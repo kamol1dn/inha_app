@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../models/course.dart';
+import '../../models/semester.dart';
 import '../../services/gpa_service.dart';
 import '../../utils/grade_calculator.dart';
 import '../../constants/app_styles.dart';
 import 'widgets/gpa_summary_card.dart';
-import 'widgets/course_list_item.dart';
+import 'widgets/semester_list_item.dart';
 
 class GPACalculatorScreen extends StatefulWidget {
   const GPACalculatorScreen({Key? key}) : super(key: key);
@@ -15,27 +16,63 @@ class GPACalculatorScreen extends StatefulWidget {
 }
 
 class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
-  List<Course> courses = [];
+  List<Semester> semesters = [];
   bool _isLoading = true;
+  double overallGPA = 0.0;
+
+  // Scroll controller to detect scroll position
+  final ScrollController _scrollController = ScrollController();
+  // State variable to track if GPA should be shown in header
+  bool _showGpaInHeader = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCourses();
+    _loadSemesters();
+
+    // Add scroll listener to detect when GPASummaryCard goes out of view
+    _scrollController.addListener(_updateHeaderGpaVisibility);
   }
 
-  Future<void> _loadCourses() async {
+  @override
+  void dispose() {
+    _scrollController.removeListener(_updateHeaderGpaVisibility);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // Update header GPA visibility based on scroll position
+  void _updateHeaderGpaVisibility() {
+    // We consider that the summary card is hidden when scrolled past a certain threshold
+    // Typically this would be the height of the card plus some padding
+    final threshold = 100.0; // Adjust based on your GPASummaryCard height
+
+    if (_scrollController.hasClients) {
+      setState(() {
+        _showGpaInHeader = _scrollController.offset > threshold;
+      });
+    }
+  }
+
+  Future<void> _loadSemesters() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final loadedCourses = await GPAService.loadCourses();
+      final loadedSemesters = await GPAService.loadSemesters();
+
+      // Calculate GPA for each semester
+      for (var semester in loadedSemesters) {
+        semester.gpa = GradeCalculator.calculateGPA(semester.courses);
+      }
+
       setState(() {
-        courses = loadedCourses;
+        semesters = loadedSemesters;
+        overallGPA = GradeCalculator.calculateOverallGPA(semesters);
       });
     } catch (e) {
-      debugPrint('Error loading courses: $e');
+      debugPrint('Error loading semesters: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -43,33 +80,55 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
     }
   }
 
-  Future<void> _saveCourses() async {
+  Future<void> _saveSemesters() async {
     try {
-      await GPAService.saveCourses(courses);
+      await GPAService.saveSemesters(semesters);
     } catch (e) {
-      debugPrint('Error saving courses: $e');
+      debugPrint('Error saving semesters: $e');
     }
   }
 
-  void _addCourse() {
+  void _addSemester() {
     setState(() {
-      courses.add(Course(name: '', credits: 3, grade: 'A'));
+      semesters.add(
+        Semester(
+          name: 'New Semester ${semesters.length + 1}',
+          courses: [],
+          gpa: 0.0,
+        ),
+      );
     });
-    _saveCourses();
+    _saveSemesters();
   }
 
-  void _removeCourse(int index) {
+  void _updateSemester(int index, Semester updatedSemester) {
     setState(() {
-      courses.removeAt(index);
+      semesters[index] = updatedSemester;
+      overallGPA = GradeCalculator.calculateOverallGPA(semesters);
     });
-    _saveCourses();
+    _saveSemesters();
   }
 
-  void _updateCourse(int index, Course updatedCourse) {
+  void _addCourse(int semesterIndex) {
     setState(() {
-      courses[index] = updatedCourse;
+      final updatedSemester = Semester.copy(semesters[semesterIndex]);
+      updatedSemester.courses.add(Course(name: '', credits: 3, grade: 'A'));
+      updatedSemester.gpa = GradeCalculator.calculateGPA(updatedSemester.courses);
+      semesters[semesterIndex] = updatedSemester;
+      overallGPA = GradeCalculator.calculateOverallGPA(semesters);
     });
-    _saveCourses();
+    _saveSemesters();
+  }
+
+  void _removeCourse(int semesterIndex, int courseIndex) {
+    setState(() {
+      final updatedSemester = Semester.copy(semesters[semesterIndex]);
+      updatedSemester.courses.removeAt(courseIndex);
+      updatedSemester.gpa = GradeCalculator.calculateGPA(updatedSemester.courses);
+      semesters[semesterIndex] = updatedSemester;
+      overallGPA = GradeCalculator.calculateOverallGPA(semesters);
+    });
+    _saveSemesters();
   }
 
   @override
@@ -78,65 +137,68 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Padding(
-      padding: AppStyles.contentPadding,
-      child: Column(
-        children: [
-          GPASummaryCard(gpa: GradeCalculator.calculateGPA(courses)),
-          const SizedBox(height: 16),
+    return Scaffold(
+      appBar: AppBar(
+        scrolledUnderElevation: 0,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('GPA Calculator'),
+            // Show CGPA in header when scrolled past summary card
+            if (_showGpaInHeader)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  'CGPA: ${overallGPA.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      body: Padding(
+        padding: AppStyles.contentPadding,
+        child: ListView(
+          controller: _scrollController,
+          children: [
+            GPASummaryCard(gpa: overallGPA),
+            const SizedBox(height: 16),
 
-          // Fixed header row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  flex: 3,
-                  child: Text('Course', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                const Expanded(
-                  flex: 1,
-                  child: Text('Credits', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                const Expanded(
-                  flex: 1,
-                  child: Text('Grade', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                Expanded(
-                  flex: 0, // Important fix: Use flex 0 to prevent overflow
-                  child: Container(width: 48), // Space for delete button
-                ),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: courses.isEmpty
-                ? const Center(child: Text('No courses added yet'))
-                : ListView.builder(
-              itemCount: courses.length,
-              itemBuilder: (context, index) {
-                return CourseListItem(
-                  course: courses[index],
-                  onUpdate: (course) => _updateCourse(index, course),
-                  onDelete: () => _removeCourse(index),
+            if (semesters.isEmpty)
+              const Center(child: Text('No semesters added yet'))
+            else
+              ...semesters.asMap().entries.map((entry) {
+                int index = entry.key;
+                Semester semester = entry.value;
+                return SemesterListItem(
+                  semester: semester,
+                  semesterIndex: index,
+                  onUpdate: (updatedSemester) => _updateSemester(index, updatedSemester),
+                  onAddCourse: _addCourse,
+                  onRemoveCourse: _removeCourse,
                 );
-              },
-            ),
-          ),
+              }).toList(),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: ElevatedButton.icon(
+            const SizedBox(height: 16),
+
+            ElevatedButton.icon(
               icon: const Icon(Icons.add),
-              label: const Text('Add Course'),
-              onPressed: _addCourse,
+              label: const Text('Add Semester'),
+              onPressed: _addSemester,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size.fromHeight(50),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

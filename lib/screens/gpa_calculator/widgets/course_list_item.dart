@@ -65,13 +65,14 @@ class CourseListItem extends StatelessWidget {
             Expanded(
               flex: 1,
               child: DropdownButtonFormField<String>(
+                isExpanded: true,
                 value: course.grade,
                 decoration: AppStyles.textFieldDecoration(),
                 items: GradeCalculator.getGradeOptions()
                     .map((grade) => DropdownMenuItem(
-                  value: grade,
-                  child: Text(grade),
-                ))
+                  value: grade.name,
+                  child: Text(grade.name),
+                ))//
                     .toList(),
                 onChanged: (value) {
                   if (value != null) {

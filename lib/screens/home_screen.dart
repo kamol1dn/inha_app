@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: _selectedIndex == 1 ? null : AppBar(
         title: Text(_titles[_selectedIndex]),
         centerTitle: true,
       ),

@@ -2,29 +2,22 @@ class Course {
   String name;
   int credits;
   String grade;
+  bool required;
 
-  Course({required this.name, required this.credits, required this.grade});
+  Course({
+    required this.name,
+    required this.credits,
+    required this.grade,
+    this.required = false,
+  });
 
-  // Add a copy constructor for easy cloning/deep copying
-  Course.copy(Course course)
-      : name = course.name,
-        credits = course.credits,
-        grade = course.grade;
-
-  // Add toMap and fromMap for possible future serialization
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'credits': credits,
-      'grade': grade,
-    };
-  }
-
-  factory Course.fromMap(Map<String, dynamic> map) {
+  // Create a copy of the course with updated values
+  static Course copy(Course course) {
     return Course(
-      name: map['name'] as String,
-      credits: map['credits'] as int,
-      grade: map['grade'] as String,
+      name: course.name,
+      credits: course.credits,
+      grade: course.grade,
+      required: course.required,
     );
   }
 }

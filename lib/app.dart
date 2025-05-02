@@ -8,7 +8,7 @@ class UniversityApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'University Tool App',
+      title: 'Inha Tools',
       theme: ThemeData(
         primarySwatch: AppStyles.primaryColor,
         visualDensity: VisualDensity.adaptivePlatformDensity,

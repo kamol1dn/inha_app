@@ -1,27 +1,40 @@
 import '../models/course.dart';
+import '../models/semester.dart';
 
 class GradeCalculator {
-  // Convert letter grade to grade points
-  static double getGradePoints(String grade) {
-    switch (grade) {
-      case 'A+': return 4.3;
-      case 'A': return 4.0;
-      case 'A-': return 3.7;
-      case 'B+': return 3.3;
-      case 'B': return 3.0;
-      case 'B-': return 2.7;
-      case 'C+': return 2.3;
-      case 'C': return 2.0;
-      case 'C-': return 1.7;
-      case 'D+': return 1.3;
-      case 'D': return 1.0;
-      case 'D-': return 0.7;
-      case 'F': return 0.0;
-      default: return 0.0;
-    }
+  // Define grade options with point values (similar to marksList in JavaScript)
+  static List<GradeOption> getGradeOptions() {
+    return [
+      GradeOption(name: 'A+', value: 4.5),
+      GradeOption(name: 'A', value: 4.0),
+      GradeOption(name: 'A-', value: 3.7),
+      GradeOption(name: 'B+', value: 3.5),
+      GradeOption(name: 'B', value: 3.0),
+      GradeOption(name: 'B-', value: 2.7),
+      GradeOption(name: 'C+', value: 2.5),
+      GradeOption(name: 'C', value: 2.0),
+      GradeOption(name: 'C-', value: 1.7),
+      GradeOption(name: 'D+', value: 1.5),
+      GradeOption(name: 'D', value: 1.0),
+      GradeOption(name: 'F', value: 0.0),
+    ];
   }
 
-  // Calculate GPA based on a list of courses
+  // Get credit hour options
+  static List<int> getCreditOptions() {
+    return [1, 2, 3, 4, 5, 6];
+  }
+
+  // Get numeric value for a letter grade
+  static double getGradeValue(String grade) {
+    final gradeOption = getGradeOptions().firstWhere(
+          (option) => option.name == grade,
+      orElse: () => GradeOption(name: 'F', value: 0.0),
+    );
+    return gradeOption.value;
+  }
+
+  // Calculate GPA for a list of courses
   static double calculateGPA(List<Course> courses) {
     if (courses.isEmpty) return 0.0;
 
@@ -29,26 +42,36 @@ class GradeCalculator {
     int totalCredits = 0;
 
     for (var course in courses) {
-      totalPoints += course.credits * getGradePoints(course.grade);
+      double gradeValue = getGradeValue(course.grade);
+      totalPoints += course.credits * gradeValue;
       totalCredits += course.credits;
     }
 
     return totalCredits > 0 ? totalPoints / totalCredits : 0.0;
   }
 
-  // Get all available grade options
-  static List<String> getGradeOptions() {
-    return const [
-      'A+', 'A', 'A-',
-      'B+', 'B', 'B-',
-      'C+', 'C', 'C-',
-      'D+', 'D', 'D-',
-      'F'
-    ];
-  }
+  // Calculate GPA for all semesters
+  static double calculateOverallGPA(List<Semester> semesters) {
+    if (semesters.isEmpty) return 0.0;
 
-  // Get available credit options (usually 1-6)
-  static List<int> getCreditOptions() {
-    return List.generate(6, (i) => i + 1);
+    double totalPoints = 0.0;
+    int totalCredits = 0;
+
+    for (var semester in semesters) {
+      for (var course in semester.courses) {
+        double gradeValue = getGradeValue(course.grade);
+        totalPoints += course.credits * gradeValue;
+        totalCredits += course.credits;
+      }
+    }
+
+    return totalCredits > 0 ? totalPoints / totalCredits : 0.0;
   }
+}
+
+class GradeOption {
+  final String name;
+  final double value;
+
+  GradeOption({required this.name, required this.value});
 }
