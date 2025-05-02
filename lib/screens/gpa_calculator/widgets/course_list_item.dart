@@ -25,7 +25,7 @@ class CourseListItem extends StatelessWidget {
           children: [
             // Course Name Field
             Expanded(
-              flex: 3,
+              flex: 11,
               child: TextFormField(
                 initialValue: course.name,
                 decoration: AppStyles.textFieldDecoration(hintText: 'Course name'),
@@ -40,7 +40,7 @@ class CourseListItem extends StatelessWidget {
 
             // Credits Dropdown
             Expanded(
-              flex: 1,
+              flex: 4,
               child: DropdownButtonFormField<int>(
                 value: course.credits,
                 decoration: AppStyles.textFieldDecoration(),
@@ -63,7 +63,7 @@ class CourseListItem extends StatelessWidget {
 
             // Grade Dropdown
             Expanded(
-              flex: 1,
+              flex: 5,
               child: DropdownButtonFormField<String>(
                 isExpanded: true,
                 value: course.grade,

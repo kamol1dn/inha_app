@@ -4,13 +4,13 @@ class Semester {
   String name;
   List<Course> courses;
   double? gpa;
- // bool isPassed = false;
+  bool isCompleted; // New field to track if semester is completed
 
   Semester({
     required this.name,
     required this.courses,
     this.gpa,
-  //  this.isPassed,
+    this.isCompleted = true, // Default to true for backward compatibility
   });
 
   // Create a copy of the semester with updated values
@@ -19,7 +19,7 @@ class Semester {
       name: semester.name,
       courses: List.from(semester.courses.map((course) => Course.copy(course))),
       gpa: semester.gpa,
-   //   isPassed: semester.isPassed,
+      isCompleted: semester.isCompleted,
     );
   }
 }

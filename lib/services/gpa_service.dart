@@ -7,6 +7,7 @@ class GPAService {
     return [
       Semester(
         name: 'Freshmen Fall (1st)',
+        isCompleted: true, // Completed semester
         courses: [
           Course(name: 'OOP 1', credits: 3, grade: 'A', required: true),
           Course(name: 'Calculus 1', credits: 3, grade: 'A', required: true),
@@ -19,6 +20,7 @@ class GPAService {
       ),
       Semester(
         name: 'Freshmen Spring (2nd)',
+        isCompleted: true, // Completed semester
         courses: [
           Course(name: 'OOP 2', credits: 3, grade: 'A', required: true),
           Course(name: 'Calculus 2', credits: 3, grade: 'A', required: true),
@@ -31,6 +33,7 @@ class GPAService {
       ),
       Semester(
         name: 'Sophomore Fall (1st)',
+        isCompleted: true, // Completed semester
         courses: [
           Course(name: 'Linear Algebra', credits: 3, grade: 'A', required: true),
           Course(name: 'Engineering Mathematics', credits: 3, grade: 'A', required: true),
@@ -43,6 +46,7 @@ class GPAService {
       ),
       Semester(
         name: 'Sophomore Spring (2nd)',
+        isCompleted: true, // Completed semester
         courses: [
           Course(name: 'Digital Logic and Circuit', credits: 3, grade: 'A'),
           Course(name: 'Discrete Mathematics', credits: 3, grade: 'A', required: true),
@@ -55,6 +59,7 @@ class GPAService {
       ),
       Semester(
         name: 'Junior Fall (1st)',
+        isCompleted: true, // Completed semester
         courses: [
           Course(name: 'System Analysis', credits: 3, grade: 'A'),
           Course(name: 'Introduction to Economics', credits: 3, grade: 'A', required: true),
@@ -67,6 +72,7 @@ class GPAService {
       ),
       Semester(
         name: 'Junior Spring (2nd)',
+        isCompleted: true, // Completed semester
         courses: [
           Course(name: 'Signals and Systems', credits: 3, grade: 'A', required: true),
           Course(name: 'Unix Programming', credits: 3, grade: 'A'),
@@ -78,6 +84,7 @@ class GPAService {
       ),
       Semester(
         name: 'Senior Fall (1st)',
+        isCompleted: true, // Completed semester
         courses: [
           Course(name: 'Software Engineering', credits: 3, grade: 'A'),
           Course(name: 'Embedded Software & Design', credits: 3, grade: 'A'),
@@ -89,6 +96,7 @@ class GPAService {
       ),
       Semester(
         name: 'Senior Spring (2nd)',
+        isCompleted: false, // Example of a future semester not yet completed
         courses: [
           Course(name: 'Capstone Design', credits: 3, grade: 'A', required: true),
           Course(name: 'Computer Security', credits: 3, grade: 'A'),

@@ -29,31 +29,64 @@ class SemesterListItem extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Semester header
+            // Semester header with completion toggle
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  semester.name,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                // Semester name
+                Expanded(
                   child: Text(
-                    'GPA: ${semester.gpa?.toStringAsFixed(2) ?? '0.00'}',
+                    semester.name,
                     style: const TextStyle(
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
+
+                // Completion toggle (Switch)
+                Row(
+                  children: [
+                    Text(
+                      'Completed',
+                      style: TextStyle(
+                        color: semester.isCompleted
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Switch(
+                      value: semester.isCompleted,
+                      onChanged: (value) {
+                        final updatedSemester = Semester.copy(semester);
+                        updatedSemester.isCompleted = value;
+                        onUpdate(updatedSemester);
+                      },
+                    ),
+                  ],
+                ),
               ],
+            ),
+
+            // GPA display
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: semester.isCompleted
+                      ? Colors.blue.shade100
+                      : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'GPA: ${semester.gpa?.toStringAsFixed(2) ?? '0.00'}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: semester.isCompleted ? Colors.black87 : Colors.grey,
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 16),
 

@@ -50,18 +50,21 @@ class GradeCalculator {
     return totalCredits > 0 ? totalPoints / totalCredits : 0.0;
   }
 
-  // Calculate GPA for all semesters
+  // Calculate GPA for all completed semesters
   static double calculateOverallGPA(List<Semester> semesters) {
     if (semesters.isEmpty) return 0.0;
 
     double totalPoints = 0.0;
     int totalCredits = 0;
 
+    // Only include completed semesters in the calculation
     for (var semester in semesters) {
-      for (var course in semester.courses) {
-        double gradeValue = getGradeValue(course.grade);
-        totalPoints += course.credits * gradeValue;
-        totalCredits += course.credits;
+      if (semester.isCompleted) {
+        for (var course in semester.courses) {
+          double gradeValue = getGradeValue(course.grade);
+          totalPoints += course.credits * gradeValue;
+          totalCredits += course.credits;
+        }
       }
     }
 

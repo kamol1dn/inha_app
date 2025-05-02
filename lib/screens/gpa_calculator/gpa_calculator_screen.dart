@@ -19,6 +19,7 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
   List<Semester> semesters = [];
   bool _isLoading = true;
   double overallGPA = 0.0;
+  int completedSemesters = 0;
 
   // Scroll controller to detect scroll position
   final ScrollController _scrollController = ScrollController();
@@ -54,6 +55,13 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
     }
   }
 
+  // Count completed semesters
+  void _updateCompletedSemestersCount() {
+    setState(() {
+      completedSemesters = semesters.where((semester) => semester.isCompleted).length;
+    });
+  }
+
   Future<void> _loadSemesters() async {
     setState(() {
       _isLoading = true;
@@ -70,6 +78,7 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
       setState(() {
         semesters = loadedSemesters;
         overallGPA = GradeCalculator.calculateOverallGPA(semesters);
+        _updateCompletedSemestersCount();
       });
     } catch (e) {
       debugPrint('Error loading semesters: $e');
@@ -95,6 +104,7 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
           name: 'New Semester ${semesters.length + 1}',
           courses: [],
           gpa: 0.0,
+          isCompleted: false, // Default new semesters to not completed
         ),
       );
     });
@@ -105,6 +115,7 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
     setState(() {
       semesters[index] = updatedSemester;
       overallGPA = GradeCalculator.calculateOverallGPA(semesters);
+      _updateCompletedSemestersCount();
     });
     _saveSemesters();
   }
@@ -170,6 +181,21 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
           controller: _scrollController,
           children: [
             GPASummaryCard(gpa: overallGPA),
+            const SizedBox(height: 8),
+
+            // Completed semesters counter
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Text(
+                'Including $completedSemesters of ${semesters.length} semesters in GPA calculation',
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
             const SizedBox(height: 16),
 
             if (semesters.isEmpty)
