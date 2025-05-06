@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class GPASummaryCard extends StatelessWidget {
   final double gpa;
 
-  const GPASummaryCard({Key? key, required this.gpa}) : super(key: key);
+  const GPASummaryCard({super.key, required this.gpa});
 
   String _getGradeDescription(double gpa) {
     if (gpa >= 4.0) return 'Excellent';

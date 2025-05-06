@@ -4,10 +4,10 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../constants/urls.dart';
 import '../services/webview_service.dart';
 import 'gpa_calculator/gpa_calculator_screen.dart';
-import 'timetable/timetable_screen.dart';
+import 'timetable/timetable_screen.dart';  // Updated import
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _selectedIndex == 1 ? null : AppBar(
+      appBar: _selectedIndex == 1 || _selectedIndex == 2 ? null : AppBar(
         title: Text(_titles[_selectedIndex]),
         centerTitle: true,
       ),
@@ -86,8 +86,8 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1: // GPA Calculator
         return const GPACalculatorScreen();
 
-      case 2: // Timetable
-        return const TimetableScreen();
+      case 2: // Timetable - Using our new Enhanced Timetable Screen
+        return const TimetableScreen(demoMode: false,);
 
       case 3: // Email
         return WebViewWidget(controller: _emailController);

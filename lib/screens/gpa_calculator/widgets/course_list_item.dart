@@ -9,11 +9,11 @@ class CourseListItem extends StatelessWidget {
   final VoidCallback onDelete;
 
   const CourseListItem({
-    Key? key,
+    super.key,
     required this.course,
     required this.onUpdate,
     required this.onDelete,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

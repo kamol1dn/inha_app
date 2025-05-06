@@ -9,7 +9,7 @@ import 'widgets/gpa_summary_card.dart';
 import 'widgets/semester_list_item.dart';
 
 class GPACalculatorScreen extends StatefulWidget {
-  const GPACalculatorScreen({Key? key}) : super(key: key);
+  const GPACalculatorScreen({super.key});
 
   @override
   _GPACalculatorScreenState createState() => _GPACalculatorScreenState();

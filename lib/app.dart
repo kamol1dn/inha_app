@@ -3,7 +3,7 @@ import 'screens/home_screen.dart';
 import 'constants/app_styles.dart';
 
 class UniversityApp extends StatelessWidget {
-  const UniversityApp({Key? key}) : super(key: key);
+  const UniversityApp({super.key});
 
   @override
   Widget build(BuildContext context) {

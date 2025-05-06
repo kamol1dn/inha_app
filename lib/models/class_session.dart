@@ -2,27 +2,29 @@ class ClassSession {
   final String time;
   final String course;
   final String location;
+  final String? teacher;
+  final String? roomCode;
+  final String? classGroup;
 
-  const ClassSession({
+  ClassSession({
     required this.time,
     required this.course,
     required this.location,
+    this.teacher,
+    this.roomCode,
+    this.classGroup,
   });
 
-  // Add toMap and fromMap for possible future serialization
-  Map<String, dynamic> toMap() {
-    return {
-      'time': time,
-      'course': course,
-      'location': location,
-    };
-  }
-
-  factory ClassSession.fromMap(Map<String, dynamic> map) {
+  factory ClassSession.fromEdupageData(Map<String, dynamic> data) {
+    // This will need to be implemented based on the actual structure of your Edupage API response
+    // For now, this is a placeholder
     return ClassSession(
-      time: map['time'] as String,
-      course: map['course'] as String,
-      location: map['location'] as String,
+      time: data['time'] ?? '',
+      course: data['subject'] ?? '',
+      location: data['room'] ?? '',
+      teacher: data['teacher'],
+      roomCode: data['roomCode'],
+      classGroup: data['classGroup'],
     );
   }
 }
