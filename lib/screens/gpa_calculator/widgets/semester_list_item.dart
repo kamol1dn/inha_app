@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../models/semester.dart';
 import '../../../utils/grade_calculator.dart';
 import 'course_list_item.dart';
-import '../../../models/course.dart';
 
 class SemesterListItem extends StatefulWidget {
   final Semester semester;
@@ -12,13 +11,13 @@ class SemesterListItem extends StatefulWidget {
   final int semesterIndex;
 
   const SemesterListItem({
-    Key? key,
+    super.key,
     required this.semester,
     required this.onUpdate,
     required this.onAddCourse,
     required this.onRemoveCourse,
     required this.semesterIndex,
-  }) : super(key: key);
+  });
 
   @override
   State<SemesterListItem> createState() => _SemesterListItemState();
