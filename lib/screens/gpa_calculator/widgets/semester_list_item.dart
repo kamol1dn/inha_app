@@ -4,7 +4,7 @@ import '../../../utils/grade_calculator.dart';
 import 'course_list_item.dart';
 import '../../../models/course.dart';
 
-class SemesterListItem extends StatelessWidget {
+class SemesterListItem extends StatefulWidget {
   final Semester semester;
   final Function(Semester) onUpdate;
   final Function(int) onAddCourse;
@@ -21,6 +21,14 @@ class SemesterListItem extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<SemesterListItem> createState() => _SemesterListItemState();
+}
+
+class _SemesterListItemState extends State<SemesterListItem> {
+  // Add expansion state to optimize rendering
+  bool _isExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -32,10 +40,20 @@ class SemesterListItem extends StatelessWidget {
             // Semester header with completion toggle
             Row(
               children: [
+                // Expand/collapse icon
+                IconButton(
+                  icon: Icon(_isExpanded ? Icons.expand_less : Icons.expand_more),
+                  onPressed: () {
+                    setState(() {
+                      _isExpanded = !_isExpanded;
+                    });
+                  },
+                ),
+
                 // Semester name
                 Expanded(
                   child: Text(
-                    semester.name,
+                    widget.semester.name,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -49,18 +67,18 @@ class SemesterListItem extends StatelessWidget {
                     Text(
                       'Completed',
                       style: TextStyle(
-                        color: semester.isCompleted
+                        color: widget.semester.isCompleted
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Switch(
-                      value: semester.isCompleted,
+                      value: widget.semester.isCompleted,
                       onChanged: (value) {
-                        final updatedSemester = Semester.copy(semester);
+                        final updatedSemester = Semester.copy(widget.semester);
                         updatedSemester.isCompleted = value;
-                        onUpdate(updatedSemester);
+                        widget.onUpdate(updatedSemester);
                       },
                     ),
                   ],
@@ -68,77 +86,98 @@ class SemesterListItem extends StatelessWidget {
               ],
             ),
 
-            // GPA display
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: semester.isCompleted
-                      ? Colors.blue.shade100
-                      : Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(20),
+            // Course count and GPA row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Course count
+                Text(
+                  '${widget.semester.courses.length} courses',
+                  style: const TextStyle(color: Colors.grey),
                 ),
-                child: Text(
-                  'GPA: ${semester.gpa?.toStringAsFixed(2) ?? '0.00'}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: semester.isCompleted ? Colors.black87 : Colors.grey,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
 
-            // Course list header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-              child: Row(
-                children: const [
-                  Expanded(
-                    flex: 3,
-                    child: Text('Course', style: TextStyle(fontWeight: FontWeight.bold)),
+                // GPA display
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: widget.semester.isCompleted
+                        ? Colors.blue.shade100
+                        : Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  Expanded(
-                    flex: 1,
-                    child: Text('Credits', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'GPA: ${widget.semester.gpa?.toStringAsFixed(2) ?? '0.00'}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: widget.semester.isCompleted ? Colors.black87 : Colors.grey,
+                    ),
                   ),
-                  Expanded(
-                    flex: 1,
-                    child: Text('Grade', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  SizedBox(width: 48), // Space for delete button
-                ],
-              ),
+                ),
+              ],
             ),
 
-            // List of courses
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: semester.courses.length,
-              itemBuilder: (context, index) {
-                return CourseListItem(
-                  course: semester.courses[index],
-                  onUpdate: (updatedCourse) {
-                    final updatedSemester = Semester.copy(semester);
-                    updatedSemester.courses[index] = updatedCourse;
-                    updatedSemester.gpa = GradeCalculator.calculateGPA(updatedSemester.courses);
-                    onUpdate(updatedSemester);
+            // Only show course details if expanded
+            if (_isExpanded) ...[
+              const SizedBox(height: 16),
+
+              // Course list header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                child: Row(
+                  children: const [
+                    Expanded(
+                      flex: 3,
+                      child: Text('Course', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: Text('Credits', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: Text('Grade', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    SizedBox(width: 48), // Space for delete button
+                  ],
+                ),
+              ),
+
+              // List of courses - using ListView.builder for optimization
+              // We'll limit the render cost with explicit height
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: widget.semester.courses.length * 70.0, // Approximate height per course
+                ),
+                child: ListView.builder(
+                  // Key performance improvements:
+                  // 1. Remove shrinkWrap: true
+                  // 2. Use primary: false instead of NeverScrollableScrollPhysics
+                  primary: false,
+                  itemCount: widget.semester.courses.length,
+                  itemBuilder: (context, index) {
+                    return CourseListItem(
+                      course: widget.semester.courses[index],
+                      onUpdate: (updatedCourse) {
+                        final updatedSemester = Semester.copy(widget.semester);
+                        updatedSemester.courses[index] = updatedCourse;
+                        updatedSemester.gpa = GradeCalculator.calculateGPA(updatedSemester.courses);
+                        widget.onUpdate(updatedSemester);
+                      },
+                      onDelete: () => widget.onRemoveCourse(widget.semesterIndex, index),
+                    );
                   },
-                  onDelete: () => onRemoveCourse(semesterIndex, index),
-                );
-              },
-            ),
+                ),
+              ),
 
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
 
-            // Add course button
-            TextButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Add Course'),
-              onPressed: () => onAddCourse(semesterIndex),
-            ),
+              // Add course button
+              TextButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Add Course'),
+                onPressed: () => widget.onAddCourse(widget.semesterIndex),
+              ),
+            ],
           ],
         ),
       ),

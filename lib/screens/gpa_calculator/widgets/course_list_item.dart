@@ -17,33 +17,51 @@ class CourseListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    // Use a more lightweight approach
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Row(
-          children: [
-            // Course Name Field
-            Expanded(
-              flex: 11,
-              child: TextFormField(
-                initialValue: course.name,
-                decoration: AppStyles.textFieldDecoration(hintText: 'Course name'),
-                onChanged: (value) {
-                  final updatedCourse = Course.copy(course);
-                  updatedCourse.name = value;
-                  onUpdate(updatedCourse);
-                },
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        children: [
+          // Course Name Field - Use a simpler TextField for better performance
+          Expanded(
+            flex: 11,
+            child: TextField(
+              controller: TextEditingController(text: course.name)..selection = TextSelection.collapsed(offset: course.name.length),
+              decoration: InputDecoration(
+                hintText: 'Course name',
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
               ),
+              onChanged: (value) {
+                final updatedCourse = Course.copy(course);
+                updatedCourse.name = value;
+                onUpdate(updatedCourse);
+              },
             ),
-            const SizedBox(width: 8),
+          ),
+          const SizedBox(width: 8),
 
-            // Credits Dropdown
-            Expanded(
-              flex: 4,
-              child: DropdownButtonFormField<int>(
+          // Credits Dropdown - Simplified
+          Expanded(
+            flex: 4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: DropdownButton<int>(
                 value: course.credits,
-                decoration: AppStyles.textFieldDecoration(),
+                underline: Container(), // Remove underline
+                isExpanded: true,
+                icon: const Icon(Icons.arrow_drop_down, size: 18),
                 items: GradeCalculator.getCreditOptions()
                     .map((credit) => DropdownMenuItem(
                   value: credit,
@@ -59,20 +77,28 @@ class CourseListItem extends StatelessWidget {
                 },
               ),
             ),
-            const SizedBox(width: 8),
+          ),
+          const SizedBox(width: 8),
 
-            // Grade Dropdown
-            Expanded(
-              flex: 5,
-              child: DropdownButtonFormField<String>(
+          // Grade Dropdown - Simplified
+          Expanded(
+            flex: 5,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: DropdownButton<String>(
+                underline: Container(), // Remove underline
                 isExpanded: true,
                 value: course.grade,
-                decoration: AppStyles.textFieldDecoration(),
+                icon: const Icon(Icons.arrow_drop_down, size: 18),
                 items: GradeCalculator.getGradeOptions()
                     .map((grade) => DropdownMenuItem(
                   value: grade.name,
                   child: Text(grade.name),
-                ))//
+                ))
                     .toList(),
                 onChanged: (value) {
                   if (value != null) {
@@ -83,14 +109,16 @@ class CourseListItem extends StatelessWidget {
                 },
               ),
             ),
+          ),
 
-            // Delete Button
-            IconButton(
-              icon: const Icon(Icons.delete, color: AppStyles.errorColor),
-              onPressed: onDelete,
-            ),
-          ],
-        ),
+          // Delete Button - Simplified for better performance
+          IconButton(
+            constraints: const BoxConstraints(maxWidth: 32),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.delete, color: AppStyles.errorColor, size: 20),
+            onPressed: onDelete,
+          ),
+        ],
       ),
     );
   }

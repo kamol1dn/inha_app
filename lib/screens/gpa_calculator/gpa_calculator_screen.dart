@@ -177,9 +177,9 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
       ),
       body: Padding(
         padding: AppStyles.contentPadding,
-        child: ListView(
-          controller: _scrollController,
+        child: Column(
           children: [
+            // Summary card - always visible at top
             GPASummaryCard(gpa: overallGPA),
             const SizedBox(height: 8),
 
@@ -198,29 +198,35 @@ class _GPACalculatorScreenState extends State<GPACalculatorScreen> {
 
             const SizedBox(height: 16),
 
-            if (semesters.isEmpty)
-              const Center(child: Text('No semesters added yet'))
-            else
-              ...semesters.asMap().entries.map((entry) {
-                int index = entry.key;
-                Semester semester = entry.value;
-                return SemesterListItem(
-                  semester: semester,
-                  semesterIndex: index,
-                  onUpdate: (updatedSemester) => _updateSemester(index, updatedSemester),
-                  onAddCourse: _addCourse,
-                  onRemoveCourse: _removeCourse,
-                );
-              }).toList(),
+            // List of semesters - only this part scrolls
+            Expanded(
+              child: semesters.isEmpty
+                  ? const Center(child: Text('No semesters added yet'))
+                  : ListView.builder(
+                controller: _scrollController,
+                itemCount: semesters.length,
+                itemBuilder: (context, index) {
+                  return SemesterListItem(
+                    semester: semesters[index],
+                    semesterIndex: index,
+                    onUpdate: (updatedSemester) => _updateSemester(index, updatedSemester),
+                    onAddCourse: _addCourse,
+                    onRemoveCourse: _removeCourse,
+                  );
+                },
+              ),
+            ),
 
-            const SizedBox(height: 16),
-
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Add Semester'),
-              onPressed: _addSemester,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(50),
+            // Add semester button - always visible at bottom
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Add Semester'),
+                onPressed: _addSemester,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                ),
               ),
             ),
           ],
