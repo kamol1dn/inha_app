@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../core/credentials.dart';
 import '../../core/session.dart';
@@ -232,29 +231,10 @@ class InsClient implements InsApi {
     for (var hop = 0; hop <= _maxRedirects; hop++) {
       final r = await _dio().getUri<List<int>>(current, options: _options(referer: referer));
       final next = _redirectTarget(current, r);
-      if (kDebugMode) _debugShape(current, r, next);
       if (next == null) return _Page.of(current, r);
       current = next;
     }
     throw ParseError('INS (too many redirects)');
-  }
-
-  /// Debug builds only: the shape of each INS page (path, status, size, which
-  /// navigation constructs it holds). Never content, cookies or form values.
-  void _debugShape(Uri uri, Response<List<int>> r, Uri? redirect) {
-    final body = decodeInsBytes(r.data ?? const <int>[]);
-    final lower = body.toLowerCase();
-    final refs = RegExp(r'''(?:src|href|location(?:\.href)?)\s*=\s*["']([^"'?#]+)''', caseSensitive: false)
-        .allMatches(body)
-        .map((m) => m.group(1)!)
-        .where((s) => s.toLowerCase().contains('.aspx') || s.toLowerCase().contains('.htm'))
-        .toSet()
-        .take(8)
-        .join(',');
-    debugPrint('INS ${r.statusCode} ${uri.path} len=${body.length}'
-        '${redirect != null ? ' -> ${redirect.host}${redirect.path}' : ''}'
-        ' frame=${lower.contains('<frame')} iframe=${lower.contains('<iframe')}'
-        ' fileurl=${lower.contains('fileurl')} refs=[$refs]');
   }
 
   /// Redirects are pinned to INS too: the server sometimes answers with its

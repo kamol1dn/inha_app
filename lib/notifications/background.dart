@@ -5,57 +5,17 @@
 /// the app registered with [setBackgroundRefresher], feeds the data to the
 /// rules and hands the result to the [Notifier].
 ///
-/// TODO(main session): wire this up in main.dart. A background isolate
-/// shares no memory with the UI isolate: no providers, no service objects,
-/// no static fields set by the app. So the refresher must build everything
-/// itself from persistent state (JsonCache, CredentialStore, Sessions'
-/// cookie jars), and it must be registered *inside* the background isolate,
-/// which is why the app passes its own entry point to [initBackground]:
+/// A background isolate shares no memory with the UI isolate: no providers,
+/// no service objects, no static fields set by the app. So the refresher
+/// builds everything itself from persistent state (`AppServices.open()`:
+/// the JSON cache, the credential store, the cookie jars), and it is
+/// registered *inside* the background isolate: main.dart passes its own
+/// entry point, `backgroundMain`, to [initBackground], and that calls
+/// [setBackgroundRefresher] before [callbackDispatcher].
 ///
-/// ```dart
-/// // main.dart
-/// @pragma('vm:entry-point')
-/// void backgroundMain() {
-///   setBackgroundRefresher(refreshEverything);
-///   callbackDispatcher();
-/// }
-///
-/// /// Also usable from the UI isolate after a pull-to-refresh.
-/// Future<RefreshResult> refreshEverything() async {
-///   final cache = await JsonCache.open();
-///   final sessions = Sessions();
-///   await sessions.init();
-///   final EclassApi eclass = EclassClient(sessions, CredentialStore());
-///   final TimetableApi timetable = EdupageClient(sessions.client(Service.edupage));
-///   // For each source: try to fetch and write the cache (same keys as
-///   // AppData: 'deadlines', 'attendance', 'lessons'); on any error
-///   // (LoginRequired, ParseError, network) keep the cached value. Return
-///   // null only for a source with nothing cached either.
-///   final deadlines = await fetchOrCached(cache, 'deadlines', eclass.upcoming, ...);
-///   final attendance = ...; // eclass.courses() then eclass.attendance(c) each
-///   final lessons = ...;    // timetable.lessons(group, excludeSubjects: ...)
-///   return RefreshResult(
-///     deadlines: deadlines, attendance: attendance, lessons: lessons,
-///     retry: anyFetchFailedForNetworkReasons,
-///   );
-/// }
-///
-/// Future<void> main() async {
-///   WidgetsFlutterBinding.ensureInitialized();
-///   await Notifier().init(onTap: openFromNotification);
-///   await initBackground(backgroundMain);
-///   await registerPeriodicRefresh();
-///   runApp(const App());
-///   // Later, from the UI (e.g. after onboarding): await Notifier().requestPermission();
-///   // After each foreground refresh, and on start from the cache, run
-///   //   Notifier().sync(deadlines: ..., attendance: ..., lessons: ...)
-///   // so class reminders are scheduled even on days the phone is offline.
-/// }
-/// ```
-///
-/// The UI isolate's SharedPreferences caches values in memory; call
-/// `prefs.reload()` before reading the JsonCache when the app resumes, or it
-/// will not see what the background task wrote.
+/// The UI isolate's SharedPreferences caches values in memory; the app
+/// calls `prefs.reload()` (AppData.reloadFromCache) when it resumes, or it
+/// would not see what the background task wrote.
 library;
 
 import 'dart:ui' show DartPluginRegistrant;
@@ -88,8 +48,8 @@ typedef BackgroundRefresher = Future<RefreshResult> Function();
 BackgroundRefresher? _refresher;
 
 /// Registers the refresher for the current isolate. Call it from the
-/// background entry point before [callbackDispatcher] (see the TODO at the
-/// top of this file); calling it in the UI isolate alone is not enough.
+/// background entry point before [callbackDispatcher] (see the top of this
+/// file); calling it in the UI isolate alone is not enough.
 void setBackgroundRefresher(BackgroundRefresher? refresher) => _refresher = refresher;
 
 /// WorkManager task name and unique work name.
@@ -145,7 +105,7 @@ Future<bool> runRefreshTask({
   final refresh = refresher ?? _refresher;
   if (refresh == null) {
     debugPrint('notifications: no background refresher registered; '
-        'see the TODO in lib/notifications/background.dart');
+        'see the top of lib/notifications/background.dart');
     return true; // retrying cannot help
   }
 
