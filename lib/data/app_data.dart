@@ -12,7 +12,6 @@ import '../services/eclass/eclass_api.dart';
 import '../services/edupage/timetable_api.dart';
 import '../services/ins/ins_api.dart';
 import '../services/mail/mail_api.dart';
-import '../services/pending.dart';
 
 /// User choices that aren't secrets.
 class Prefs {
@@ -218,7 +217,6 @@ String _debugDescribe(Object e) {
 /// One plain sentence naming the service and what happened (DESIGN.md 10).
 /// Raw exception text never reaches the screen.
 String describeError(Object e, String service) {
-  if (e is NotConnectedYet) return "$service isn't connected in this build yet.";
   if (e is LoginRequired) return '$service sign-in needed.';
   if (e is ParseError) return "Couldn't read the $service page; it may have changed.";
   if (e is DioException) {
