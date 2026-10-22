@@ -12,10 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-// timezone is a dependency of flutter_local_notifications; zonedSchedule
-// takes its TZDateTime. TODO(main session): add `timezone: ^0.11.2` to
-// pubspec.yaml and drop this ignore.
-// ignore: depend_on_referenced_packages
+// zonedSchedule takes a TZDateTime; scheduling uses tz.UTC with absolute instants.
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/models.dart';

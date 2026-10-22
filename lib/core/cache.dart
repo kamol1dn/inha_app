@@ -25,6 +25,10 @@ class JsonCache {
 
   static Future<JsonCache> open() async => JsonCache(await SharedPreferences.getInstance());
 
+  /// Re-read from disk: the background refresh writes from another isolate,
+  /// and SharedPreferences otherwise serves this isolate's in-memory copy.
+  Future<void> reload() => _prefs.reload();
+
   Cached<T>? read<T>(String key, T Function(Object? json) decode) {
     final raw = _prefs.getString('cache.$key');
     if (raw == null) return null;

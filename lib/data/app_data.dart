@@ -52,6 +52,10 @@ class Prefs {
   set deadlineCourse(String? v) =>
       v == null ? _p.remove('deadlines.course') : _p.setString('deadlines.course', v);
 
+  /// Whether the Android notification permission prompt was shown once.
+  bool get notificationsAsked => _p.getBool('notify.asked') ?? false;
+  set notificationsAsked(bool v) => _p.setBool('notify.asked', v);
+
   bool get showWatchedVods => _p.getBool('deadlines.showWatched') ?? false;
   set showWatchedVods(bool v) => _p.setBool('deadlines.showWatched', v);
 
@@ -81,6 +85,14 @@ class AppData extends ChangeNotifier {
     required this.cache,
     required this.prefs,
   }) {
+    _readCache();
+  }
+
+  /// Called after the timetable or eClass data changes, which is what
+  /// reminders are planned from. The app hooks the notifier in here.
+  Future<void> Function()? onReminderDataChanged;
+
+  void _readCache() {
     lessons = Snapshot(data: cache.read('lessons', _decodeList(Lesson.fromJson)));
     deadlines = Snapshot(data: cache.read('deadlines', _decodeList(Deadline.fromJson)));
     attendance =
@@ -88,6 +100,14 @@ class AppData extends ChangeNotifier {
     grades = Snapshot(
         data: cache.read('grades', (j) => GradeReport.fromJson(j as Map<String, dynamic>)));
     inbox = Snapshot(data: cache.read('inbox', _decodeList(MailHeader.fromJson)));
+  }
+
+  /// Picks up what the background refresh wrote while the app was away.
+  Future<void> reloadFromCache() async {
+    if ([lessons, deadlines, attendance, grades, inbox].any((s) => s.loading)) return;
+    await cache.reload();
+    _readCache();
+    notifyListeners();
   }
 
   late Snapshot<List<Lesson>> lessons;
@@ -108,16 +128,24 @@ class AppData extends ChangeNotifier {
         refreshMail(),
       ]);
 
-  Future<void> refreshTimetable() => _run<List<Lesson>>(
-        get: () => lessons,
-        set: (s) => lessons = s,
-        fetch: () => timetable.lessons(prefs.classGroup, excludeSubjects: prefs.excludedSubjects),
-        key: 'lessons',
-        encode: _encodeList,
-      );
+  Future<void> refreshTimetable() async {
+    await _run<List<Lesson>>(
+      get: () => lessons,
+      set: (s) => lessons = s,
+      fetch: () => timetable.lessons(prefs.classGroup, excludeSubjects: prefs.excludedSubjects),
+      key: 'lessons',
+      encode: _encodeList,
+    );
+    await onReminderDataChanged?.call();
+  }
 
   /// Deadlines and attendance share one eClass login, so they refresh together.
   Future<void> refreshEclass() async {
+    await _refreshEclassData();
+    await onReminderDataChanged?.call();
+  }
+
+  Future<void> _refreshEclassData() async {
     await Future.wait([
       _run<List<Deadline>>(
         get: () => deadlines,

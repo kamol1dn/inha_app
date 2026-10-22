@@ -1,39 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
-import 'core/cache.dart';
-import 'core/credentials.dart';
-import 'core/session.dart';
 import 'data/app_data.dart';
-import 'models/models.dart';
-import 'services/eclass/eclass_client.dart';
-import 'services/edupage/edupage_client.dart';
-import 'services/ins/ins_client.dart';
-import 'services/mail/ews_client.dart';
+import 'data/services.dart';
+import 'notifications/background.dart';
+import 'notifications/notifier.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final sessions = Sessions();
-  await sessions.init();
-  final prefs = Prefs(await SharedPreferences.getInstance());
-  final credentials = CredentialStore();
-  final data = AppData(
-    eclass: EclassClient(sessions, credentials),
-    timetable: EdupageClient(sessions.client(Service.edupage)),
-    ins: InsClient(sessions, credentials),
-    mail: EwsClient(sessions.client(Service.mail), credentials),
-    cache: await JsonCache.open(),
-    prefs: prefs,
-  );
+  final services = await AppServices.open();
+  final data = services.data;
+
+  final notifier = Notifier();
+  await notifier.init(onTap: (_) {}); // a tap opens the app on Today
+  data.onReminderDataChanged = () => _syncReminders(notifier, data);
+  await initBackground(backgroundMain);
+  await registerPeriodicRefresh();
+
   runApp(MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: data),
-      Provider.value(value: sessions),
-      Provider.value(value: credentials),
+      Provider.value(value: services.sessions),
+      Provider.value(value: services.credentials),
+      Provider.value(value: notifier),
     ],
     child: const InhaApp(),
   ));
+
+  // Plan reminders from the cache straight away, so they exist even if
+  // today's refresh fails; the refresh then re-plans them with fresh data.
+  await _syncReminders(notifier, data);
   data.refreshAll();
+}
+
+/// Sync passes run one after another: the timetable and eClass refreshes
+/// finish independently, and each triggers a pass over the newest data.
+Future<void> _syncChain = Future.value();
+
+Future<void> _syncReminders(Notifier notifier, AppData data) =>
+    _syncChain = _syncChain.then((_) => notifier.sync(
+          deadlines: data.deadlines.data?.value,
+          attendance: data.attendance.data?.value,
+          lessons: data.lessons.data?.value,
+        )).then<void>((_) {}, onError: (Object e) => debugPrint('reminders: sync failed: $e'));
+
+/// WorkManager's entry point, in a background isolate of its own.
+@pragma('vm:entry-point')
+void backgroundMain() {
+  setBackgroundRefresher(refreshInBackground);
+  callbackDispatcher();
+}
+
+/// Refreshes the sources reminders depend on and hands back the newest data
+/// for each (fresh, or cached when a fetch failed). runRefreshTask then plans
+/// and delivers the notifications.
+Future<RefreshResult> refreshInBackground() async {
+  final data = (await AppServices.open()).data;
+  await Future.wait([data.refreshTimetable(), data.refreshEclass()]);
+  return RefreshResult(
+    deadlines: data.deadlines.data?.value,
+    attendance: data.attendance.data?.value,
+    lessons: data.lessons.data?.value,
+    retry: [data.lessons.error, data.deadlines.error, data.attendance.error].any(isNetworkError),
+  );
 }

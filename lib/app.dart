@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'data/app_data.dart';
+import 'notifications/notifier.dart';
 import 'features/courses_screen.dart';
 import 'features/deadlines_screen.dart';
 import 'features/grades_screen.dart';
@@ -72,8 +73,44 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _tab = 0;
+  DateTime _lastRefresh = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askForNotificationsOnce());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Android 13+ needs the user's OK to post notifications. Asked once, on
+  /// the first launch; after that it lives in the system settings.
+  Future<void> _askForNotificationsOnce() async {
+    final data = context.read<AppData>();
+    if (data.prefs.notificationsAsked) return;
+    data.prefs.notificationsAsked = true;
+    await context.read<Notifier>().requestPermission();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final data = context.read<AppData>();
+    // Show what the background refresh fetched, then refresh if it's been a while.
+    data.reloadFromCache().then((_) {
+      if (DateTime.now().difference(_lastRefresh) > const Duration(minutes: 15)) {
+        _lastRefresh = DateTime.now();
+        data.refreshAll();
+      }
+    });
+  }
 
   void _push(Widget screen) =>
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
