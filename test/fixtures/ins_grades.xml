@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="euc-kr"?>
+<!-- SYNTHETIC FIXTURE: shaped after docs/ENDPOINTS.md. Every value is fake; DEPT_KNAME carries two raw EUC-KR byte pairs on purpose. -->
+<root>
+  <MAIN>
+    <STNO>U0000000</STNO>
+    <KNAME>TEST STUDENT</KNAME>
+    <JUMIN>FAKE-JUMIN-000000-0000000</JUMIN>
+    <DEPT_KNAME>School of Computer and Information Engineering (정보)</DEPT_KNAME>
+    <ENT_DATE>September  1, 2025</ENT_DATE>
+    <GRADE>2</GRADE>
+    <COM_CREDIT>17.0</COM_CREDIT>
+    <SIN_CREDIT>23.0</SIN_CREDIT>
+    <TOT_JUM>60.50</TOT_JUM>
+    <COM_PYUNG>3.558824</COM_PYUNG>
+    <SIN_PYUNG>3.558824</SIN_PYUNG>
+    <TODAYTIME>2026-10-22 09:00:00</TODAYTIME>
+    <KYOPIL>8.0</KYOPIL>
+    <JUNPIL>9.0</JUNPIL>
+    <MARK>
+      <STNO>U0000000</STNO>
+      <GRADE>Freshman</GRADE>
+      <YEARTERM>20251</YEARTERM>
+      <DISPLAY_YEARTERM>2025 Fall Semester</DISPLAY_YEARTERM>
+      <HAKSU_NO>CSE1001</HAKSU_NO>
+      <KWAMOK_KNAME xml:space="preserve">Introduction to Programming</KWAMOK_KNAME>
+      <CREDIT>3.0</CREDIT>
+      <MARKS>A+</MARKS>
+      <JUMSU>4.50</JUMSU>
+      <JONG_AKNAME>MR-M</JONG_AKNAME>
+      <REG_GUBUN />
+      <RHAKSU_NO/>
+      <SEASON_YN>N</SEASON_YN>
+      <HONOR/>
+      <DEPT_TREE>FAKE-TREE</DEPT_TREE>
+      <MAJOR_CODE>F00</MAJOR_CODE>
+    </MARK>
+    <MARK>
+      <STNO>U0000000</STNO>
+      <GRADE>Freshman</GRADE>
+      <YEARTERM>20251</YEARTERM>
+      <DISPLAY_YEARTERM>2025 Fall Semester</DISPLAY_YEARTERM>
+      <HAKSU_NO>MTH1010</HAKSU_NO>
+      <KWAMOK_KNAME xml:space="preserve">Calculus I</KWAMOK_KNAME>
+      <CREDIT>3.0</CREDIT>
+      <MARKS>B+</MARKS>
+      <JUMSU>3.50</JUMSU>
+      <JONG_AKNAME>GE-R</JONG_AKNAME>
+      <REG_GUBUN />
+      <RHAKSU_NO/>
+      <SEASON_YN>N</SEASON_YN>
+      <HONOR/>
+      <DEPT_TREE>FAKE-TREE</DEPT_TREE>
+      <MAJOR_CODE>F00</MAJOR_CODE>
+    </MARK>
+    <MARK>
+      <STNO>U0000000</STNO>
+      <GRADE>Freshman</GRADE>
+      <YEARTERM>20251</YEARTERM>
+      <DISPLAY_YEARTERM>2025 Fall Semester</DISPLAY_YEARTERM>
+      <HAKSU_NO>ENG1001</HAKSU_NO>
+      <KWAMOK_KNAME xml:space="preserve">Academic English I</KWAMOK_KNAME>
+      <CREDIT>2.0</CREDIT>
+      <MARKS>A0</MARKS>
+      <JUMSU>4.00</JUMSU>
+      <JONG_AKNAME>GE-R</JONG_AKNAME>
+      <REG_GUBUN />
+      <RHAKSU_NO/>
+      <SEASON_YN>N</SEASON_YN>
+      <HONOR/>
+      <DEPT_TREE>FAKE-TREE</DEPT_TREE>
+      <MAJOR_CODE>F00</MAJOR_CODE>
+    </MARK>
+    <MARK>
+      <STNO>U0000000</STNO>
+      <GRADE>Freshman</GRADE>
+      <YEARTERM>20252</YEARTERM>
+      <DISPLAY_YEARTERM>2026 Spring Semester</DISPLAY_YEARTERM>
+      <HAKSU_NO>CSE2002</HAKSU_NO>
+      <KWAMOK_KNAME xml:space="preserve">Data Structures</KWAMOK_KNAME>
+      <CREDIT>3.0</CREDIT>
+      <MARKS>A0</MARKS>
+      <JUMSU>4.00</JUMSU>
+      <JONG_AKNAME>MR-M</JONG_AKNAME>
+      <REG_GUBUN />
+      <RHAKSU_NO/>
+      <SEASON_YN>N</SEASON_YN>
+      <HONOR/>
+      <DEPT_TREE>FAKE-TREE</DEPT_TREE>
+      <MAJOR_CODE>F00</MAJOR_CODE>
+    </MARK>
+    <MARK>
+      <STNO>U0000000</STNO>
+      <GRADE>Freshman</GRADE>
+      <YEARTERM>20252</YEARTERM>
+      <DISPLAY_YEARTERM>2026 Spring Semester</DISPLAY_YEARTERM>
+      <HAKSU_NO>EEE2010</HAKSU_NO>
+      <KWAMOK_KNAME xml:space="preserve">Signals &amp; Systems</KWAMOK_KNAME>
+      <CREDIT>3.0</CREDIT>
+      <MARKS>C+</MARKS>
+      <JUMSU>2.50</JUMSU>
+      <JONG_AKNAME>MR-E</JONG_AKNAME>
+      <REG_GUBUN />
+      <RHAKSU_NO/>
+      <SEASON_YN>N</SEASON_YN>
+      <HONOR/>
+      <DEPT_TREE>FAKE-TREE</DEPT_TREE>
+      <MAJOR_CODE>F00</MAJOR_CODE>
+    </MARK>
+    <MARK>
+      <STNO>U0000000</STNO>
+      <GRADE />
+      <YEARTERM>20252</YEARTERM>
+      <DISPLAY_YEARTERM>2026 Spring Semester</DISPLAY_YEARTERM>
+      <HAKSU_NO>PHY1020</HAKSU_NO>
+      <KWAMOK_KNAME xml:space="preserve">Physics II</KWAMOK_KNAME>
+      <CREDIT>3.0</CREDIT>
+      <MARKS>B0</MARKS>
+      <JUMSU>3.00</JUMSU>
+      <JONG_AKNAME>GE-R</JONG_AKNAME>
+      <REG_GUBUN />
+      <RHAKSU_NO/>
+      <SEASON_YN>N</SEASON_YN>
+      <HONOR/>
+      <DEPT_TREE>FAKE-TREE</DEPT_TREE>
+      <MAJOR_CODE>F00</MAJOR_CODE>
+    </MARK>
+    <MARK>
+      <STNO>U0000000</STNO>
+      <GRADE>Sophomore</GRADE>
+      <YEARTERM>20261</YEARTERM>
+      <DISPLAY_YEARTERM>Current Semester</DISPLAY_YEARTERM>
+      <HAKSU_NO>CSE3010</HAKSU_NO>
+      <KWAMOK_KNAME xml:space="preserve">Operating Systems</KWAMOK_KNAME>
+      <CREDIT>3.0</CREDIT>
+      <MARKS>-</MARKS>
+      <JUMSU/>
+      <JONG_AKNAME>MR-M</JONG_AKNAME>
+      <REG_GUBUN />
+      <RHAKSU_NO/>
+      <SEASON_YN>N</SEASON_YN>
+      <HONOR/>
+      <DEPT_TREE>FAKE-TREE</DEPT_TREE>
+      <MAJOR_CODE>F00</MAJOR_CODE>
+    </MARK>
+    <MARK>
+      <STNO>U0000000</STNO>
+      <GRADE>Sophomore</GRADE>
+      <YEARTERM>20261</YEARTERM>
+      <DISPLAY_YEARTERM>Current Semester</DISPLAY_YEARTERM>
+      <HAKSU_NO>CSE3020</HAKSU_NO>
+      <KWAMOK_KNAME xml:space="preserve">Computer Networks</KWAMOK_KNAME>
+      <CREDIT>3.0</CREDIT>
+      <MARKS>-</MARKS>
+      <JUMSU>0.00</JUMSU>
+      <JONG_AKNAME>MR-M</JONG_AKNAME>
+      <REG_GUBUN />
+      <RHAKSU_NO/>
+      <SEASON_YN>N</SEASON_YN>
+      <HONOR/>
+      <DEPT_TREE>FAKE-TREE</DEPT_TREE>
+      <MAJOR_CODE>F00</MAJOR_CODE>
+    </MARK>
+  </MAIN>
+</root>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Header><h:ServerVersionInfo MajorVersion="15" MinorVersion="1" MajorBuildNumber="2507" MinorBuildNumber="6" Version="V2017_07_11" xmlns:h="http://schemas.microsoft.com/exchange/services/2006/types" xmlns="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"/></s:Header><s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><m:GetItemResponse xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"><m:ResponseMessages><m:GetItemResponseMessage ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode><m:Items><t:Message><t:ItemId Id="AAMkAtBl/RqtU6aBUwEk3BqjSVh6ewsyHcf6EiwKtq9Qj/TT/6aHDBvY4MDGSl/izPXavYp654YVviL3TwHQVeD7lC/YaBdTqfZprr26n6bc5xfiG6o1xa/FQhf895nyH3facs0Vy/dF97Po0swAAA=" ChangeKey="CQAAABYAAABZT9rUe77tEUNTiZSt7oa+LQRhHfwA"/><t:Body BodyType="Text" IsTruncated="false">Hi all,&#xD;
+&#xD;
+Tomorrow at 15:00 in room B-304 we will go over Lab 3 &amp; the report format.&#xD;
+Bring your laptops; the &lt;dataset&gt; is on eClass.&#xD;
+&#xD;
+Ҳурмат билан,&#xD;
+B. Tursunov&#xD;
+</t:Body></t:Message></m:Items></m:GetItemResponseMessage></m:ResponseMessages></m:GetItemResponse></s:Body></s:Envelope>

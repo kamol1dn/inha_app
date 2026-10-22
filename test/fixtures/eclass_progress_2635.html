@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html  dir="ltr" lang="en" xml:lang="en">
+<head>
+    <title>INHA University In Tashkent</title>
+    <link rel="shortcut icon" href="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/theme/1773396564/favicon" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="keywords" content="moodle, TEST STUDENT Student progress" />
+<link rel="stylesheet" type="text/css" href="https://eclass.inha.ac.kr/theme/yui_combo.php?rollup/3.17.2/yui-moodlesimple-min.css" /><script id="firstthemesheet" type="text/css">/** Required in order to fix style inclusion problems in IE with YUI **/</script><link rel="stylesheet" type="text/css" href="https://eclass.inha.ac.kr/theme/styles.php/coursemosv2/1773396564/all" />
+<script type="text/javascript">
+//<![CDATA[
+var M = {}; M.yui = {};
+M.pageloadstarttime = new Date();
+M.cfg = {"wwwroot":"https:\/\/eclass.inha.ac.kr","sesskey":"TESTSESSKY","loadingicon":"https:\/\/eclass.inha.ac.kr\/theme\/image.php\/coursemosv2\/core\/1773396564\/i\/loading_small","themerev":"1773396564","slasharguments":1,"theme":"coursemosv2","jsrev":"1773396564","admin":"admin","svgicons":true};var yui1ConfigFn = function(me) {if(/-skin|reset|fonts|grids|base/.test(me.name)){me.type='css';me.path=me.path.replace(/\.js/,'.css');me.path=me.path.replace(/\/yui2-skin/,'/assets/skins/sam/yui2-skin')}};
+var yui2ConfigFn = function(me) {var parts=me.name.replace(/^moodle-/,'').split('-'),component=parts.shift(),module=parts[0],min='-min';if(/-(skin|core)$/.test(me.name)){parts.pop();me.type='css';min=''}
+if(module){var filename=parts.join('-');me.path=component+'/'+module+'/'+filename+min+'.'+me.type}else{me.path=component+'/'+component+'.'+me.type}};
+YUI_config = {"debug":false,"base":"https:\/\/eclass.inha.ac.kr\/lib\/yuilib\/3.17.2\/","comboBase":"https:\/\/eclass.inha.ac.kr\/theme\/yui_combo.php?","combine":true,"filter":null,"insertBefore":"firstthemesheet","groups":{"yui2":{"base":"https:\/\/eclass.inha.ac.kr\/lib\/yuilib\/2in3\/2.9.0\/build\/","comboBase":"https:\/\/eclass.inha.ac.kr\/theme\/yui_combo.php?","combine":true,"ext":false,"root":"2in3\/2.9.0\/build\/","patterns":{"yui2-":{"group":"yui2","configFn":yui1ConfigFn}}},"moodle":{"name":"moodle","base":"https:\/\/eclass.inha.ac.kr\/theme\/yui_combo.php?m\/1773396564\/","combine":true,"comboBase":"https:\/\/eclass.inha.ac.kr\/theme\/yui_combo.php?","ext":false,"root":"m\/1773396564\/","patterns":{"moodle-":{"group":"moodle","configFn":yui2ConfigFn}},"filter":null,"modules":{"moodle-core-actionmenu":{"requires":["base","event","node-event-simulate"]},"moodle-core-blocks":{"requires":["base","node","io","dom","dd","dd-scroll","moodle-core-dragdrop","moodle-core-notification"]},"moodle-core-checknet":{"requires":["base-base","moodle-core-notification-alert","io-base"]},"moodle-core-chooserdialogue":{"requires":["base","panel","moodle-core-notification"]},"moodle-core-dock":{"requires":["base","node","event-custom","event-mouseenter","event-resize","escape","moodle-core-dock-loader","moodle-core-event"]},"moodle-core-dock-loader":{"requires":["escape"]},"moodle-core-dragdrop":{"requires":["base","node","io","dom","dd","event-key","event-focus","moodle-core-notification"]},"moodle-core-event":{"requires":["event-custom"]},"moodle-core-formautosubmit":{"requires":["base","event-key"]},"moodle-core-formchangechecker":{"requires":["base","event-focus","moodle-core-event"]},"moodle-core-handlebars":{"condition":{"trigger":"handlebars","when":"after"}},"moodle-core-languninstallconfirm":{"requires":["base","node","moodle-core-notification-confirm","moodle-core-notification-alert"]},"moodle-core-lockscroll":{"requires":["plugin","base-build"]},"moodle-core-maintenancemodetimer":{"requires":["base","node"]},"moodle-core-notification":{"requires":["moodle-core-notification-dialogue","moodle-core-notification-alert","moodle-core-notification-confirm","moodle-core-notification-exception","moodle-core-notification-ajaxexception"]},"moodle-core-notification-dialogue":{"requires":["base","node","panel","escape","event-key","dd-plugin","moodle-core-widget-focusafterclose","moodle-core-lockscroll"]},"moodle-core-notification-alert":{"requires":["moodle-core-notification-dialogue"]},"moodle-core-notification-confirm":{"requires":["moodle-core-notification-dialogue"]},"moodle-core-notification-exception":{"requires":["moodle-core-notification-dialogue"]},"moodle-core-notification-ajaxexception":{"requires":["moodle-core-notification-dialogue"]},"moodle-core-popuphelp":{"requires":["moodle-core-tooltip"]},"moodle-core-tooltip":{"requires":["base","node","io-base","moodle-core-notification-dialogue","json-parse","widget-position","widget-position-align","event-outside","cache-base"]},"moodle-core_availability-form":{"requires":["base","node","event","event-delegate","panel","moodle-core-notification-dialogue","json"]},"moodle-backup-backupselectall":{"requires":["node","event","node-event-simulate","anim"]},"moodle-backup-confirmcancel":{"requires":["node","node-event-simulate","moodle-core-notification-confirm"]},"moodle-calendar-info":{"requires":["base","node","event-mouseenter","event-key","overlay","moodle-calendar-info-skin"]},"moodle-course-categoryexpander":{"requires":["node","event-key"]},"moodle-course-dragdrop":{"requires":["base","node","io","dom","dd","dd-scroll","moodle-core-dragdrop","moodle-core-notification","moodle-course-coursebase","moodle-course-util"]},"moodle-course-formatchooser":{"requires":["base","node","node-event-simulate"]},"moodle-course-management":{"requires":["base","node","io-base","moodle-core-notification-exception","json-parse","dd-constrain","dd-proxy","dd-drop","dd-delegate","node-event-delegate"]},"moodle-course-modchooser":{"requires":["moodle-core-chooserdialogue","moodle-course-coursebase"]},"moodle-course-toolboxes":{"requires":["node","base","event-key","node","io","moodle-course-coursebase","moodle-course-util"]},"moodle-course-util":{"requires":["node"],"use":["moodle-course-util-base"],"submodules":{"moodle-course-util-base":{},"moodle-course-util-section":{"requires":["node","moodle-course-util-base"]},"moodle-course-util-cm":{"requires":["node","moodle-course-util-base"]}}},"moodle-form-dateselector":{"requires":["base","node","overlay","calendar"]},"moodle-form-passwordunmask":{"requires":[]},"moodle-form-shortforms":{"requires":["node","base","selector-css3","moodle-core-event"]},"moodle-form-showadvanced":{"requires":["node","base","selector-css3"]},"moodle-core_message-messenger":{"requires":["escape","handlebars","io-base","moodle-core-notification-ajaxexception","moodle-core-notification-alert","moodle-core-notification-dialogue","moodle-core-notification-exception"]},"moodle-question-chooser":{"requires":["moodle-core-chooserdialogue"]},"moodle-question-preview":{"requires":["base","dom","event-delegate","event-key","core_question_engine"]},"moodle-question-qbankmanager":{"requires":["node","selector-css3"]},"moodle-question-searchform":{"requires":["base","node"]},"moodle-availability_completion-form":{"requires":["base","node","event","moodle-core_availability-form"]},"moodle-availability_date-form":{"requires":["base","node","event","io","moodle-core_availability-form"]},"moodle-availability_grade-form":{"requires":["base","node","event","moodle-core_availability-form"]},"moodle-availability_group-form":{"requires":["base","node","event","moodle-core_availability-form"]},"moodle-availability_grouping-form":{"requires":["base","node","event","moodle-core_availability-form"]},"moodle-availability_profile-form":{"requires":["base","node","event","moodle-core_availability-form"]},"moodle-qtype_ddimageortext-dd":{"requires":["node","dd","dd-drop","dd-constrain"]},"moodle-qtype_ddimageortext-form":{"requires":["moodle-qtype_ddimageortext-dd","form_filepicker"]},"moodle-qtype_ddmarker-dd":{"requires":["node","event-resize","dd","dd-drop","dd-constrain","graphics"]},"moodle-qtype_ddmarker-form":{"requires":["moodle-qtype_ddmarker-dd","form_filepicker","graphics","escape"]},"moodle-qtype_ddwtos-dd":{"requires":["node","dd","dd-drop","dd-constrain"]},"moodle-qtype_stack-input":{"requires":["node","event-valuechange","moodle-core-event","io","json-parse"]},"moodle-mod_assign-history":{"requires":["node","transition"]},"moodle-mod_forum-subscriptiontoggle":{"requires":["base-base","io-base"]},"moodle-mod_quiz-autosave":{"requires":["base","node","event","event-valuechange","node-event-delegate","io-form"]},"moodle-mod_quiz-dragdrop":{"requires":["base","node","io","dom","dd","dd-scroll","moodle-core-dragdrop","moodle-core-notification","moodle-mod_quiz-quizbase","moodle-mod_quiz-util-base","moodle-mod_quiz-util-page","moodle-mod_quiz-util-slot","moodle-course-util"]},"moodle-mod_quiz-modform":{"requires":["base","node","event"]},"moodle-mod_quiz-questionchooser":{"requires":["moodle-core-chooserdialogue","moodle-mod_quiz-util","querystring-parse"]},"moodle-mod_quiz-quizbase":{"requires":["base","node"]},"moodle-mod_quiz-quizquestionbank":{"requires":["base","event","node","io","io-form","yui-later","moodle-question-qbankmanager","moodle-core-notification-dialogue"]},"moodle-mod_quiz-randomquestion":{"requires":["base","event","node","io","moodle-core-notification-dialogue"]},"moodle-mod_quiz-repaginate":{"requires":["base","event","node","io","moodle-core-notification-dialogue"]},"moodle-mod_quiz-toolboxes":{"requires":["base","node","event","event-key","io","moodle-mod_quiz-quizbase","moodle-mod_quiz-util-slot","moodle-core-notification-ajaxexception"]},"moodle-mod_quiz-util":{"requires":["node","moodle-core-actionmenu"],"use":["moodle-mod_quiz-util-base"],"submodules":{"moodle-mod_quiz-util-base":{},"moodle-mod_quiz-util-slot":{"requires":["node","moodle-mod_quiz-util-base"]},"moodle-mod_quiz-util-page":{"requires":["node","moodle-mod_quiz-util-base"]}}},"moodle-message_airnotifier-toolboxes":{"requires":["base","node","io"]},"moodle-block_navigation-navigation":{"requires":["base","io-base","node","event-synthetic","event-delegate","json-parse"]},"moodle-filter_glossary-autolinker":{"requires":["base","node","io-base","json-parse","event-delegate","overlay","moodle-core-event","moodle-core-notification-alert","moodle-core-notification-exception","moodle-core-notification-ajaxexception"]},"moodle-filter_mathjaxloader-loader":{"requires":["moodle-core-event"]},"moodle-editor_atto-editor":{"requires":["node","transition","io","overlay","escape","event","event-simulate","event-custom","node-event-html5","node-event-simulate","yui-throttle","moodle-core-notification-dialogue","moodle-core-notification-confirm","moodle-editor_atto-rangy","handlebars","timers","querystring-stringify"]},"moodle-editor_atto-plugin":{"requires":["node","base","escape","event","event-outside","handlebars","event-custom","timers","moodle-editor_atto-menu"]},"moodle-editor_atto-menu":{"requires":["moodle-core-notification-dialogue","node","event","event-custom"]},"moodle-editor_atto-rangy":{"requires":[]},"moodle-report_eventlist-eventfilter":{"requires":["base","event","node","node-event-delegate","datatable","autocomplete","autocomplete-filters"]},"moodle-report_loglive-fetchlogs":{"requires":["base","event","node","io","node-event-delegate"]},"moodle-gradereport_grader-gradereporttable":{"requires":["base","node","event","handlebars","overlay","event-hover"]},"moodle-gradereport_history-userselector":{"requires":["escape","event-delegate","event-key","handlebars","io-base","json-parse","moodle-core-notification-dialogue"]},"moodle-tool_capability-search":{"requires":["base","node"]},"moodle-tool_lp-dragdrop-reorder":{"requires":["moodle-core-dragdrop"]},"moodle-tool_monitor-dropdown":{"requires":["base","event","node"]},"moodle-assignfeedback_editpdf-editor":{"requires":["base","event","node","io","graphics","json","event-move","event-resize","transition","querystring-stringify-simple","moodle-core-notification-dialog","moodle-core-notification-exception","moodle-core-notification-ajaxexception"]},"moodle-atto_accessibilitychecker-button":{"requires":["color-base","moodle-editor_atto-plugin"]},"moodle-atto_accessibilityhelper-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_align-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_bold-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_charmap-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_clear-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_collapse-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_coursemosvimeo-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_emoticon-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_equation-button":{"requires":["moodle-editor_atto-plugin","moodle-core-event","io","event-valuechange","tabview","array-extras"]},"moodle-atto_html-button":{"requires":["moodle-editor_atto-plugin","event-valuechange"]},"moodle-atto_image-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_indent-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_italic-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_link-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_managefiles-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_managefiles-usedfiles":{"requires":["node","escape"]},"moodle-atto_media-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_noautolink-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_orderedlist-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_pasteimage-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_pbltemplate-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_poodll-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_rtl-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_strike-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_subscript-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_superscript-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_table-button":{"requires":["moodle-editor_atto-plugin","moodle-editor_atto-menu","event","event-valuechange"]},"moodle-atto_title-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_underline-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_undo-button":{"requires":["moodle-editor_atto-plugin"]},"moodle-atto_unorderedlist-button":{"requires":["moodle-editor_atto-plugin"]}}},"gallery":{"name":"gallery","base":"https:\/\/eclass.inha.ac.kr\/lib\/yuilib\/gallery\/","combine":true,"comboBase":"https:\/\/eclass.inha.ac.kr\/theme\/yui_combo.php?","ext":false,"root":"gallery\/1773396564\/","patterns":{"gallery-":{"group":"gallery"}}}},"modules":{"core_filepicker":{"name":"core_filepicker","fullpath":"https:\/\/eclass.inha.ac.kr\/lib\/javascript.php\/1773396564\/repository\/filepicker.js","requires":["base","node","node-event-simulate","json","async-queue","io-base","io-upload-iframe","io-form","yui2-treeview","panel","cookie","datatable","datatable-sort","resize-plugin","dd-plugin","escape","moodle-core_filepicker"]},"core_comment":{"name":"core_comment","fullpath":"https:\/\/eclass.inha.ac.kr\/lib\/javascript.php\/1773396564\/comment\/comment.js","requires":["base","io-base","node","json","yui2-animation","overlay","escape"]},"report_ubcompletion":{"name":"report_ubcompletion","fullpath":"https:\/\/eclass.inha.ac.kr\/lib\/javascript.php\/1773396564\/report\/ubcompletion\/module.js","requires":[]}}};
+M.yui.loader = {modules: {}};
+
+//]]>
+</script>
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="인하대학교 LMS" />
+<meta property="og:description" content="Inha University" />
+<meta property="og:image" content="null" />
+<meta property="og:url" content="http://djulms.moodler.kr" />
+
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-4ZB4LBGXYG"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-4ZB4LBGXYG');
+</script>    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, target-densitydpi=medium-dpi, minimal-ui" />
+</head>
+
+<body  id="page-report-ubcompletion-user_progress" class="format-ubsweeks  path-report path-report-ubcompletion safari dir-ltr lang-en yui-skin-sam yui3-skin-sam eclass-inha-ac-kr pagelayout-report course-2635 context-76988 category-93 coursemos-layout-course page-xs has-region-side-pre empty-region-side-pre content-only">
+	<div class="skiplinks">
+    <a href="#maincontent" class="skip">Skip to main content</a>
+</div><script type="text/javascript" src="https://eclass.inha.ac.kr/theme/yui_combo.php?rollup/3.17.2/yui-moodlesimple-min.js&amp;rollup/1773396564/mcore-min.js"></script><script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/core/jquery-1.11.2.min.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/core/ui-1.12.1/jquery-ui.min.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/bootstrap.min.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/jquery.cookie.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/jquery.validate.min.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/jquery.validate.methods.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/jquery.tableHeadFixer.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/bootstrap-datepicker.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/jquery-sortable.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/moment.min.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/fullcalendar.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/gcal.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/jquery.filedownload.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/timer.jquery.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/jquery.validate.en.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/jquery.mCustomScrollbar.concat.min.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/jquery.php/theme_coursemosv2/jquery.headroom.min.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/lib/javascript.php/1773396564/lib/javascript-static.js"></script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/javascript.php/coursemosv2/1773396564/head"></script>
+<script type="text/javascript">
+//<![CDATA[
+document.body.className += ' jsenabled';
+//]]>
+</script>
+
+
+<style type="text/css">
+body{
+/* 모바일 화면일때 파일 선택도구 보이게 화면조정(jeenlee_190322) */
+ @media (max-width: 767px) {
+	.moodle-dialogue-base .moodle-dialogue-fullscreen .moodle-dialogue-content { top: 91px;}
+	/* 모바일상에 파일첨부 레이아웃 재조정_jeenlee_2019.03.19 */
+	.mobiletheme .file-picker .fp-repo-items {
+    margin: 10px 0 0 0;
+	}
+	.mobiletheme .fp-content-center {
+		padding: 20px 10px;
+	}
+	/* 모바일화면일때 파일첨부가 중앙으로 오도록 수정(jeenlee_190322) */
+	.fp-repo-items .control-group .control-label {
+		display: none;
+	}
+	.fp-repo-items .control-group .controls {
+		margin-left: 100px;
+	}
+ }
+}
+</style>	<script type="text/javascript">
+		theme_coursemosv2.lang = 'en';
+    </script>
+	<div id="page" class="">
+		<div id="page-header">
+			<nav class="navbar navbar-default navbar-fixed-top headroom">
+	<div class="container-fluid">
+		<div class="navbar-brand">
+			<a href="https://eclass.inha.ac.kr" class="logo"><span class="sr-only">CyberCampus</span></a>
+		</div>
+		
+		<div class="usermenu">
+		<ul class="nav nav-pills" role="tablist"><li class="user-info-change"><li class="user_department hidden-xs">TEST STUDENT</li><li class="user-info-menu"><a class="user-info-popover" tabindex="0" role="button" data-toggle="popover" data-placement="bottom"><img src="https://eclass.inha.ac.kr/pluginfile.php/1/user/icon/coursemosv2/f2?rev=1" alt="Picture of TEST STUDENT" class="userpicture" /></a><div class="user-info-box popover-box"><div class="dropdown dropdown-lang"><a id="user-info-lang" href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/theme_coursemosv2/1773396564/flag/en" alt="" />&nbsp;&nbsp;English ‎(en)‎ <span class="caret"></span> </a><ul class="dropdown-menu" aria-labelledby="user-info-lang"><li><a href="https://eclass.inha.ac.kr/report/ubcompletion/user_progress.php?id=2635&amp;lang=en" title="English ‎(en)‎" class="a-lang" data-lang="en"><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/theme_coursemosv2/1773396564/flag/en" alt="en" class="lang_flag" /> English ‎(en)‎</a></li></ul></div><div class="user-info-picture"><img src="https://eclass.inha.ac.kr/pluginfile.php/1/user/icon/coursemosv2/f1?rev=1" alt="Picture of TEST STUDENT" class="userpicture" /><h4>TEST STUDENT</h4><p class="department">School of Computer and Information Engineering</p></div><ul class="user-info-submenu clearfix"><li class="items"><a href="https://eclass.inha.ac.kr/user/edit.php?id=1">Update profile</a></li><li class="items"><a href="https://eclass.inha.ac.kr/login/logout.php?sesskey=TESTSESSKY">Log out</a></li></ul><ul class="user-info-shortcut"><li><a href="https://eclass.inha.ac.kr/user/files.php">Manage file</a></li></ul></div></li><li class="user-courses"><a class="user-courses-popover icon-a" tabindex="0" role="button" data-toggle="popover" data-placement="bottom"><div class="icon icon-my"></div></a><div class="user-courses-box popover-box"><div class="popover-header">My Course (0)</div><ul class="my-course-lists"><li class="nocourses">Loading...</li></ul><div class="popover-footer"><a href="https://eclass.inha.ac.kr">MY COURSES</a></div></div></li><li class="user-notification"><a class="icon-a user-noti-popover" tabindex="0" role="button" data-toggle="popover" data-placement="bottom"><div class="icon icon-noti"></div></a><div class="user-noti-box popover-box"><div class="popover-header"><span>All Notifications</span> <img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/theme_coursemosv2/1773396564/layout/popover-icon" alt="" class="gear" /></div><div class="user-noti-lists"><div class="nomessage">Loading...</div></div><div class="popover-footer"><a href="https://eclass.inha.ac.kr/local/ubnotification/">View all</a></div></div></li><li class="user-message"><a class="icon-a user-message-popover" tabindex="0" role="button" data-toggle="popover" data-placement="bottom"><div class="icon icon-msg"></div></a><div class="user-message-box popover-box"><div class="popover-header">Message <img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/theme_coursemosv2/1773396564/layout/popover-icon" alt="" class="gear" /></div><div class="user-message-lists"><div class="nomessage">Loading...</div></div><div class="popover-footer"><a href="#" class="btn-allread-message">Read all messages.</a><span class="popover-bar">&nbsp;</span><a href="https://eclass.inha.ac.kr/local/ubmessage/">View All</a></div></div></li><li class="active user-login user-logout hidden-xs"><a href="https://eclass.inha.ac.kr/login/logout.php?sesskey=TESTSESSKY" class="btn btn-person">Log out</a></li></ul>		</div>
+		
+		<div class="coursename"><h1><a href="https://eclass.inha.ac.kr/course/view.php?id=2635">Blockchain Basics and Platforms[202602-SOC4190-001]</a></h1></div>	</div>
+</nav>		</div>
+		
+		<div id="page-lnb">
+			<ul class="left-menus">
+	<li class=""><a href="https://eclass.inha.ac.kr" class="left-menu-link left-menu-link-mypage" title="My Page" data-toggle="tooltip" data-placement="right"><h5 class="">My Page</h5></a><ul><li class=""><a href="https://eclass.inha.ac.kr" title="">Dashboard</a></li><li class=""><a href="https://eclass.inha.ac.kr/user/files.php" title="">Manage file</a></li><li class=""><a href="https://eclass.inha.ac.kr/mod/ubboard/my.php" title="">Notice Board</a></li><li class=""><a href="https://eclass.inha.ac.kr/user/edit.php?id=1" title="">Update profile</a></li><li class=""><a href="https://eclass.inha.ac.kr/calendar/view.php?view=month" title="">Manage calendar</a></li></ul></li><li class=""><a href="https://eclass.inha.ac.kr" class="left-menu-link left-menu-link-mycourses" title="Curriculum" data-toggle="tooltip" data-placement="right"><h5 class="">Curriculum</h5></a><ul><li class=""><a href="https://eclass.inha.ac.kr/local/ubion/user/" title="">My Course</a></li><li class=""><a href="https://eclass.inha.ac.kr/local/ubassistant/" title="">Assistant/Auditor Request</a></li></ul></li><li class=""><a href="https://eclass.inha.ac.kr/local/ubmessage/" class="left-menu-link left-menu-link-message" title="Message" data-toggle="tooltip" data-placement="right"><h5 class="nosubmenu">Message</h5></a></li><li class=""><a href="https://eclass.inha.ac.kr/mod/ubboard/view.php?id=5" class="left-menu-link left-menu-link-guide" title="Guide" data-toggle="tooltip" data-placement="right"><h5 class="">Guide</h5></a><ul><li class=""><a href="https://eclass.inha.ac.kr/mod/ubboard/view.php?id=5" title="">Announcements</a></li><li class=""><a href="https://eclass.inha.ac.kr/mod/ubboard/view.php?id=6" title="">Q&A</a></li><li class=""><a href="https://eclass.inha.ac.kr/mod/ubboard/view.php?id=7" title="">FAQ</a></li><li class=""><a href="https://eclass.inha.ac.kr/local/ubion/manual/" title="">Manual</a></li><div class="itl_info"><h5>Call us</h5><div class="itl_desc"><p class="tell">000-0000-0000</p><p class="name">MOOC Center</p></div></div></ul></li></ul>
+
+<!--<ul class="left-menus left-banner active">
+<li><a href="http://oldlearn.inha.ac.kr/" target="_blank"><div class="itl_info"><div class="itl_desc"><p class="name">(old)LMS</p></div></div></a></li></ul>//-->		</div>
+		<div id="page-mask">
+						<div id="page-container" class="">
+				<div id="page-submenu">
+	<div id="coursemos-course-menu">
+		<ul class="course-menus">
+			<li>
+	<div class="block block-coursemos block-coursehome "  data-name="coursehome">
+		<div class="header">
+			<div class="block_action">
+				<img class="block-hider-hide" alt="Hide block" src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/core/1773396564/t/switch_minus" title="Hide block" />
+				<img class="block-hider-show" alt="Show block" src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/core/1773396564/t/switch_plus" title="Show block" />
+			</div>
+			<h2><a href="https://eclass.inha.ac.kr/course/view.php?id=2635">Course Home</a></h2>
+		</div>
+		<div class="content">
+						<ul class="topmenu">
+				<li class="expand"><a href="#" title="Course Info" class="" >Course Info <span class="caret"></span></a><ul><li><a href="https://eclass.inha.ac.kr/local/ubion/setting/syllabus.php?id=2635" title="Syllabus" class="submenu-syllabus " >Syllabus</a></li><li><a href="https://eclass.inha.ac.kr/user/users.php?id=2635" title="Participants list" class="submenu-users " >Participants list</a></li></ul></li><li class="expand"><a href="#" title="Grade/Attendance" class="" >Grade/Attendance <span class="caret"></span></a><ul><li><a href="https://eclass.inha.ac.kr/report/ubcompletion/progress.php?id=2635" title="Progress status" class="submenu-progress active" >Progress status</a></li><li><a href="https://eclass.inha.ac.kr/grade/report/user/index.php?id=2635" title="Grades" class="submenu-grade " >Grades</a></li></ul></li><li class=""><a href="#" title="Students Notifications" class="" >Students Notifications <span class="caret"></span></a><ul><li><a href="https://eclass.inha.ac.kr/local/ubmessage/send.php?id=2635" title="Sending Message" class="submenu-message " >Sending Message</a></li></ul></li><li class=""><a href="#" title="Others" class="" >Others <span class="caret"></span></a><ul><li><a href="https://eclass.inha.ac.kr/local/ubcommunication/group/user_group.php?id=2635" title="Group members" class="submenu-group_member " >Group members</a></li></ul></li>			</ul>
+			
+					</div>
+	</div>
+</li>
+	<li>
+		<div class="block block-coursemos block-quick-mod "  data-name="quick-mod">
+			<div class="header">
+				<div class="block_action">
+					<img class="block-hider-hide" alt="Hide block" src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/core/1773396564/t/switch_minus" title="Hide block" />
+					<img class="block-hider-show" alt="Show block" src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/core/1773396564/t/switch_plus" title="Show block" />
+				</div>
+				<h2>Activities/Resources</h2>
+			</div>
+			<div class="content">
+				<ul class="add_activities">
+					<li><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/label/1773396564/icon" alt="" class="moduleicon" /> <a href="https://eclass.inha.ac.kr/mod/label/index.php?id=2635">Label</a></li><li><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/assign/1773396564/icon" alt="" class="moduleicon" /> <a href="https://eclass.inha.ac.kr/mod/assign/index.php?id=2635">Assignment</a></li><li><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/ubfile/1773396564/icon" alt="" class="moduleicon" /> <a href="https://eclass.inha.ac.kr/mod/ubfile/index.php?id=2635">file</a></li><li><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/vod/1773396564/icon" alt="" class="moduleicon" /> <a href="https://eclass.inha.ac.kr/mod/vod/index.php?id=2635">VOD</a></li><li class="extra_modules"><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/ubboard/1773396564/icon" alt="" class="moduleicon" /> <a href="https://eclass.inha.ac.kr/mod/ubboard/index.php?id=2635">Board</a></li><li class="extra_modules"><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/page/1773396564/icon" alt="" class="moduleicon" /> <a href="https://eclass.inha.ac.kr/mod/page/index.php?id=2635">Page</a></li><li class="extra_modules"><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/quiz/1773396564/icon" alt="" class="moduleicon" /> <a href="https://eclass.inha.ac.kr/mod/quiz/index.php?id=2635">Quiz</a></li><li class="extra_modules"><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/url/1773396564/icon" alt="" class="moduleicon" /> <a href="https://eclass.inha.ac.kr/mod/url/index.php?id=2635">URL</a></li>				</ul>
+							</div>
+		</div>
+	</li>
+			</ul>
+		<aside id="block-region-side-pre" class="block-region" data-blockregion="side-pre" data-droptarget="1"></aside>        	</div>
+	
+</div>
+				
+				
+				<div id="page-content" class="clearfix">
+					<div id="page-content-wrap">
+						<div class="page-content-navigation"><ol class=breadcrumb><li class="breadcrumb-home"><a href="https://eclass.inha.ac.kr"><img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/theme_coursemosv2/1773396564/layout/course-home" alt="HOME" /></a></li><li><span itemscope="" itemtype="http://data-vocabulary.org/Breadcrumb"><a itemprop="url" title="Blockchain Basics and Platforms" href="https://eclass.inha.ac.kr/course/view.php?id=2635"><span itemprop="title">Blockchain Basics and Platforms</span></a></span></li><li><span itemscope="" itemtype="http://data-vocabulary.org/Breadcrumb"><a itemprop="url" href="https://eclass.inha.ac.kr/report/ubcompletion/user_progress.php?id=2635&amp;viewtype=1"><span itemprop="title">TEST STUDENT Student progress</span></a></span></li></ol></div>						<div id="region-main">
+							<span class="notifications" id="user-notifications"></span><div role="main"><span id="maincontent"></span><h2>TEST STUDENT Student progress</h2><div class="report_ubcompletion progressreport">
+	<div class="buttons"></div>	<div id="ubcompletion-progress-wrapper" class="no-overflow">
+		<div class="well">
+			<table class="table table-bordered">
+				<colgroup>
+					<col class="w150" />
+					<col />
+				</colgroup>
+				<tbody>
+					<tr>
+						<th class="text-right">ID number</th>
+						<td class="text-left">U0000000</td>
+					</tr>
+					<tr>
+						<th class="text-right">Fullname</th>
+						<td class="text-left">TEST STUDENT</td>
+					</tr>
+					<tr>
+						<th class="text-right">Mobile phone</th>
+						<td class="text-left">998000000000</td>
+					</tr>
+									</tbody>
+			</table>
+		</div>
+
+		<div class="tabs">
+					</div>
+
+		<div class="alert alert-danger">There are no resources/activities with progress management in this course yet</div>	</div>
+
+	
+	<div class="modal fade user_progress_modal">
+		<div class="modal-dialog modal-lg">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+					<h3 class="modal-title"></h3>
+				</div>
+				<div class="modal-body">
+					<div class="maxheight">
+                        <div class="well">
+                            <dl class="dl-horizontal" style="margin-bottom:0">
+                                <dt>열람시간</dt>
+                                <dd>동영상 뷰어 활성화 시간</dd>
+                                <dt>recognized learning hours</dt>
+                                <dd>동영상 재생 시간</dd>
+                            </dl>
+                        </div>
+						<table class="progress_detail table table-bordered">
+							<colgroup>
+								<col class="w50" />
+								<col class="w120" />
+								<col class="w120" />
+                                <col class="w100" />
+                                <col class="w120" />
+								<col class="w100" />
+							</colgroup>
+							<thead>
+								<tr>
+									<th class="text-center">No.</th>
+									<th class="text-center">Start time</th>
+									<th class="text-center">End time</th>
+                                    <th class="text-center">
+                                        열람시간                                    </th>
+                                    <th class="text-center">
+                                        recognized learning hours                                    </th>
+									<th class="text-center">IP address(Device type)</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>&nbsp;</td>
+                                    <td>&nbsp;</td>
+                                    <td>&nbsp;</td>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button class="btn btn-default" data-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="modal fade user_progress_detail_modal">
+		<div class="modal-dialog modal-lg">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+					<h3 class="modal-title">track detail</h3>
+				</div>
+				<div class="modal-body">
+					<div class="maxheight">
+						<table class="progress_detail table table-bordered">
+							<colgroup>
+								<col class="w50" />
+								<col class="w50" />
+								<col class="w50" />
+								<col class="w80" />
+								<col class="w80" />
+								<col class="w80" />
+								<col class="w80" />
+								<col class="w100" />
+								<col />
+							</colgroup>
+							<thead>
+								<tr>
+									<th class="text-center">id</th>
+									<th class="text-center">track</th>
+									<th class="text-center">attempt</th>
+									<th class="text-center">state</th>
+									<th class="text-center">positionold</th>
+									<th class="text-center">positionnew</th>
+									<th class="text-center">progress</th>
+									<th class="text-center">timetrack</th>
+									<th class="text-center">unixtime</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+									<td>&nbsp;</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button class="btn btn-default" data-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+    </div>
+
+</div>
+</div>				            
+			            </div>
+		            </div>
+				</div>
+								<div class="coursemos-course-menu-expand">
+					<button type="button" class="nobtn btn-course-menu btn-course-menu-open"></button>
+					<button type="button" class="nobtn btn-course-menu btn-course-menu-close"></button>
+				</div>
+							</div>
+		</div>
+		
+		<div id="page-footer">
+			<ul class="footer-menus pull-left">
+		<!-- <li><a href="https://www.inha.ac.kr/kr/927/subview.do" target="_blank">Pledge Letter</a></li>//-->
+</ul>
+<!-- 
+<div class="helpdesk">
+	<a href="#" class="nobtn">도움말</a>
+</div>
+ -->
+<div class="address">
+	Inha University in TashkentOffice : 9, Ziyolilar str., M.Ulugbek district, Tashkent city
+Contact : +998 00 000-00-00; +998 00 000-00-00; +998 00 000-00-00 Email : test@example.com Internet : www.iut.uz, www.inha.uz <br/>
+	<span class="copyright">
+			</span>
+</div>
+<div id="back-top">
+	<a href="#top"><span></span></a>
+</div>
+<div id="ajax_loading_submit">&nbsp;</div>
+<div id="ajax_loading_container">
+	<div id="ajax_loading_submit_img">
+		<img src="https://eclass.inha.ac.kr/theme/image.php/coursemosv2/theme_coursemosv2/1773396564/ajax-loader" alt="loading..." /> Loading...
+	</div>
+	<div id="ajax_loading_message">
+		<p class="save_msg">Data is saved. Please wait.</p>
+		<p class="refresh_msg">Long period of time, if refresh(F5) while loading page please.</p>
+	</div>
+</div>	
+		</div>
+	</div>
+	
+<script type="text/javascript" src="https://s3.ap-northeast-2.amazonaws.com/code.coursemos.co.kr/flexiblepage_cm32.js?v=0.04"></script>
+<script type="text/javascript">
+//<![CDATA[
+var require = {
+    baseUrl : 'https://eclass.inha.ac.kr/lib/requirejs.php/1773396564/',
+    // We only support AMD modules with an explicit define() statement.
+    enforceDefine: true,
+    skipDataMain: true,
+    waitSeconds : 0,
+
+    paths: {
+        jquery: 'https://eclass.inha.ac.kr/lib/javascript.php/1773396564/lib/jquery/jquery-1.11.2.min',
+        jqueryui: 'https://eclass.inha.ac.kr/lib/javascript.php/1773396564/lib/jquery/ui-1.12.1/jquery-ui.min',
+        jqueryprivate: 'https://eclass.inha.ac.kr/lib/javascript.php/1773396564/lib/requirejs/jquery-private'
+    },
+
+    // Custom jquery config map.
+    map: {
+      // '*' means all modules will get 'jqueryprivate'
+      // for their 'jquery' dependency.
+      '*': { jquery: 'jqueryprivate' },
+
+      // 'jquery-private' wants the real jQuery module
+      // though. If this line was not here, there would
+      // be an unresolvable cyclic dependency.
+      jqueryprivate: { jquery: 'jquery' }
+    }
+};
+
+//]]>
+</script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/lib/javascript.php/1773396564/lib/requirejs/require.min.js"></script>
+<script type="text/javascript">
+//<![CDATA[
+require(['core/first'], function() {
+;
+require(["media_videojs/loader"], function(loader) {
+    loader.setUp(function(videojs) {
+        videojs.options.flash.swf = "https://eclass.inha.ac.kr/media/player/videojs/videojs/video-js.swf";
+videojs.addLanguage("en",{
+ "Play": "Play",
+ "Pause": "Pause",
+ "Current Time": "Current Time",
+ "Duration Time": "Duration Time",
+ "Remaining Time": "Remaining Time",
+ "Stream Type": "Stream Type",
+ "LIVE": "LIVE",
+ "Loaded": "Loaded",
+ "Progress": "Progress",
+ "Fullscreen": "Fullscreen",
+ "Non-Fullscreen": "Non-Fullscreen",
+ "Mute": "Mute",
+ "Unmute": "Unmute",
+ "Playback Rate": "Playback Rate",
+ "Subtitles": "Subtitles",
+ "subtitles off": "subtitles off",
+ "Captions": "Captions",
+ "captions off": "captions off",
+ "Chapters": "Chapters",
+ "Close Modal Dialog": "Close Modal Dialog",
+ "Descriptions": "Descriptions",
+ "descriptions off": "descriptions off",
+ "Audio Track": "Audio Track",
+ "You aborted the media playback": "You aborted the media playback",
+ "A network error caused the media download to fail part-way.": "A network error caused the media download to fail part-way.",
+ "The media could not be loaded, either because the server or network failed or because the format is not supported.": "The media could not be loaded, either because the server or network failed or because the format is not supported.",
+ "The media playback was aborted due to a corruption problem or because the media used features your browser did not support.": "The media playback was aborted due to a corruption problem or because the media used features your browser did not support.",
+ "No compatible source was found for this media.": "No compatible source was found for this media.",
+ "The media is encrypted and we do not have the keys to decrypt it.": "The media is encrypted and we do not have the keys to decrypt it.",
+ "Play Video": "Play Video",
+ "Close": "Close",
+ "Modal Window": "Modal Window",
+ "This is a modal window": "This is a modal window",
+ "This modal can be closed by pressing the Escape key or activating the close button.": "This modal can be closed by pressing the Escape key or activating the close button.",
+ ", opens captions settings dialog": ", opens captions settings dialog",
+ ", opens subtitles settings dialog": ", opens subtitles settings dialog",
+ ", opens descriptions settings dialog": ", opens descriptions settings dialog",
+ ", selected": ", selected"
+});
+
+    });
+});;
+require(["block_settings/settingsblock"], function(amd) { amd.init("17", null); });;
+
+require(['core/yui'], function(Y) {
+    M.util.init_skiplink(Y);
+});
+;
+require(["core/notification"], function(amd) { amd.init(76988, []); });;
+require(["core/log"], function(amd) { amd.setConfig({"level":"warn"}); });
+});
+//]]>
+</script>
+<script type="text/javascript" src="https://eclass.inha.ac.kr/theme/javascript.php/coursemosv2/1773396564/footer"></script>
+<script type="text/javascript">
+//<![CDATA[
+M.str = {"moodle":{"lastmodified":"Last modified","name":"Name","error":"Error","info":"Information","yes":"Yes","no":"No","morehelp":"More help","loadinghelp":"Loading...","cancel":"Cancel","confirm":"Confirm","areyousure":"Are you sure?","closebuttontitle":"Close","unknownerror":"Unknown error"},"repository":{"type":"Type","size":"Size","invalidjson":"Invalid JSON string","nofilesattached":"No files attached","filepicker":"File picker","logout":"Logout","nofilesavailable":"No files available","norepositoriesavailable":"Sorry, none of your current repositories can return files in the required format.","fileexistsdialogheader":"File exists","fileexistsdialog_editor":"A file with that name has already been attached to the text you are editing.","fileexistsdialog_filemanager":"A file with that name has already been attached","renameto":"Rename to \"{$a}\"","referencesexist":"There are {$a} alias\/shortcut files that use this file as their source","select":"Select"},"admin":{"confirmdeletecomments":"You are about to delete comments, are you sure?","confirmation":"Confirmation"},"report_ubcompletion":{"recognition_confirm_y":"[{$a}] \ucc98\ub9ac \ud558\uc2dc\uaca0\uc2b5\ub2c8\uae4c?","recognition_confirm_n":"[{$a}]\uc744 \ucde8\uc18c\ud558\uc2dc\uaca0\uc2b5\ub2c8\uae4c?"}};
+//]]>
+</script>
+<script type="text/javascript">
+//<![CDATA[
+(function() {setTimeout("fix_column_widths()", 20);
+ M.util.js_pending('random6ada52b69335c1'); Y.use('report_ubcompletion', function(Y) { M.report_ubcompletion.user_progress(Y, "2635", "1", {"no_learning_msg":"Learning history does not exist.","progress_recognize_100":"Do you want to recognize 100% of Progress?","notfound_video_id":"This video ID does not exist."});  M.util.js_complete('random6ada52b69335c1'); });
+M.util.help_popups.setup(Y);
+Y.use("moodle-core-popuphelp",function() {M.core.init_popuphelp();
+});
+ M.util.js_pending('random6ada52b69335c3'); Y.on('domready', function() { M.util.js_complete("init");  M.util.js_complete('random6ada52b69335c3'); });
+})();
+//]]>
+</script>
+</body>
+</html>

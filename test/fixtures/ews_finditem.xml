@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Header>
+    <h:ServerVersionInfo MajorVersion="15" MinorVersion="1" MajorBuildNumber="2507" MinorBuildNumber="6" Version="V2017_07_11" xmlns:h="http://schemas.microsoft.com/exchange/services/2006/types" xmlns="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"/>
+  </s:Header>
+  <s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <m:FindItemResponse xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+      <m:ResponseMessages>
+        <m:FindItemResponseMessage ResponseClass="Success">
+          <m:ResponseCode>NoError</m:ResponseCode>
+          <m:RootFolder IndexedPagingOffset="5" TotalItemsInView="137" IncludesLastItemInRange="false">
+            <t:Items>
+              <t:Message>
+                <t:ItemId Id="AAMkATDglwkA+hbKMhk0D2CnZBhRk7F0QrkGI6ahdOtMg0+1K0CHzNrWesV2GfVHC2dV+G4Kc+DugAKa3pOdUL3mKfCAqmG/Yb0i/T7cWhc8eCdgARDzxCD9Y+jg8Jf982hElOqf2DC4urFVyAwAAA=" ChangeKey="CQAAABYAAABzzAFPGcWaMUL7DsaE8PcF1w7vOa1A"/>
+                <t:Subject>Midterm exam schedule — Fall 2026</t:Subject>
+                <t:DateTimeReceived>2026-10-22T04:41:07Z</t:DateTimeReceived>
+                <t:Preview>Dear students,&#xD;
+&#xD;
+The midterm exam schedule for Fall 2026 is attached. Please check your room and seat number before Monday.</t:Preview>
+                <t:From>
+                  <t:Mailbox>
+                    <t:Name>Academic Affairs Office</t:Name>
+                    <t:EmailAddress>academic.office@inha.example</t:EmailAddress>
+                    <t:RoutingType>SMTP</t:RoutingType>
+                    <t:MailboxType>Mailbox</t:MailboxType>
+                  </t:Mailbox>
+                </t:From>
+                <t:IsRead>false</t:IsRead>
+              </t:Message>
+              <t:Message>
+                <t:ItemId Id="AAMkAtBl/RqtU6aBUwEk3BqjSVh6ewsyHcf6EiwKtq9Qj/TT/6aHDBvY4MDGSl/izPXavYp654YVviL3TwHQVeD7lC/YaBdTqfZprr26n6bc5xfiG6o1xa/FQhf895nyH3facs0Vy/dF97Po0swAAA=" ChangeKey="CQAAABYAAABZT9rUe77tEUNTiZSt7oa+LQRhHfwA"/>
+                <t:Subject>Q&amp;A session: &quot;Deep Learning&quot; &lt;Lab 3&gt; &#8211; don&apos;t miss it</t:Subject>
+                <t:DateTimeReceived>2026-10-21T13:05:52Z</t:DateTimeReceived>
+                <t:Preview>Hi all, tomorrow at 15:00 in room B-304 we will go over Lab 3 &amp; the report format. Bring your laptops.</t:Preview>
+                <t:From>
+                  <t:Mailbox>
+                    <t:Name>Prof. Bekzod Tursunov</t:Name>
+                    <t:EmailAddress>b.tursunov@inha.example</t:EmailAddress>
+                    <t:RoutingType>SMTP</t:RoutingType>
+                    <t:MailboxType>Mailbox</t:MailboxType>
+                  </t:Mailbox>
+                </t:From>
+                <t:IsRead>false</t:IsRead>
+              </t:Message>
+              <t:Message>
+                <t:ItemId Id="AAMkAfUJlfX1lySUQR/Pp+83/jqLb4YJy/qWUZqzttCaXRybzhAejUrNO4HkISgf47W8m21mKkSUq7C2QMb7xUI+Ykn4E9vKln1eTL6ZbW+tHdusQTgNEKSNXtkJONJnN93eEegJ1syEpxuCUiQAAA=" ChangeKey="CQAAABYAAABZjsodOVtpOBEhN/vWJEQjRvU2pgIA"/>
+                <t:Subject>[eClass] New assignment: Multimedia Computing Report 2</t:Subject>
+                <t:DateTimeReceived>2026-10-20T09:30:00Z</t:DateTimeReceived>
+                <t:Preview>Report 2 has been posted. Due: 2 November 2026, 23:59.</t:Preview>
+                <t:From>
+                  <t:Mailbox>
+                    <t:EmailAddress>noreply@eclass.inha.example</t:EmailAddress>
+                    <t:RoutingType>SMTP</t:RoutingType>
+                    <t:MailboxType>OneOff</t:MailboxType>
+                  </t:Mailbox>
+                </t:From>
+                <t:IsRead>true</t:IsRead>
+              </t:Message>
+              <t:Message>
+                <t:ItemId Id="AAMkA8O0kryfmvqVmKUsNrVmIFVm/lrSdh00yd0ZLAQLZvFaW1053sqyEIRodR7pNlkeJOP0HCCEarc/ZkQq+5xPVB0+x3qgO6yjv0EMeH0Y0gqoNSGtpv5lAk/GM60CUWf89qkXTKe/ju3FpYQAAA=" ChangeKey="CQAAABYAAAB+LyqhxuyfTrlXX9rLj1x2GFFMzJtA"/>
+                <t:Subject>Ётоқхона тўлови / Dormitory payment reminder</t:Subject>
+                <t:DateTimeReceived>2026-10-18T06:12:44Z</t:DateTimeReceived>
+                <t:Preview>Hurmatli talabalar! Ётоқхона тўлови 31 октябргача.</t:Preview>
+                <t:From>
+                  <t:Mailbox>
+                    <t:Name>Талабалар бўлими</t:Name>
+                    <t:EmailAddress>students.office@inha.example</t:EmailAddress>
+                    <t:RoutingType>SMTP</t:RoutingType>
+                    <t:MailboxType>Mailbox</t:MailboxType>
+                  </t:Mailbox>
+                </t:From>
+                <t:IsRead>true</t:IsRead>
+              </t:Message>
+              <t:MeetingRequest>
+                <t:ItemId Id="AAMkAhpzHviWjAUIfgz/P2w/I3Z0+Cv3udgYthgOyr2DeV782bd0lTbyH2JTyFujsCVA8dXVO6xuKpXMgPEDcs3+0/gbczIntv8x/+MC4M+5N+xy4qqmpN/megx/9zfMraRT7d5PF/Eub6MM3ZgAAA=" ChangeKey="CwAAABYAAAB0JADWKRFboPe0DlDY4L7oeDW5UjjA"/>
+                <t:Subject>Capstone meeting: team 7</t:Subject>
+                <t:DateTimeReceived>2026-10-15T11:20:03Z</t:DateTimeReceived>
+                <t:Preview>When: Monday, 27 October 2026 14:00-15:00 (UTC+05:00) Tashkent. Where: Library, room 2</t:Preview>
+                <t:From>
+                  <t:Mailbox>
+                    <t:Name>Nodira Karimova</t:Name>
+                    <t:EmailAddress>n.karimova@inha.example</t:EmailAddress>
+                    <t:RoutingType>SMTP</t:RoutingType>
+                    <t:MailboxType>Mailbox</t:MailboxType>
+                  </t:Mailbox>
+                </t:From>
+                <t:IsRead>false</t:IsRead>
+              </t:MeetingRequest>
+            </t:Items>
+          </m:RootFolder>
+        </m:FindItemResponseMessage>
+      </m:ResponseMessages>
+    </m:FindItemResponse>
+  </s:Body>
+</s:Envelope>

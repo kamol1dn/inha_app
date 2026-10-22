@@ -1,0 +1,72 @@
+// Every user-visible time and date string comes from here (DESIGN.md section 9).
+library;
+
+const _wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const _mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+String _pad(int n) => n.toString().padLeft(2, '0');
+
+/// 09:00
+String clock(DateTime t) => '${_pad(t.hour)}:${_pad(t.minute)}';
+
+/// Thu 23 Oct (year only when it isn't this year)
+String dayDate(DateTime t, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final y = t.year == n.year ? '' : ' ${t.year}';
+  return '${_wd[t.weekday - 1]} ${t.day} ${_mon[t.month - 1]}$y';
+}
+
+String weekdayShort(int weekday) => _wd[weekday - 1];
+
+DateTime _midnight(DateTime t) => DateTime(t.year, t.month, t.day);
+
+/// Today / Tomorrow / Sat 25 Oct, for day group headers.
+String dayHeader(DateTime t, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final days = _midnight(t).difference(_midnight(n)).inDays;
+  if (days == 0) return 'Today';
+  if (days == 1) return 'Tomorrow';
+  return dayDate(t, now: n);
+}
+
+/// 1 h 10 min / 40 min
+String duration(Duration d) {
+  final h = d.inHours, m = d.inMinutes % 60;
+  if (h == 0) return '$m min';
+  if (m == 0) return '$h h';
+  return '$h h $m min';
+}
+
+/// now / in 25 min / in 2 h 15 min / in 6 h / Sat 23:59 / 3 Nov 23:59 / Overdue 2 h
+String relative(DateTime t, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final d = t.difference(n);
+  if (d.isNegative) {
+    final p = n.difference(t);
+    if (p.inHours < 24) return p.inMinutes < 60 ? 'Overdue ${p.inMinutes} min' : 'Overdue ${p.inHours} h';
+    return 'Overdue ${p.inDays} d';
+  }
+  if (d.inMinutes < 1) return 'now';
+  if (d.inMinutes < 60) return 'in ${d.inMinutes} min';
+  if (d.inHours < 3) return 'in ${duration(d)}';
+  if (d.inHours < 24) return 'in ${d.inHours} h';
+  if (d.inDays < 7) return '${_wd[t.weekday - 1]} ${clock(t)}';
+  return '${t.day} ${_mon[t.month - 1]} ${clock(t)}';
+}
+
+/// For lists of past items (mail): 14:07 today, Wed 14:07 within the week,
+/// otherwise 17 Oct (with the year if it isn't this one).
+String pastWhen(DateTime t, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final days = _midnight(n).difference(_midnight(t)).inDays;
+  if (days <= 0) return clock(t);
+  if (days < 7) return '${_wd[t.weekday - 1]} ${clock(t)}';
+  return '${t.day} ${_mon[t.month - 1]}${t.year == n.year ? '' : ' ${t.year}'}';
+}
+
+/// Updated 08:41 (today) / Updated Tue 18:04
+String updatedAt(DateTime t, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final sameDay = _midnight(t) == _midnight(n);
+  return sameDay ? clock(t) : '${_wd[t.weekday - 1]} ${clock(t)}';
+}
