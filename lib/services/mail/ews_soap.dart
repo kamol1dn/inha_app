@@ -70,7 +70,9 @@ String findInboxEnvelope({
 </m:FindItem>''', serverVersion);
 }
 
-/// GetItem for one message's body, converted to plain text by Exchange.
+/// GetItem for one message: the header fields, the attachment list (names
+/// and sizes, no content) and the body, converted to plain text by Exchange.
+/// Reading an item this way does not mark it read.
 String getItemEnvelope(String id, {String serverVersion = ewsServerVersion}) =>
     _envelope('''
 <m:GetItem>
@@ -78,6 +80,11 @@ String getItemEnvelope(String id, {String serverVersion = ewsServerVersion}) =>
     <t:BaseShape>IdOnly</t:BaseShape>
     <t:BodyType>Text</t:BodyType>
     <t:AdditionalProperties>
+      <t:FieldURI FieldURI="item:Subject"/>
+      <t:FieldURI FieldURI="message:From"/>
+      <t:FieldURI FieldURI="item:DateTimeReceived"/>
+      <t:FieldURI FieldURI="message:IsRead"/>
+      <t:FieldURI FieldURI="item:Attachments"/>
       <t:FieldURI FieldURI="item:Body"/>
     </t:AdditionalProperties>
   </m:ItemShape>
@@ -85,6 +92,27 @@ String getItemEnvelope(String id, {String serverVersion = ewsServerVersion}) =>
     <t:ItemId Id="${_escape(id)}"/>
   </m:ItemIds>
 </m:GetItem>''', serverVersion);
+
+/// UpdateItem setting `message:IsRead`. Read receipts the sender asked for
+/// are suppressed: opening a message in the app must never send mail on the
+/// student's behalf. No ChangeKey, so the flag is set whatever else changed.
+String setReadEnvelope(String id, {bool read = true, String serverVersion = ewsServerVersion}) =>
+    _envelope('''
+<m:UpdateItem MessageDisposition="SaveOnly" ConflictResolution="AlwaysOverwrite" SuppressReadReceipts="true">
+  <m:ItemChanges>
+    <t:ItemChange>
+      <t:ItemId Id="${_escape(id)}"/>
+      <t:Updates>
+        <t:SetItemField>
+          <t:FieldURI FieldURI="message:IsRead"/>
+          <t:Message>
+            <t:IsRead>$read</t:IsRead>
+          </t:Message>
+        </t:SetItemField>
+      </t:Updates>
+    </t:ItemChange>
+  </m:ItemChanges>
+</m:UpdateItem>''', serverVersion);
 
 /// GetFolder on the inbox for its unread count.
 String getInboxFolderEnvelope({String serverVersion = ewsServerVersion}) => _envelope('''
@@ -148,10 +176,47 @@ List<MailHeader> parseFindItem(String xml) {
 }
 
 /// The plain-text body from a GetItem response, with `\n` line breaks.
-String parseGetItem(String xml) {
+String parseGetItem(String xml) => _body(_getItem(xml));
+
+/// The whole message from a GetItem response made with [getItemEnvelope].
+/// Inline attachments (pictures inside the body) are left out of
+/// [MailMessage.attachments]; they are not files the student sent or gets.
+MailMessage parseMessage(String xml) {
+  final item = _getItem(xml);
+  final id = item.child('ItemId')?.attr('Id') ?? '';
+  if (id.isEmpty) throw ParseError('mail (GetItem)');
+  final mailbox = item.child('From')?.child('Mailbox');
+  return MailMessage(
+    id: id,
+    from: _sender(item),
+    fromAddress: mailbox?.child('EmailAddress')?.text.trim() ?? '',
+    subject: item.child('Subject')?.text.trim() ?? '',
+    received: DateTime.tryParse(item.child('DateTimeReceived')?.text.trim() ?? '')?.toLocal() ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    unread: item.child('IsRead')?.text.trim().toLowerCase() == 'false',
+    body: _body(item),
+    attachments: [
+      for (final a in item.child('Attachments')?.elements ?? const <SoapElement>[])
+        if (a.child('IsInline')?.text.trim().toLowerCase() != 'true')
+          MailAttachment(
+            name: a.child('Name')?.text.trim() ?? '',
+            size: int.tryParse(a.child('Size')?.text.trim() ?? '') ?? 0,
+          ),
+    ],
+  );
+}
+
+/// Checks an UpdateItem response; throws [EwsError] when Exchange refused.
+void parseUpdateItem(String xml) => _responseMessage(xml, 'UpdateItem');
+
+SoapElement _getItem(String xml) {
   final message = _responseMessage(xml, 'GetItem');
   final item = message.child('Items')?.elements.firstOrNull;
   if (item == null) throw ParseError('mail (GetItem)');
+  return item;
+}
+
+String _body(SoapElement item) {
   final body = item.child('Body');
   if (body == null) return '';
   var text = body.text;
@@ -159,7 +224,16 @@ String parseGetItem(String xml) {
   if (body.attr('BodyType')?.toLowerCase() == 'html') {
     text = html.parse(text).body?.text ?? text;
   }
-  return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+  // Exchange's HTML-to-text conversion leaves long runs of empty lines and
+  // lines of only spaces or invisible padding (layout tables, the zero-width
+  // characters newsletters pad their preview text with); keep one blank
+  // line between paragraphs.
+  return text
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .replaceAll(_blankLineEnd, '')
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
 }
 
 /// The inbox unread count from a GetFolder response.
@@ -211,6 +285,11 @@ String _faultCode(SoapElement fault) {
   final local = faultCode.substring(faultCode.indexOf(':') + 1);
   return local.isEmpty ? 'SoapFault' : local;
 }
+
+/// Spaces and invisible characters (separators, format characters such as
+/// zero-width spaces and soft hyphens, the combining grapheme joiner) at the
+/// end of a line, or making up the whole line.
+final _blankLineEnd = RegExp(r'[\p{Z}\p{Cf}͏\t]+$', multiLine: true, unicode: true);
 
 String _sender(SoapElement item) {
   final mailbox = item.child('From')?.child('Mailbox');

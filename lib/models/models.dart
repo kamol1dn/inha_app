@@ -1,7 +1,7 @@
 /// Plain data types shared by every service and screen.
 ///
 /// Every type round-trips through JSON so the last good fetch can be cached
-/// and shown offline.
+/// and shown offline, except an opened [MailMessage], which is fetched each time.
 library;
 
 enum Service { eclass, edupage, ins, mail }
@@ -316,4 +316,37 @@ class MailHeader {
         received: DateTime.parse(j['received'] as String),
         unread: (j['unread'] as bool?) ?? false,
       );
+
+  MailHeader withUnread(bool unread) => MailHeader(
+      id: id, from: from, subject: subject, received: received, preview: preview, unread: unread);
+}
+
+/// A file attached to a message: only its name and size, not its content.
+class MailAttachment {
+  final String name;
+  final int size; // bytes; 0 when Exchange didn't say
+  const MailAttachment({required this.name, this.size = 0});
+}
+
+/// One opened message. Fetched when it is opened and not cached.
+class MailMessage {
+  final String id;
+  final String from; // display name, or the address when there is none
+  final String fromAddress;
+  final String subject;
+  final DateTime received;
+  final bool unread;
+  final String body; // plain text, \n line breaks
+  final List<MailAttachment> attachments;
+
+  const MailMessage({
+    required this.id,
+    required this.from,
+    required this.subject,
+    required this.received,
+    required this.body,
+    this.fromAddress = '',
+    this.unread = false,
+    this.attachments = const [],
+  });
 }

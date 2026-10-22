@@ -40,8 +40,11 @@ class JsonCache {
     }
   }
 
-  Future<Cached<T>> write<T>(String key, T value, Object? Function(T) encode) async {
-    final at = DateTime.now();
+  /// Stores [value] as fetched [at] (now by default; an edit to cached data
+  /// keeps the time it was fetched).
+  Future<Cached<T>> write<T>(String key, T value, Object? Function(T) encode,
+      {DateTime? at}) async {
+    at ??= DateTime.now();
     await _prefs.setString(
         'cache.$key', jsonEncode({'at': at.toIso8601String(), 'value': encode(value)}));
     return Cached(value, at);

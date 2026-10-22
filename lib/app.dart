@@ -118,7 +118,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final data = context.watch<AppData>();
-    final unread = (data.inbox.data?.value ?? const []).where((m) => m.unread).length;
+    final unread = data.mailUnread.data?.value ??
+        (data.inbox.data?.value ?? const []).where((m) => m.unread).length;
     final title = switch (_tab) {
       0 => dayDate(DateTime.now()),
       1 => 'Schedule',
@@ -190,5 +191,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   static bool _anyLoading(AppData d) =>
-      d.lessons.loading || d.deadlines.loading || d.attendance.loading || d.inbox.loading;
+      d.lessons.loading || d.deadlines.loading || d.attendance.loading || d.inbox.loading ||
+      d.mailUnread.loading;
 }

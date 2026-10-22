@@ -96,12 +96,19 @@ void main() {
       expect(readSoap(xml).find('AdditionalProperties')!.elements, hasLength(4));
     });
 
-    test('GetItem: text body of the exact id', () {
+    test('GetItem: header fields, attachments and text body of the exact id', () {
       final xml = getItemEnvelope(ids[1]);
       expect(xml, contains('<t:RequestServerVersion Version="Exchange2013"/>'));
       expect(xml, contains('<m:GetItem>'));
       expect(xml, contains('<t:BodyType>Text</t:BodyType>'));
-      expect(xml, contains('<t:FieldURI FieldURI="item:Body"/>'));
+      expect(readSoap(xml).find('AdditionalProperties')!.elements.map((e) => e.attr('FieldURI')), [
+        'item:Subject',
+        'message:From',
+        'item:DateTimeReceived',
+        'message:IsRead',
+        'item:Attachments',
+        'item:Body',
+      ]);
       expect(xml, contains('<t:ItemId Id="${ids[1]}"/>'));
       final shape = readSoap(xml).find('ItemShape')!;
       expect(shape.elements.map((e) => e.qualifiedName),
@@ -112,6 +119,24 @@ void main() {
       final xml = getItemEnvelope('a&b"<c>');
       expect(xml, contains('<t:ItemId Id="a&amp;b&quot;&lt;c&gt;"/>'));
       expect(readSoap(xml).find('ItemId')!.attr('Id'), 'a&b"<c>');
+    });
+
+    test('UpdateItem: sets IsRead on the exact id, without a read receipt', () {
+      final xml = setReadEnvelope(ids[1]);
+      expect(xml, contains('<t:RequestServerVersion Version="Exchange2013"/>'));
+      final update = readSoap(xml).find('UpdateItem')!;
+      expect(update.attr('MessageDisposition'), 'SaveOnly');
+      expect(update.attr('ConflictResolution'), 'AlwaysOverwrite');
+      expect(update.attr('SuppressReadReceipts'), 'true');
+      final change = update.find('ItemChange')!;
+      expect(change.child('ItemId')!.attr('Id'), ids[1]);
+      expect(change.child('ItemId')!.attr('ChangeKey'), isNull);
+      final field = change.find('SetItemField')!;
+      expect(field.child('FieldURI')!.attr('FieldURI'), 'message:IsRead');
+      expect(field.child('Message')!.child('IsRead')!.text, 'true');
+
+      expect(readSoap(setReadEnvelope('a&b', read: false)).find('IsRead')!.text, 'false');
+      expect(readSoap(setReadEnvelope('a&b')).find('ItemId')!.attr('Id'), 'a&b');
     });
 
     test('GetFolder: inbox unread count', () {
@@ -221,6 +246,62 @@ void main() {
       expect(parseGetItem(fixture('ews_getitem.xml')), getItemBody);
     });
 
+    test('GetItem as a message: sender, subject, time, read flag, file attachments', () {
+      final xml = response('GetItem',
+          '<m:ResponseCode>NoError</m:ResponseCode><m:Items><t:Message>'
+          '<t:ItemId Id="${ids[0]}" ChangeKey="CQAAAA"/>'
+          '<t:Subject>Lab 3 report format</t:Subject>'
+          '<t:DateTimeReceived>2026-10-21T09:12:00Z</t:DateTimeReceived>'
+          '<t:Body BodyType="Text">See the template.&#xD;\nThanks</t:Body>'
+          '<t:Attachments>'
+          '<t:FileAttachment><t:AttachmentId Id="a1"/><t:Name>lab3_template.docx</t:Name>'
+          '<t:ContentType>application/vnd.openxmlformats-officedocument.wordprocessingml.document</t:ContentType>'
+          '<t:Size>48213</t:Size><t:IsInline>false</t:IsInline></t:FileAttachment>'
+          '<t:FileAttachment><t:AttachmentId Id="a2"/><t:Name>image001.png</t:Name>'
+          '<t:Size>5120</t:Size><t:IsInline>true</t:IsInline></t:FileAttachment>'
+          '<t:ItemAttachment><t:AttachmentId Id="a3"/><t:Name>Fwd: schedule</t:Name></t:ItemAttachment>'
+          '</t:Attachments>'
+          '<t:From><t:Mailbox><t:Name>Bekzod Tursunov</t:Name>'
+          '<t:EmailAddress>b.tursunov@inha.example</t:EmailAddress></t:Mailbox></t:From>'
+          '<t:IsRead>false</t:IsRead>'
+          '</t:Message></m:Items>');
+      final m = parseMessage(xml);
+      expect(m.id, ids[0]);
+      expect(m.subject, 'Lab 3 report format');
+      expect(m.from, 'Bekzod Tursunov');
+      expect(m.fromAddress, 'b.tursunov@inha.example');
+      expect(m.received, DateTime.utc(2026, 10, 21, 9, 12).toLocal());
+      expect(m.unread, isTrue);
+      expect(m.body, 'See the template.\nThanks');
+      expect(m.attachments.map((a) => (a.name, a.size)),
+          [('lab3_template.docx', 48213), ('Fwd: schedule', 0)]);
+    });
+
+    test('GetItem body: runs of blank and whitespace-only lines become one blank line', () {
+      final xml = response('GetItem',
+          '<m:ResponseCode>NoError</m:ResponseCode><m:Items><t:Message><t:ItemId Id="x"/>'
+          '<t:Body BodyType="Text">Dear students,&#xD;\n&#xD;\n  &#xD;\n\t&#xD;\n&#xD;\n'
+          'The exam is on Monday.  &#xD;\nRoom B-304</t:Body></t:Message></m:Items>');
+      expect(parseGetItem(xml), 'Dear students,\n\nThe exam is on Monday.\nRoom B-304');
+    });
+
+    test('GetItem fixture as a message: no sender fields is not an error', () {
+      final m = parseMessage(fixture('ews_getitem.xml'));
+      expect(m.id, ids[1]);
+      expect(m.body, getItemBody);
+      expect(m.attachments, isEmpty);
+      expect(m.unread, isFalse);
+    });
+
+    test('UpdateItem: success passes, an error carries the ResponseCode', () {
+      parseUpdateItem(response('UpdateItem', '<m:ResponseCode>NoError</m:ResponseCode><m:Items/>'));
+      expect(
+          () => parseUpdateItem(response(
+              'UpdateItem', '<m:ResponseCode>ErrorAccessDenied</m:ResponseCode>',
+              responseClass: 'Error')),
+          throwsA(isA<EwsError>().having((e) => e.code, 'code', 'ErrorAccessDenied')));
+    });
+
     test('GetItem error carries the ResponseCode', () {
       expect(() => parseGetItem(itemNotFound),
           throwsA(isA<EwsError>().having((e) => e.code, 'code', 'ErrorItemNotFound')));
@@ -262,7 +343,9 @@ void main() {
         ? fixture('ews_finditem.xml')
         : r.body.contains('<m:GetItem>')
             ? fixture('ews_getitem.xml')
-            : fixture('ews_getfolder.xml');
+            : r.body.contains('<m:UpdateItem')
+                ? response('UpdateItem', '<m:ResponseCode>NoError</m:ResponseCode><m:Items/>')
+                : fixture('ews_getfolder.xml');
 
     (EwsClient, FakeEws) make(Reply Function(Sent) handler,
         {String? username = 'U2610999'}) {
@@ -280,16 +363,17 @@ void main() {
       expect(EwsClient.loginCandidates('  '), isEmpty);
     });
 
-    test('success: SOAP POST with Basic auth; inbox, body and unread count', () async {
+    test('success: SOAP POST with Basic auth; inbox, message, read flag, unread count', () async {
       final (client, fake) = make((r) => (200, routeOk(r)));
 
       final inbox = await client.inbox();
       expect(inbox.map((h) => h.id), ids);
       expect(inbox[2].from, 'noreply@eclass.inha.example');
-      expect(await client.body(ids[1]), getItemBody);
+      expect((await client.message(ids[1])).body, getItemBody);
       expect(await client.unreadCount(), 12);
+      await client.markRead(ids[1]);
 
-      expect(fake.sent, hasLength(3));
+      expect(fake.sent, hasLength(4));
       final auth = 'Basic ${base64Encode(utf8.encode('$login:$password'))}';
       for (final r in fake.sent) {
         expect(r.options.method, 'POST');
@@ -301,6 +385,8 @@ void main() {
       expect(fake.sent[0].body, contains('item:Preview'));
       expect(fake.sent[1].body, contains('<t:ItemId Id="${ids[1]}"/>'));
       expect(fake.sent[2].body, contains('folder:UnreadCount'));
+      expect(fake.sent[3].body, contains('<m:UpdateItem'));
+      expect(fake.sent[3].body, contains('<t:IsRead>true</t:IsRead>'));
     });
 
     test('401 is LoginRequired(Service.mail)', () async {
@@ -360,7 +446,7 @@ void main() {
 
     test('EWS errors are ParseError with the code only, never the password', () async {
       final (client, fake) = make((r) => (200, itemNotFound));
-      final error = await client.body(ids[0]).then<Object?>((_) => null, onError: (Object e) => e);
+      final error = await client.message(ids[0]).then<Object?>((_) => null, onError: (Object e) => e);
       expect(error, isA<ParseError>());
       expect((error as EwsError).code, 'ErrorItemNotFound');
       expect(error.toString(), 'Could not read mail (ErrorItemNotFound)');

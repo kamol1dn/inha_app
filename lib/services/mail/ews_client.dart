@@ -59,7 +59,11 @@ class EwsClient implements MailApi {
   }
 
   @override
-  Future<String> body(String id) async => parseGetItem(await _call(getItemEnvelope(id)));
+  Future<MailMessage> message(String id) async => parseMessage(await _call(getItemEnvelope(id)));
+
+  @override
+  Future<void> markRead(String id, {bool read = true}) async =>
+      parseUpdateItem(await _call(setReadEnvelope(id, read: read)));
 
   @override
   Future<int> unreadCount() async => parseGetFolder(await _call(getInboxFolderEnvelope()));

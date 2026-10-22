@@ -54,6 +54,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final deadlines = data.deadlines.data?.value ?? const <Deadline>[];
     final attention = needsAttention(deadlines, att, now);
     final unread = (data.inbox.data?.value ?? const <MailHeader>[]).where((m) => m.unread).toList();
+    final unreadTotal = data.mailUnread.data?.value ?? unread.length;
 
     return RefreshIndicator(
       onRefresh: data.refreshAll,
@@ -110,12 +111,19 @@ class _TodayScreenState extends State<TodayScreen> {
               title: Text(m.subject, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
               subtitle: Text(m.from, maxLines: 1, overflow: TextOverflow.ellipsis),
               trailing: Text(pastWhen(m.received), style: t.textTheme.bodySmall?.tnum),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MailScreen())),
+              onTap: () => openMail(context, m),
             ),
-          if (unread.length > 2)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text('${unread.length - 2} more', style: t.textTheme.bodyMedium),
+          if (unreadTotal > 2)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: TextButton(
+                  onPressed: () =>
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MailScreen())),
+                  child: Text('${unreadTotal - 2} more'),
+                ),
+              ),
             ),
         ],
         _footer(context, data),

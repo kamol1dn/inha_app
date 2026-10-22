@@ -6,8 +6,12 @@ abstract class MailApi {
   /// Newest first. Throws [LoginRequired] on 401.
   Future<List<MailHeader>> inbox({int limit = 30, int offset = 0});
 
-  /// Plain-text body of one message.
-  Future<String> body(String id);
+  /// One message with its plain-text body and attachment list. Does not
+  /// change its read state.
+  Future<MailMessage> message(String id);
+
+  /// Sets the message's read flag (no read receipt is sent).
+  Future<void> markRead(String id, {bool read = true});
 
   Future<int> unreadCount();
 }

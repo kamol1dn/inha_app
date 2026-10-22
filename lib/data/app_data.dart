@@ -99,11 +99,12 @@ class AppData extends ChangeNotifier {
     grades = Snapshot(
         data: cache.read('grades', (j) => GradeReport.fromJson(j as Map<String, dynamic>)));
     inbox = Snapshot(data: cache.read('inbox', _decodeList(MailHeader.fromJson)));
+    mailUnread = Snapshot(data: cache.read('mailUnread', (j) => j as int));
   }
 
   /// Picks up what the background refresh wrote while the app was away.
   Future<void> reloadFromCache() async {
-    if ([lessons, deadlines, attendance, grades, inbox].any((s) => s.loading)) return;
+    if ([lessons, deadlines, attendance, grades, inbox, mailUnread].any((s) => s.loading)) return;
     await cache.reload();
     _readCache();
     notifyListeners();
@@ -114,6 +115,18 @@ class AppData extends ChangeNotifier {
   late Snapshot<List<CourseAttendance>> attendance;
   late Snapshot<GradeReport> grades;
   late Snapshot<List<MailHeader>> inbox;
+
+  /// The inbox's unread count from Exchange, which also counts messages
+  /// beyond the pages loaded into [inbox].
+  late Snapshot<int> mailUnread;
+
+  /// Messages per inbox page.
+  static const mailPageSize = 30;
+
+  /// Whether the server may have messages past the last loaded page.
+  bool mailHasMore = true;
+  bool loadingMoreMail = false;
+  Object? mailMoreError;
 
   static List<T> Function(Object?) _decodeList<T>(T Function(Map<String, dynamic>) f) =>
       (j) => (j as List).map((e) => f(e as Map<String, dynamic>)).toList();
@@ -174,13 +187,72 @@ class AppData extends ChangeNotifier {
         encode: (v) => v.toJson(),
       );
 
-  Future<void> refreshMail() => _run<List<MailHeader>>(
-        get: () => inbox,
-        set: (s) => inbox = s,
-        fetch: () => mail.inbox(),
-        key: 'inbox',
-        encode: _encodeList,
-      );
+  Future<void> refreshMail() => Future.wait([
+        _run<List<MailHeader>>(
+          get: () => inbox,
+          set: (s) => inbox = s,
+          fetch: () async {
+            final page = await mail.inbox(limit: mailPageSize);
+            mailHasMore = page.length >= mailPageSize;
+            mailMoreError = null;
+            return page;
+          },
+          key: 'inbox',
+          encode: _encodeList,
+        ),
+        _run<int>(
+          get: () => mailUnread,
+          set: (s) => mailUnread = s,
+          fetch: mail.unreadCount,
+          key: 'mailUnread',
+          encode: (v) => v,
+        ),
+      ]);
+
+  /// Appends the next inbox page. Kept in memory only: the cache holds the
+  /// first page, which is what a refresh brings back.
+  Future<void> loadMoreMail() async {
+    final have = inbox.data;
+    if (have == null || !mailHasMore || loadingMoreMail || inbox.loading) return;
+    loadingMoreMail = true;
+    mailMoreError = null;
+    notifyListeners();
+    try {
+      final page = await mail.inbox(limit: mailPageSize, offset: have.value.length);
+      final known = {for (final m in have.value) m.id};
+      mailHasMore = page.length >= mailPageSize;
+      inbox = Snapshot(
+          data: Cached([...have.value, ...page.where((m) => !known.contains(m.id))], have.fetchedAt),
+          error: inbox.error);
+    } catch (e) {
+      mailMoreError = e;
+    }
+    loadingMoreMail = false;
+    notifyListeners();
+  }
+
+  /// Sets a message's read flag on the server, then in the inbox and the
+  /// unread count here. Call it only when the flag actually changes.
+  Future<void> setMailRead(String id, {bool read = true}) async {
+    await mail.markRead(id, read: read);
+    final list = inbox.data;
+    if (list != null) {
+      final updated = [for (final m in list.value) m.id == id ? m.withUnread(!read) : m];
+      inbox = Snapshot(
+          data: await cache.write('inbox', updated, _encodeList, at: list.fetchedAt),
+          error: inbox.error,
+          loading: inbox.loading);
+    }
+    final count = mailUnread.data;
+    if (count != null) {
+      final n = (count.value + (read ? -1 : 1)).clamp(0, 1 << 30);
+      mailUnread = Snapshot(
+          data: await cache.write('mailUnread', n, (v) => v, at: count.fetchedAt),
+          error: mailUnread.error,
+          loading: mailUnread.loading);
+    }
+    notifyListeners();
+  }
 
   Future<void> _run<T>({
     required Snapshot<T> Function() get,

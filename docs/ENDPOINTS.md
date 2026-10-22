@@ -117,8 +117,17 @@ Basic`), so the app uses EWS SOAP with `Authorization: Basic` and never touches 
   30, offset 0), shape `IdOnly` + additional properties `item:Subject`,
   `message:From`, `item:DateTimeReceived`, `message:IsRead`, `item:Preview` (Exchange
   2013+; drop it if the server rejects it).
-- `GetItem` with `BodyType Text` for one message.
+- `GetItem` with `BodyType Text` for one message, plus `item:Subject`, `message:From`,
+  `item:DateTimeReceived`, `message:IsRead` and `item:Attachments` (name, size, `IsInline`;
+  no content). GetItem does not change the read flag. Exchange writes HTML links as
+  `label<url>` and leaves runs of blank lines and zero-width padding in the text body.
+- `UpdateItem` `SetItemField message:IsRead` (`MessageDisposition="SaveOnly"`,
+  `ConflictResolution="AlwaysOverwrite"`, no ChangeKey) marks a message read or unread.
+  `SuppressReadReceipts="true"` (Exchange 2013 schema) so opening a message never sends a
+  read receipt for the student. Checked live: the flag shows up in the next `GetFolder`.
 - `GetFolder` inbox → `UnreadCount` for the badge.
+- Paging: `IndexedPageItemView` `Offset` = messages already loaded; a page shorter than
+  `MaxEntriesReturned` is the last one.
 - Username: the **student ID**, not the email address (confirmed by the student;
   the OWA logon page asks for "user name", Exchange 2019 / 15.2.1544, so a default
   domain is configured). Sent exactly as saved, one attempt only, so a wrong

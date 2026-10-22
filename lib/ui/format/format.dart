@@ -64,6 +64,18 @@ String pastWhen(DateTime t, {DateTime? now}) {
   return '${t.day} ${_mon[t.month - 1]}${t.year == n.year ? '' : ' ${t.year}'}';
 }
 
+/// Thu 23 Oct 14:07 (year only when it isn't this year)
+String dayDateTime(DateTime t, {DateTime? now}) => '${dayDate(t, now: now)} ${clock(t)}';
+
+/// 812 B / 14 KB / 2.3 MB / 18 MB
+String fileSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  final kb = bytes / 1024;
+  if (kb < 1024) return '${kb.round()} KB';
+  final mb = kb / 1024;
+  return mb < 10 ? '${mb.toStringAsFixed(1)} MB' : '${mb.round()} MB';
+}
+
 /// Updated 08:41 (today) / Updated Tue 18:04
 String updatedAt(DateTime t, {DateTime? now}) {
   final n = now ?? DateTime.now();

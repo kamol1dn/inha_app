@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/cache.dart';
 import '../core/session.dart';
@@ -123,6 +124,22 @@ class SourceError extends StatelessWidget {
           TextButton(onPressed: onRetry, child: const Text('Retry')),
       ]),
     );
+  }
+}
+
+/// Opens [uri] in the browser (or the mail app for `mailto:`). Says so in a
+/// snack bar when nothing on the phone can open it.
+Future<void> openUrl(BuildContext context, Uri uri) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  var opened = false;
+  try {
+    opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {
+    opened = false;
+  }
+  if (!opened) {
+    final what = uri.host.isNotEmpty ? uri.host : uri.path;
+    messenger?.showSnackBar(SnackBar(content: Text("Couldn't open $what.")));
   }
 }
 
