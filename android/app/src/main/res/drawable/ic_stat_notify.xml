@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification small icon: white on transparent (Android tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <group android:translateX="-22" android:translateY="-22">
+        <path android:fillColor="#FFFFFF" android:pathData="M25,39 h6 v30 h-6 z M37,39 h6 v19 a5,5 0 0 0 10,0 v-19 h6 v19 a11,11 0 0 1 -22,0 z M63,39 h20 v6 h-7 v24 h-6 v-24 h-7 z" />
+    </group>
+</vector>

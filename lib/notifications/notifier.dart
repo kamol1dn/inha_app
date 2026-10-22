@@ -22,7 +22,7 @@ class Notifier {
   Notifier({
     FlutterLocalNotificationsPlugin? plugin,
     Future<SharedPreferences> Function()? prefs,
-    this.icon = '@mipmap/ic_launcher',
+    this.icon = 'ic_stat_notify',
     this.scheduleMode = AndroidScheduleMode.inexactAllowWhileIdle,
   })  : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
         _prefs = prefs ?? SharedPreferences.getInstance;
@@ -30,9 +30,9 @@ class Notifier {
   final FlutterLocalNotificationsPlugin _plugin;
   final Future<SharedPreferences> Function() _prefs;
 
-  /// Small icon resource. The launcher icon works but shows as a blob in the
-  /// status bar; a white-on-transparent drawable is better (see
-  /// docs/NOTIFICATIONS.md).
+  /// Small icon resource: `res/drawable/ic_stat_notify.xml`, the wordmark in
+  /// white on transparent (Android tints it). Kept from resource shrinking by
+  /// `res/raw/keep.xml`, since only Dart names it.
   final String icon;
 
   /// Inexact by default, so no exact-alarm permission is needed. Android may

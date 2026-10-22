@@ -165,19 +165,11 @@ Also:
 - When the app resumes, call `prefs.reload()` before reading the JsonCache. Otherwise the UI isolate's SharedPreferences cache will not see what the background task wrote.
 - On logout, call `Notifier().cancelAll()` and `cancelPeriodicRefresh()`.
 
-### 5. Optional: status bar icon
+### 5. Status bar icon
 
-`Notifier(icon: ...)` defaults to `@mipmap/ic_launcher`. It works, and R8 keeps it because the manifest references it, but in the status bar it shows as a white blob. For a proper icon:
-
-1. Add a white-on-transparent vector at `android/app/src/main/res/drawable/ic_stat_notify.xml`.
-2. Pass `icon: 'ic_stat_notify'` to every `Notifier(...)`, including the background one.
-3. Keep it from resource shrinking with `android/app/src/main/res/raw/keep.xml`:
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/ic_stat_notify" />
-```
+Done: `android/app/src/main/res/drawable/ic_stat_notify.xml` (the IUT wordmark, white on transparent) is the
+`Notifier` default, so the background isolate uses it too, and `res/raw/keep.xml` keeps it (and the launcher
+icon) from R8's resource shrinking, which can't see names used only from Dart.
 
 ## Known limits
 

@@ -20,10 +20,20 @@ Don't start B until A is done and checked on the emulator against the live servi
 
 All four services load real data on the emulator.
 
-## Phase A: functionality
+## Phase A: functionality (done 2026-10-23)
 
 Roughly in priority order. Each item is done when it works on the emulator against the
-live site and has tests for its logic.
+live site and has tests for its logic. All eight are done, each in its own commit on `v2`
+(`54e2bb1` mail, `bbdf502` rows, `ca20c4e` notifications, `3b002ce` Save and test,
+`ba54ea9` absence limits, `52f75fa` submissions, `b5f37c6` + `2e34c47` cleanups, then the
+release build). What is left from it:
+
+- **Not exercised live:** signing out (it deletes the saved login on the emulator; unit
+  tests cover it), a rejected password (lockout risk), and a submitted assignment (none
+  this term; the parser follows Moodle's markup and was checked on a finished quiz).
+- **Attachments** are listed with name and size but don't open yet.
+- **The launcher icon** is a provisional "IUT" wordmark (`tool/make_icons.py`); Phase B
+  replaces it.
 
 1. **Mail can be read.** Tapping a message opens it: sender, time, subject, plain-text
    body (`EwsClient.body` already exists), and links that open. Opening marks it read
@@ -110,6 +120,19 @@ slop) and gives the app an identity.
   C:); NDK 28.2 had to be installed by hand (`android sdk install ndk/28.2.13676358`);
   `TestWidgetsFlutterBinding` replaces HttpClient with a fake that returns 400, so live
   checks must not initialise it.
+- **More gotchas (milestone 2):** `flutter run` may fail to attach with a DDS WebSocket
+  error; add `--no-dds`. Hot reload keeps top-level `final`s (regexes) as they were; use
+  `R`. Pressing Back on Today exits the app and drops `flutter run`; a relaunch then runs
+  the APK's older code. If every service times out at once, the emulator's DNS went stale
+  when the laptop changed networks: `adb root`, then
+  `adb shell "iptables -t nat -I OUTPUT -d 10.0.2.3 -p udp --dport 53 -j DNAT --to-destination 8.8.8.8:53"`
+  (and the same for tcp); it lasts until the emulator reboots. Don't restart the emulator
+  casually: it runs with `-no-snapshot-save`, and the saved logins may not survive.
+- **Release build:** `flutter build apk --release` signs with the keystore named in
+  `android/key.properties` (git-ignored; the keystore is `C:\Users\User\.android\iut-release.jks`).
+  Keep both: every later update must be signed with the same key. A release APK can't be
+  installed over the emulator's debug app without uninstalling it (which drops the saved
+  logins); to test one there, add a temporary `applicationIdSuffix`.
 - **Endpoints:** everything known about each site is in `docs/ENDPOINTS.md`. Trace a real
   request in the student's Chrome (Claude in Chrome) before guessing; remember a live
   DOM can differ from the raw page (INS's report viewer did).
