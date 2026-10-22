@@ -342,12 +342,14 @@ and "Limit not set", with no bar.
 - **Absence bar:** one cell per allowed absence, each 12×6dp with 2dp gaps. Used cells take the status `fg`; empty cells use
   `outlineVariant`. Over the limit, every cell is danger and the text reads `5 absences · limit 4`. The bar always appears next to its
   text and carries `Semantics(label: '3 of 4 allowed absences used')`.
-- **Course detail:**
-  - The absence count in `headlineMedium` ("3 of 4").
-  - A divided list of eClass attendance sessions: date plus Present, Absent, Late or Other, each as icon and word.
+- **Course detail** (opened from a course row, a lesson in Schedule or Today, or a deadline's sheet):
+  - The absence count in `headlineMedium` ("3 of 4"), counted over the sessions held so far, and "Open in eClass".
+  - The course's deadlines, then the INS grade: both short, so they come before the long lists.
   - VOD weeks, each with `38 / 75 min`, a 4dp `LinearProgressIndicator`, and the window dates.
-  - The course's deadlines.
-  - The INS grade.
+  - A divided list of the eClass attendance sessions held so far, newest first: date plus Present, Absent, Late or
+    Other, each as icon and word. eClass also lists the semester's future sessions; they are not shown.
+- **A lesson with no eClass course** (Mental Education) opens a sheet with its time, room and teacher, and says
+  there is no attendance record for it.
 
 **Mail and grades.**
 - **Mail** is a divided list of sender, time, subject and a one-line preview. Unread subjects use `titleMedium`, read ones `bodyLarge`.

@@ -75,6 +75,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _tab = 0;
+  final _timetable = GlobalKey<TimetableScreenState>();
   DateTime _lastRefresh = DateTime.now();
 
   @override
@@ -162,8 +163,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         body: IndexedStack(
           index: _tab,
           children: [
-            TodayScreen(onOpenTab: (i) => setState(() => _tab = i)),
-            const TimetableScreen(),
+            TodayScreen(
+              onOpenTab: (i) => setState(() => _tab = i),
+              onOpenSchedule: (weekday) {
+                setState(() => _tab = 1);
+                _timetable.currentState?.showWeekday(weekday);
+              },
+            ),
+            TimetableScreen(key: _timetable),
             const DeadlinesScreen(),
             const CoursesScreen(),
           ],

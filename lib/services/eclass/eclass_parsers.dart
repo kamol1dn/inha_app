@@ -94,6 +94,7 @@ List<Deadline> parseUpcoming(String html) {
       start: times.length >= 2 ? times.first : null,
       end: times.last,
       moduleId: moduleId,
+      moduleType: mod?.group(1),
     ));
   }
   return out;

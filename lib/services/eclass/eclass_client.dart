@@ -4,6 +4,7 @@ import '../../core/credentials.dart';
 import '../../core/session.dart';
 import '../../models/models.dart';
 import 'eclass_api.dart';
+import 'eclass_links.dart';
 import 'eclass_parsers.dart';
 
 /// [EclassApi] over eClass's HTML pages: posts the login form, keeps the
@@ -14,7 +15,7 @@ import 'eclass_parsers.dart';
 class EclassClient implements EclassApi {
   EclassClient(this._sessions, this._credentials);
 
-  static final Uri base = Uri.parse('https://eclass.inha.ac.kr');
+  static final Uri base = eclassBase;
   static const _maxLoginRedirects = 5;
 
   final Sessions _sessions;

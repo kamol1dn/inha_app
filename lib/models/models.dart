@@ -107,6 +107,7 @@ class Deadline {
   final DateTime? start;
   final DateTime end;
   final int? moduleId; // eClass module id, for opening it
+  final String? moduleType; // "assign", "quiz", "vod", "ubboard", ...
 
   const Deadline({
     required this.title,
@@ -115,6 +116,7 @@ class Deadline {
     required this.end,
     this.start,
     this.moduleId,
+    this.moduleType,
   });
 
   Map<String, dynamic> toJson() => {
@@ -124,6 +126,7 @@ class Deadline {
         'start': start?.toIso8601String(),
         'end': end.toIso8601String(),
         'moduleId': moduleId,
+        'moduleType': moduleType,
       };
   factory Deadline.fromJson(Map<String, dynamic> j) => Deadline(
         title: j['title'] as String,
@@ -132,6 +135,7 @@ class Deadline {
         start: j['start'] == null ? null : DateTime.parse(j['start'] as String),
         end: DateTime.parse(j['end'] as String),
         moduleId: j['moduleId'] as int?,
+        moduleType: j['moduleType'] as String?,
       );
 }
 
@@ -188,6 +192,13 @@ class CourseAttendance {
   const CourseAttendance({required this.course, this.classes = const [], this.vods = const []});
 
   int count(AttendanceMark m) => classes.where((e) => e.mark == m).length;
+
+  /// Sessions dated on or before [now]'s day. eClass lists the whole
+  /// semester, the weeks still to come as unmarked rows.
+  List<AttendanceEntry> held(DateTime now) {
+    final end = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    return classes.where((e) => e.date.isBefore(end)).toList();
+  }
 
   Map<String, dynamic> toJson() => {
         'course': course.toJson(),

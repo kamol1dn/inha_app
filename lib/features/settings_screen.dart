@@ -52,7 +52,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         ListTile(
           title: const Text('Hidden subjects'),
-          subtitle: Text(data.prefs.excludedSubjects.join(', ')),
+          subtitle: Text(data.prefs.excludedSubjects.isEmpty ? 'None' : data.prefs.excludedSubjects.join(', ')),
+          onTap: _editHidden,
         ),
         const Padding(
           padding: EdgeInsets.all(16),
@@ -137,6 +138,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
           break;
       }
     }
+  }
+
+  /// Subjects EduPage lists for the group that the student doesn't take
+  /// (dropped, or another track's). Offered: what the timetable shows now,
+  /// plus what is already hidden.
+  Future<void> _editHidden() async {
+    final data = context.read<AppData>();
+    final hidden = {...data.prefs.excludedSubjects};
+    final subjects = {
+      for (final l in data.lessons.data?.value ?? const <Lesson>[]) l.subject,
+      ...hidden,
+    }.toList()
+      ..sort();
+    final saved = await showDialog<Set<String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setInner) => AlertDialog(
+          title: const Text('Hidden subjects'),
+          contentPadding: const EdgeInsets.only(top: 16),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(shrinkWrap: true, children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: Text('Checked subjects are left out of Today and Schedule.'),
+              ),
+              for (final s in subjects)
+                CheckboxListTile(
+                  value: hidden.contains(s),
+                  title: Text(s),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                  onChanged: (on) => setInner(() => on == true ? hidden.add(s) : hidden.remove(s)),
+                ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, hidden), child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (saved == null) return;
+    data.prefs.excludedSubjects = saved;
+    setState(() {});
+    data.refreshTimetable();
   }
 
   Future<void> _editGroup() async {

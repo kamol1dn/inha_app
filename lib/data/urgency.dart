@@ -24,6 +24,27 @@ CourseAttendance? courseFor(String courseName, List<CourseAttendance> all) {
   return null;
 }
 
+/// A course's own calendar items: due ones only, not more than a day overdue,
+/// soonest first.
+List<Deadline> courseDeadlines(Course course, List<Deadline> all, List<CourseAttendance> att, DateTime now) =>
+    all
+        .where((d) =>
+            isDue(d) &&
+            d.end.isAfter(now.subtract(const Duration(hours: 24))) &&
+            courseFor(d.courseName, att)?.course.id == course.id)
+        .toList()
+      ..sort((a, b) => a.end.compareTo(b.end));
+
+/// The course's INS result for its latest term, matched on the course code
+/// (eClass and INS use the same one), else on the name.
+GradeRecord? gradeFor(Course course, GradeReport? report) {
+  final records = report?.records ?? const <GradeRecord>[];
+  final byCode = course.code.isEmpty ? <GradeRecord>[] : records.where((r) => r.code == course.code).toList();
+  final matches = byCode.isNotEmpty ? byCode : records.where((r) => _norm(r.name) == _norm(course.name)).toList();
+  if (matches.isEmpty) return null;
+  return matches.reduce((a, b) => a.termKey >= b.termKey ? a : b);
+}
+
 /// The progress row for a VOD-window event, or null if unknown.
 VodProgress? vodFor(Deadline d, List<CourseAttendance> all) {
   if (d.kind != DeadlineKind.vod) return null;

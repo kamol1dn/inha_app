@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../ui/format/format.dart';
 import '../ui/theme/app_text.dart';
 import 'common.dart';
+import 'details.dart';
 
 IconData deadlineIcon(DeadlineKind k) => switch (k) {
       DeadlineKind.assignment => Icons.assignment_outlined,
@@ -15,12 +16,16 @@ IconData deadlineIcon(DeadlineKind k) => switch (k) {
     };
 
 /// Two-line deadline row: type icon, item, course; trailing due time and,
-/// under 48 h, the relative time in its status colour.
+/// under 48 h, the relative time in its status colour. With [showDay] (rows
+/// not under a day header) a later due time carries its weekday. Tapping it
+/// opens the item's details.
 class DeadlineTile extends StatelessWidget {
   final Deadline deadline;
   final List<CourseAttendance> attendance;
   final DateTime now;
-  const DeadlineTile(this.deadline, {super.key, required this.attendance, required this.now});
+  final bool showDay;
+  const DeadlineTile(this.deadline,
+      {super.key, required this.attendance, required this.now, this.showDay = false});
 
   @override
   Widget build(BuildContext context) {
@@ -50,10 +55,13 @@ class DeadlineTile extends StatelessWidget {
         children: [
           if (showRel)
             Text(relative(d.end, now: now), style: t.textTheme.bodyMedium?.tnum.copyWith(color: relColor)),
-          Text(d.kind == DeadlineKind.vod ? 'closes ${clock(d.end)}' : clock(d.end),
+          Text(
+              '${d.kind == DeadlineKind.vod ? 'closes ' : ''}'
+              '${showDay && !showRel ? relative(d.end, now: now) : clock(d.end)}',
               style: t.textTheme.bodySmall?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant)),
         ],
       ),
+      onTap: () => showDeadlineSheet(context, d),
     );
   }
 }

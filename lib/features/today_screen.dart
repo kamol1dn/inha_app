@@ -11,12 +11,14 @@ import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
 import 'common.dart';
 import 'deadline_tile.dart';
+import 'details.dart';
 import 'mail_screen.dart';
 
 /// Answers "where do I need to be next, what's due, am I in trouble" (DESIGN.md 7).
 class TodayScreen extends StatefulWidget {
   final void Function(int tab) onOpenTab;
-  const TodayScreen({super.key, required this.onOpenTab});
+  final void Function(int weekday) onOpenSchedule;
+  const TodayScreen({super.key, required this.onOpenTab, required this.onOpenSchedule});
   @override
   State<TodayScreen> createState() => _TodayScreenState();
 }
@@ -49,6 +51,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final upcoming = today.where((l) => minutesOf(l.start) > nowMin).toList();
     final cardLesson = current ?? upcoming.firstOrNull;
     final later = upcoming.where((l) => !identical(l, cardLesson)).toList();
+    final nextDay = cardLesson == null ? _nextClassDay(lessons, now) : null;
 
     final att = data.attendance.data?.value ?? const <CourseAttendance>[];
     final deadlines = data.deadlines.data?.value ?? const <Deadline>[];
@@ -66,8 +69,9 @@ class _TodayScreenState extends State<TodayScreen> {
             lesson: cardLesson,
             isNow: current != null,
             now: now,
-            nextDay: cardLesson == null ? _nextClassDay(lessons, now) : null,
+            nextDay: nextDay,
             loaded: data.lessons.data != null,
+            onTap: () => widget.onOpenSchedule(cardLesson?.weekday ?? nextDay?.$2.weekday ?? now.weekday),
           ),
         ),
         SourceError(data.lessons, 'EduPage', onRetry: data.refreshTimetable),
@@ -83,11 +87,12 @@ class _TodayScreenState extends State<TodayScreen> {
               ),
               title: Text(l.subject, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
               trailing: Text(l.room, style: t.textTheme.bodyMedium?.tnum),
+              onTap: () => openLesson(context, l),
             ),
         ],
         SectionHeader('Needs attention', source: data.deadlines),
         SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
-        for (final d in attention.take(5)) DeadlineTile(d, attendance: att, now: now),
+        for (final d in attention.take(5)) DeadlineTile(d, attendance: att, now: now, showDay: true),
         if (attention.length > 5)
           Align(
             alignment: Alignment.centerLeft,
@@ -196,8 +201,14 @@ class _NextClassCard extends StatelessWidget {
   final DateTime now;
   final (DateTime, Lesson)? nextDay;
   final bool loaded;
+  final VoidCallback onTap;
   const _NextClassCard(
-      {required this.lesson, required this.isNow, required this.now, required this.nextDay, required this.loaded});
+      {required this.lesson,
+      required this.isNow,
+      required this.now,
+      required this.nextDay,
+      required this.loaded,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -237,9 +248,16 @@ class _NextClassCard extends StatelessWidget {
       ];
     }
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+          ),
+        ),
       ),
     );
   }

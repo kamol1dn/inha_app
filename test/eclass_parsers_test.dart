@@ -67,6 +67,7 @@ void main() {
       expect(vod.title, 'Midterm info');
       expect(vod.kind, DeadlineKind.vod);
       expect(vod.moduleId, 72743);
+      expect(vod.moduleType, 'vod');
       expect(vod.courseName, 'Distinguished Lecture in Social Science and Art');
       expect(vod.start, unix(1792177200));
       expect(vod.end, unix(1792954799));
@@ -80,6 +81,7 @@ void main() {
       expect(a.title, 'Assignment 1');
       expect(a.courseName, 'Multimedia Computing');
       expect(a.moduleId, 72061);
+      expect(a.moduleType, 'assign');
       expect(a.start, isNull);
       expect(a.end.toUtc(), DateTime.utc(2026, 10, 25, 18, 55));
     });
@@ -87,6 +89,7 @@ void main() {
     test('a quiz is recognised from its module link', () {
       final q = events.singleWhere((e) => e.kind == DeadlineKind.quiz);
       expect(q.moduleId, 72454);
+      expect(q.moduleType, 'quiz');
       expect(q.courseName, 'Blockchain Basics and Platforms');
       expect(q.end, unix(1792954740));
     });
@@ -96,6 +99,7 @@ void main() {
       expect(today.title, 'Deep learning for computer vision[001]-9교시');
       expect(today.kind, DeadlineKind.classPeriod);
       expect(today.moduleId, isNull);
+      expect(today.moduleType, isNull);
       expect(today.start, isNull);
       expect(today.courseName, 'Deep learning for computer vision');
       expect(today.end, unix(1792609200));
