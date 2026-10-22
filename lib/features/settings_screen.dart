@@ -5,7 +5,18 @@ import '../core/credentials.dart';
 import '../core/session.dart';
 import '../data/app_data.dart';
 import '../models/models.dart';
+import '../notifications/notifier.dart';
+import '../notifications/rules.dart';
+import '../ui/theme/status_colors.dart';
 import 'common.dart';
+
+/// What each notification switch covers, in the student's words (DESIGN.md 11).
+const _channelText = {
+  NotifyChannel.deadlines: ('Deadlines', 'Assignments and quizzes, 24 h and 3 h before they are due'),
+  NotifyChannel.vod: ('VOD windows', 'Lecture videos not fully watched, 48 h and 6 h before the window closes'),
+  NotifyChannel.attendance: ('Attendance', 'When eClass records a new absence'),
+  NotifyChannel.classes: ('Classes', 'The room, 15 min before each class'),
+};
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,11 +26,14 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final Map<Service, String?> _users = {};
+  NotifySettings? _notify;
+  bool _notifyAllowed = true;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadNotify();
   }
 
   Future<void> _load() async {
@@ -28,6 +42,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _users[s] = (await store.read(s))?.username;
     }
     if (mounted) setState(() {});
+  }
+
+  Future<void> _loadNotify() async {
+    final notifier = context.read<Notifier>();
+    final settings = await notifier.settings();
+    final allowed = await notifier.enabled();
+    if (mounted) {
+      setState(() {
+        _notify = settings;
+        _notifyAllowed = allowed;
+      });
+    }
+  }
+
+  /// Saves the switches and re-plans the reminders at once, so a channel
+  /// turned off loses its scheduled reminders now, not at the next refresh.
+  Future<void> _setNotify(NotifySettings s) async {
+    setState(() => _notify = s);
+    await context.read<Notifier>().saveSettings(s);
+    if (mounted) await context.read<AppData>().onReminderDataChanged?.call();
+  }
+
+  Future<void> _allowNotifications() async {
+    await context.read<Notifier>().requestPermission();
+    await _loadNotify();
   }
 
   @override
@@ -44,6 +83,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _editLogin(s),
           ),
+        const SectionHeader('Notifications'),
+        if (!_notifyAllowed)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Row(children: [
+              const Expanded(child: StatusLine(Status.warning, 'Android is not letting this app post notifications.')),
+              TextButton(onPressed: _allowNotifications, child: const Text('Allow')),
+            ]),
+          ),
+        if (_notify case final n?) ...[
+          for (final c in NotifyChannel.values)
+            SwitchListTile(
+              title: Text(_channelText[c]!.$1),
+              subtitle: Text(_channelText[c]!.$2),
+              value: n.channels.contains(c),
+              onChanged: (on) =>
+                  _setNotify(n.copyWith(channels: on ? {...n.channels, c} : ({...n.channels}..remove(c)))),
+            ),
+          SwitchListTile(
+            title: const Text('Quiet hours'),
+            subtitle: const Text('23:00–07:30. Reminders wait until 07:30, or come at 22:00 when that would be '
+                'too late.'),
+            value: n.quietHours,
+            onChanged: (on) => _setNotify(n.copyWith(quietHours: on)),
+          ),
+        ],
         const SectionHeader('Timetable'),
         ListTile(
           title: const Text('Class group'),

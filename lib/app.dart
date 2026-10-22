@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import 'data/app_data.dart';
 import 'notifications/notifier.dart';
+import 'notifications/routes.dart';
+import 'features/details.dart';
 import 'features/courses_screen.dart';
 import 'features/deadlines_screen.dart';
 import 'features/grades_screen.dart';
@@ -14,6 +16,11 @@ import 'ui/format/format.dart';
 import 'ui/theme/app_colors.dart';
 import 'ui/theme/app_text.dart';
 import 'ui/theme/status_colors.dart';
+
+/// The key of the last tapped notification, until HomeShell has opened it.
+class NotificationTaps extends ValueNotifier<String?> {
+  NotificationTaps() : super(null);
+}
 
 class InhaApp extends StatelessWidget {
   const InhaApp({super.key});
@@ -82,12 +89,44 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _askForNotificationsOnce());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _askForNotificationsOnce();
+      _taps = context.read<NotificationTaps>()..addListener(_openTapped);
+      _openTapped();
+    });
+  }
+
+  NotificationTaps? _taps;
+
+  /// Opens the item behind a tapped notification on top of its tab.
+  void _openTapped() {
+    final key = _taps?.value;
+    if (key == null || !mounted) return;
+    _taps!.value = null;
+    final data = context.read<AppData>();
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    switch (notificationTarget(key,
+        deadlines: data.deadlines.data?.value ?? const [], attendance: data.attendance.data?.value ?? const [])) {
+      case DeadlineTarget(:final deadline):
+        setState(() => _tab = 2);
+        showDeadlineSheet(context, deadline);
+      case CourseTarget(:final course):
+        setState(() => _tab = 3);
+        openCourse(context, course);
+      case ScheduleTarget(:final weekday):
+        setState(() => _tab = 1);
+        _timetable.currentState?.showWeekday(weekday);
+      case TabTarget(:final tab):
+        setState(() => _tab = tab);
+      case null:
+        break;
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _taps?.removeListener(_openTapped);
     super.dispose();
   }
 

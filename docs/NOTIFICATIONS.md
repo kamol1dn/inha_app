@@ -7,19 +7,41 @@ Code: `lib/notifications/`
 | `rules.dart` | Pure logic. Data in, `List<PlannedNotification>` out. No plugins, no clock. |
 | `notifier.dart` | Wraps flutter_local_notifications: channels, permission, show, schedule, cancel, sent-key store. |
 | `background.dart` | WorkManager periodic refresh (~3 h, network required) that runs the rules and the notifier. |
+| `routes.dart` | Pure. A tapped notification's key to what it opens. |
 
-Tests: `flutter test test/notification_rules_test.dart`
+Tests: `flutter test test/notification_rules_test.dart test/notification_settings_test.dart`
 
 ## What gets sent
 
-| Rule | When | Channel |
-|---|---|---|
-| Unwatched VOD (no progress data counts as unwatched) | 48 h and 6 h before the watch window closes | Attendance (high) |
-| Assignment, quiz, other eClass event | 24 h and 3 h before the deadline | Deadlines (high) |
-| New absence (dated within the last 21 days) | Once, right away | Attendance (high) |
-| Lesson today | 15 min before it starts | Classes (default) |
+| Rule | When | Channel | On by default |
+|---|---|---|---|
+| Unwatched VOD (no progress data counts as unwatched) | 48 h and 6 h before the watch window closes | VOD windows (high) | Yes |
+| Assignment, quiz, other eClass event | 24 h and 3 h before the deadline | Deadlines (high) | Yes |
+| New absence (dated within the last 21 days) | Once, right away | Attendance (high) | Yes |
+| Lesson today | 15 min before it starts | Classes (default) | No (DESIGN.md 11) |
 
 Thresholds are constants at the top of `rules.dart`.
+
+**Settings.** Each channel has a switch in the app's Settings, and so do quiet hours. They are stored in
+shared_preferences (`notify.on.<channel>`, `notify.quietHours`) and read on every pass, so the background
+isolate follows them. Turning a channel off cancels its scheduled reminders at once. Absences are still
+recorded while Attendance is off, so turning it back on does not announce them.
+
+**No first-run flood.** The first time a course's attendance is seen with any sessions in it (a first install,
+a new semester), its absences are recorded as sent without a notification; only absences that appear after
+that are announced. Seen course ids are kept under `notify.seenCourses.v1`. This also holds when the
+notification permission has not been granted yet. (Milestone 1 posted one notification per absence of the
+last 21 days on a first install.)
+
+**Quiet hours, 23:00 to 07:30** (on by default). A reminder that falls inside them waits until 07:30 if the
+item is still open at least an hour after that. Otherwise it goes out at 22:00 the evening before, and if
+that has passed too (the item was found during the night), it is posted without sound or vibration. A new
+absence found at night waits for 07:30.
+
+**Tapping** a notification opens its item on top of the tab that owns it: a deadline or VOD opens its sheet
+over Deadlines, an absence opens the course, a class reminder opens Schedule on that day. An item that is
+gone opens its tab. While the app runs the tap arrives through `onDidReceiveNotificationResponse`; a tap
+that starts the app is read from `getNotificationAppLaunchDetails`.
 
 A reminder whose time has passed while the item is still open (phone off, item just appeared) goes out right away. Only the most urgent missed reminder is sent, and it is skipped if the next reminder for the same item is less than an hour away.
 
@@ -163,4 +185,5 @@ Also:
 - **Background runs are best-effort.** WorkManager runs about every 3 h when there is a network, but Doze and OEM battery savers (Xiaomi, Huawei, some Samsung) can delay or block it (see dontkillmyapp.com). Class reminders are planned for today only, so the first class of the day depends on a pass after midnight or the app being opened.
 - **No "submitted" flag.** `Deadline` cannot say whether an assignment was already submitted, so its reminders still fire. Adding `bool done` to `Deadline` and skipping it in `_deadlineReminders` would fix this.
 - **VOD matching is by course name and title** (case and whitespace ignored). If eClass's upcoming-events titles differ from the progress-page titles, a watched VOD looks unwatched and still gets reminders. That is the safe failure, but noisy. The eClass client should produce matching titles.
-- **Absences older than 21 days are never announced.** This stops a first install from listing the whole semester.
+- **Absences older than 21 days are never announced,** even for a course seen before.
+- **Grouping.** Android groups the app's notifications itself once several are showing; the app sets no group.

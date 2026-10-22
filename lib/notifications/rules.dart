@@ -50,6 +50,16 @@ const absenceLookback = Duration(days: 21);
 /// [absenceLookback], or an old absence could be announced twice.
 const sentKeyRetention = Duration(days: 60);
 
+/// Quiet hours (DESIGN.md 11): 23:00 to 07:30, device time.
+const defaultQuietHours = QuietHours(startMinute: 23 * 60, endMinute: 7 * 60 + 30);
+
+/// A reminder that falls in quiet hours waits for the morning only if the
+/// item is still open at least this long after the quiet hours end.
+const quietMorningMargin = Duration(hours: 1);
+
+/// Otherwise it goes out this long before the quiet hours start (22:00).
+const quietEveningLead = Duration(hours: 1);
+
 // ---------------------------------------------------------------------------
 // Keys
 // ---------------------------------------------------------------------------
@@ -67,9 +77,42 @@ const allKeyPrefixes = {vodKeyPrefix, dueKeyPrefix, absenceKeyPrefix, classKeyPr
 // Types
 // ---------------------------------------------------------------------------
 
-/// The Android notification channel a notification goes to. VOD windows go
-/// to [attendance], not [deadlines], because they decide attendance.
-enum NotifyChannel { deadlines, attendance, classes }
+/// The Android notification channel a notification goes to, each with its
+/// own switch in Settings. Off by default: [classes] (DESIGN.md 11).
+enum NotifyChannel { deadlines, vod, attendance, classes }
+
+/// The nightly quiet hours, as minutes after midnight in device time. The
+/// window may cross midnight (start after end).
+class QuietHours {
+  final int startMinute;
+  final int endMinute;
+  const QuietHours({required this.startMinute, required this.endMinute});
+
+  int _minute(DateTime t) => t.hour * 60 + t.minute;
+
+  bool contains(DateTime t) {
+    final m = _minute(t.toLocal());
+    return startMinute <= endMinute
+        ? m >= startMinute && m < endMinute
+        : m >= startMinute || m < endMinute;
+  }
+
+  /// When the quiet hours containing [t] end.
+  DateTime endOf(DateTime t) {
+    final l = t.toLocal();
+    var end = DateTime(l.year, l.month, l.day, endMinute ~/ 60, endMinute % 60);
+    if (!end.isAfter(l)) end = DateTime(l.year, l.month, l.day + 1, endMinute ~/ 60, endMinute % 60);
+    return end;
+  }
+
+  /// When the quiet hours containing [t] began.
+  DateTime startOf(DateTime t) {
+    final l = t.toLocal();
+    var start = DateTime(l.year, l.month, l.day, startMinute ~/ 60, startMinute % 60);
+    if (start.isAfter(l)) start = DateTime(l.year, l.month, l.day - 1, startMinute ~/ 60, startMinute % 60);
+    return start;
+  }
+}
 
 /// One notification to show now or schedule for later.
 class PlannedNotification {
@@ -83,12 +126,17 @@ class PlannedNotification {
   final DateTime when;
   final NotifyChannel channel;
 
+  /// Post without sound or vibration: it is due during quiet hours and could
+  /// neither wait for the morning nor go out before them.
+  final bool quiet;
+
   const PlannedNotification({
     required this.key,
     required this.title,
     required this.body,
     required this.when,
     required this.channel,
+    this.quiet = false,
   });
 
   @override
@@ -98,13 +146,15 @@ class PlannedNotification {
       other.title == title &&
       other.body == body &&
       other.when == when &&
-      other.channel == channel;
+      other.channel == channel &&
+      other.quiet == quiet;
 
   @override
-  int get hashCode => Object.hash(key, title, body, when, channel);
+  int get hashCode => Object.hash(key, title, body, when, channel, quiet);
 
   @override
-  String toString() => 'PlannedNotification($key at $when, ${channel.name}: "$title" / "$body")';
+  String toString() =>
+      'PlannedNotification($key at $when, ${channel.name}${quiet ? ', quiet' : ''}: "$title" / "$body")';
 }
 
 // ---------------------------------------------------------------------------
@@ -117,29 +167,40 @@ class PlannedNotification {
 /// Nothing is ever placed before [now]: reminders that are due get `when ==
 /// now`. Deadlines that have passed and lessons that have started are
 /// dropped.
+///
+/// With [quietHours], a reminder that would go out inside them waits for
+/// their end if the item is still open an hour after that, else goes out an
+/// hour before they start (22:00), else (that time has passed) goes out
+/// [PlannedNotification.quiet]. Every channel is planned whether or not the
+/// student turned it off; the notifier filters.
 List<PlannedNotification> planNotifications({
   required DateTime now,
   List<Deadline> deadlines = const [],
   List<CourseAttendance> attendance = const [],
   List<Lesson> lessons = const [],
   Set<String> sentKeys = const {},
+  QuietHours? quietHours,
 }) {
   final out = <String, PlannedNotification>{};
   void add(PlannedNotification n) => out.putIfAbsent(n.key, () => n);
 
   for (final d in deadlines) {
     if (d.kind == DeadlineKind.vod) {
-      _vodReminders(now, d, attendance).forEach(add);
+      _quiet(_vodReminders(now, d, attendance), d.end, now, quietHours).forEach(add);
     } else if (remindedDeadlineKinds.contains(d.kind)) {
-      _deadlineReminders(now, d).forEach(add);
+      _quiet(_deadlineReminders(now, d), d.end, now, quietHours).forEach(add);
     }
   }
   for (final course in attendance) {
-    _absences(now, course).forEach(add);
+    for (final n in _absences(now, course)) {
+      // Nothing closes: an absence can always wait for the morning.
+      _quiet([n], DateTime(9999), now, quietHours).forEach(add);
+    }
   }
   for (final lesson in lessons) {
     final n = _classReminder(now, lesson);
-    if (n != null) add(n);
+    if (n == null) continue;
+    _quiet([n], n.when.add(classReminderLead), now, quietHours).forEach(add);
   }
 
   final list = out.values.where((n) => !sentKeys.contains(n.key)).toList()
@@ -168,11 +229,11 @@ Iterable<PlannedNotification> _vodReminders(
     notBefore: d.start, // nothing to watch before the window opens
   )) {
     yield PlannedNotification(
-      key: '$vodKeyPrefix${_norm(course)}|${_norm(d.title)}|${_stamp(d.end)}|${_leadTag(lead)}',
+      key: '${reminderStem(d)}|${_leadTag(lead)}',
       title: '$course: ${_clean(d.title)}',
       body: '$status, closes $closes.',
       when: at,
-      channel: NotifyChannel.attendance,
+      channel: NotifyChannel.vod,
     );
   }
 }
@@ -218,7 +279,7 @@ Iterable<PlannedNotification> _deadlineReminders(DateTime now, Deadline d) sync*
   };
   for (final (lead, at) in _reminderTimes(now: now, end: d.end, leads: deadlineReminderLeads)) {
     yield PlannedNotification(
-      key: '$dueKeyPrefix${d.kind.name}:${_norm(course)}|${_norm(d.title)}|${_stamp(d.end)}|${_leadTag(lead)}',
+      key: '${reminderStem(d)}|${_leadTag(lead)}',
       title: '$course: ${_clean(d.title)}',
       body: body,
       when: at,
@@ -267,6 +328,46 @@ PlannedNotification? _classReminder(DateTime now, Lesson l) {
     when: times.single.$2,
     channel: NotifyChannel.classes,
   );
+}
+
+/// The part of a deadline's reminder keys that names the item, without the
+/// lead: every reminder for [d] has the key `<stem>|<lead>`. Used to find the
+/// item again when its notification is tapped.
+String reminderStem(Deadline d) {
+  final item = '${_norm(_courseName(d.courseName))}|${_norm(d.title)}|${_stamp(d.end)}';
+  return d.kind == DeadlineKind.vod ? '$vodKeyPrefix$item' : '$dueKeyPrefix${d.kind.name}:$item';
+}
+
+/// The eClass course id in an absence key, or null for another key.
+int? absenceCourseId(String key) => key.startsWith(absenceKeyPrefix)
+    ? int.tryParse(key.substring(absenceKeyPrefix.length).split('|').first)
+    : null;
+
+/// Moves an item's reminders out of [quiet] hours (see [planNotifications]).
+/// [end] is when the item closes. Reminders that end up at the same instant
+/// collapse into the last one given, which is the most urgent.
+Iterable<PlannedNotification> _quiet(
+    Iterable<PlannedNotification> reminders, DateTime end, DateTime now, QuietHours? quiet) {
+  if (quiet == null) return reminders;
+  final byTime = <DateTime, PlannedNotification>{};
+  for (final n in reminders) {
+    var when = n.when;
+    var silent = false;
+    if (quiet.contains(when)) {
+      final morning = quiet.endOf(when);
+      final evening = quiet.startOf(when).subtract(quietEveningLead);
+      if (end.isAfter(morning.add(quietMorningMargin))) {
+        when = morning;
+      } else if (evening.isAfter(now)) {
+        when = evening;
+      } else {
+        silent = true;
+      }
+    }
+    byTime[when] = PlannedNotification(
+        key: n.key, title: n.title, body: n.body, when: when, channel: n.channel, quiet: silent);
+  }
+  return byTime.values;
 }
 
 /// When to send each reminder for something happening at [end], as

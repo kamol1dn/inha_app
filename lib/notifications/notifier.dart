@@ -44,6 +44,11 @@ class Notifier {
   /// fireAtMs is 0 for notifications shown right away.
   static const prefsKey = 'notify.records.v1';
 
+  /// shared_preferences key listing the eClass course ids whose attendance
+  /// has been seen. A course's absences from before it was first seen are
+  /// recorded without being announced.
+  static const seenCoursesKey = 'notify.seenCourses.v1';
+
   /// Items due within this long are shown now instead of scheduled; the
   /// plugin rejects schedule times that have passed by the time it runs.
   static const _showNowSlack = Duration(minutes: 1);
@@ -56,11 +61,16 @@ class Notifier {
           '${_leads(deadlineReminderLeads)} before they are due',
       importance: Importance.high,
     ),
+    NotifyChannel.vod: AndroidNotificationChannel(
+      'vod',
+      'VOD windows',
+      description: 'Lecture videos still to watch, ${_leads(vodReminderLeads)} before the window closes',
+      importance: Importance.high,
+    ),
     NotifyChannel.attendance: AndroidNotificationChannel(
       'attendance',
       'Attendance',
-      description: 'Lecture videos still to watch, '
-          '${_leads(vodReminderLeads)} before the window closes, and new absences',
+      description: 'A new absence in eClass',
       importance: Importance.high,
     ),
     NotifyChannel.classes: AndroidNotificationChannel(
@@ -133,6 +143,23 @@ class Notifier {
       return false;
     }
   }
+
+  /// The key of the notification whose tap launched the app, if one did.
+  Future<String?> launchPayload() async {
+    if (!await init()) return null;
+    try {
+      final details = await _plugin.getNotificationAppLaunchDetails();
+      return details?.didNotificationLaunchApp == true ? details?.notificationResponse?.payload : null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// The student's choices in Settings. Read from shared_preferences on every
+  /// pass, so the background isolate follows them too.
+  Future<NotifySettings> settings() async => NotifySettings.read(await _load());
+
+  Future<void> saveSettings(NotifySettings s) async => s.write(await _prefs());
 
   // -------------------------------------------------------------------------
   // Single notifications
@@ -210,7 +237,12 @@ class Notifier {
   /// Runs the rules on fresh data and delivers the result. Pass null for a
   /// source with no data at all (fetch failed and nothing cached): its
   /// pending reminders are then left alone instead of cancelled. Returns
-  /// what was planned.
+  /// what was delivered.
+  ///
+  /// Channels the student turned off are not delivered, and their pending
+  /// reminders are cancelled. Absences are recorded without a notification
+  /// when the Attendance channel is off, and for a course seen for the first
+  /// time (a first install, a new semester): those are not news.
   Future<List<PlannedNotification>> sync({
     List<Deadline>? deadlines,
     List<CourseAttendance>? attendance,
@@ -218,22 +250,45 @@ class Notifier {
     DateTime? now,
   }) async {
     final at = now ?? DateTime.now();
+    final prefs = await _load();
+    final settings = NotifySettings.read(prefs);
     final plan = planNotifications(
       now: at,
       deadlines: deadlines ?? const [],
       attendance: attendance ?? const [],
       lessons: lessons ?? const [],
       sentKeys: await sentKeys(at),
+      quietHours: settings.quietHours ? defaultQuietHours : null,
     );
+
+    final seen = {...?prefs.getStringList(seenCoursesKey)?.map(int.tryParse).whereType<int>()};
+    final firstSeen = {
+      for (final c in attendance ?? const <CourseAttendance>[])
+        if (c.classes.isNotEmpty && !seen.contains(c.course.id)) c.course.id,
+    };
+    final attendanceOn = settings.channels.contains(NotifyChannel.attendance);
+    bool silent(PlannedNotification n) {
+      final course = absenceCourseId(n.key);
+      return course != null && (!attendanceOn || firstSeen.contains(course));
+    }
+
+    final shown = [
+      for (final n in plan)
+        if (settings.channels.contains(n.channel) && !silent(n)) n,
+    ];
     await deliver(
-      plan,
+      shown,
       now: at,
+      record: {for (final n in plan) if (silent(n)) n.key},
       cancelMissing: {
         if (deadlines != null) ...[vodKeyPrefix, dueKeyPrefix],
         if (lessons != null) classKeyPrefix,
       },
     );
-    return plan;
+    if (firstSeen.isNotEmpty) {
+      await prefs.setStringList(seenCoursesKey, [for (final id in {...seen, ...firstSeen}) '$id']);
+    }
+    return shown;
   }
 
   /// Shows the items due now, schedules the rest and records every key.
@@ -244,18 +299,26 @@ class Notifier {
   /// plan was built from real data for.
   ///
   /// Does nothing while notifications are off, so nothing is marked sent
-  /// that the user never saw; once allowed, the rules catch up.
+  /// that the user never saw; once allowed, the rules catch up. The keys in
+  /// [record] are the exception: they are marked sent without being shown,
+  /// whether or not notifications are allowed.
   Future<void> deliver(
     List<PlannedNotification> plan, {
     DateTime? now,
     Set<String> cancelMissing = const {},
+    Set<String> record = const {},
   }) {
     return _serial(() async {
-      if (!await enabled()) return;
       final at = now ?? DateTime.now();
       final atMs = at.millisecondsSinceEpoch;
       final prefs = await _load();
       final recs = _decode(prefs);
+      final unrecorded = record.where((k) => !(recs[k]?.sentBy(atMs) ?? false)).toList();
+      for (final k in unrecorded) {
+        recs[k] = _Record(atMs, 0);
+      }
+      if (unrecorded.isNotEmpty) await _save(prefs, recs);
+      if (!await enabled()) return;
 
       final wanted = {for (final n in plan) n.key};
       final stale = [
@@ -321,6 +384,7 @@ class Notifier {
             ? AndroidNotificationCategory.event
             : AndroidNotificationCategory.reminder,
         styleInformation: BigTextStyleInformation(n.body),
+        silent: n.quiet,
       ),
     );
   }
@@ -369,6 +433,37 @@ class Notifier {
         ? parts.join()
         : '${parts.sublist(0, parts.length - 1).join(', ')} and ${parts.last}';
   }
+}
+
+/// Which channels the student wants and whether quiet hours apply, as set
+/// in Settings. Defaults follow DESIGN.md 11: everything on except Classes.
+class NotifySettings {
+  final Set<NotifyChannel> channels;
+  final bool quietHours;
+  const NotifySettings({required this.channels, this.quietHours = true});
+
+  static const defaultChannels = {NotifyChannel.deadlines, NotifyChannel.vod, NotifyChannel.attendance};
+
+  static String _key(NotifyChannel c) => 'notify.on.${c.name}';
+  static const _quietKey = 'notify.quietHours';
+
+  factory NotifySettings.read(SharedPreferences p) => NotifySettings(
+        channels: {
+          for (final c in NotifyChannel.values)
+            if (p.getBool(_key(c)) ?? defaultChannels.contains(c)) c,
+        },
+        quietHours: p.getBool(_quietKey) ?? true,
+      );
+
+  Future<void> write(SharedPreferences p) async {
+    for (final c in NotifyChannel.values) {
+      await p.setBool(_key(c), channels.contains(c));
+    }
+    await p.setBool(_quietKey, quietHours);
+  }
+
+  NotifySettings copyWith({Set<NotifyChannel>? channels, bool? quietHours}) =>
+      NotifySettings(channels: channels ?? this.channels, quietHours: quietHours ?? this.quietHours);
 }
 
 class _Record {

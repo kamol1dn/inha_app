@@ -81,7 +81,7 @@ void main() {
       for (final n in out) {
         expect(n.title, 'Multimedia Computing: Week 8 Image compression');
         expect(n.body, 'Not watched yet, closes Sun 25 Oct, 23:59.');
-        expect(n.channel, NotifyChannel.attendance);
+        expect(n.channel, NotifyChannel.vod);
         expect(n.key, startsWith(vodKeyPrefix));
       }
       expect(out.map((n) => n.key).toSet(), hasLength(2));

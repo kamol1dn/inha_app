@@ -13,7 +13,11 @@ Future<void> main() async {
   final data = services.data;
 
   final notifier = Notifier();
-  await notifier.init(onTap: (_) {}); // a tap opens the app on Today
+  // A tap while the app runs arrives here; one that started the app is the
+  // launch payload. HomeShell opens the item.
+  final taps = NotificationTaps();
+  await notifier.init(onTap: (r) => taps.value = r.payload);
+  taps.value ??= await notifier.launchPayload();
   data.onReminderDataChanged = () => _syncReminders(notifier, data);
   await initBackground(backgroundMain);
   await registerPeriodicRefresh();
@@ -24,6 +28,7 @@ Future<void> main() async {
       Provider.value(value: services.sessions),
       Provider.value(value: services.credentials),
       Provider.value(value: notifier),
+      ChangeNotifierProvider.value(value: taps),
     ],
     child: const InhaApp(),
   ));
