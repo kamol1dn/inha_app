@@ -34,6 +34,30 @@ release build). What is left from it:
 - **Attachments** are listed with name and size but don't open yet.
 - **The launcher icon** is a provisional "IUT" wordmark (`tool/make_icons.py`); Phase B
   replaces it.
+- **Waiting on the student:** installing the phone APK (sent as
+  `app-arm64-v8a-release.apk`) and signing in on the phone; real absence limits per course
+  (Settings > Absence limits); choosing a Phase B direction.
+
+Calls made without the student, to review (each is also in its commit message):
+
+- Opening a message marks it read with **read receipts suppressed**, so the app never sends
+  mail for you; "Mark as unread" is in the message's app bar.
+- **Classes reminders are off by default** and the other channels on (DESIGN.md 11). Quiet
+  hours are on by default.
+- A course's absences from **before the app first saw it** are recorded silently, not
+  announced (fixes the first-install flood; also covers a new semester).
+- **Absence warning** at max(1, 25% of the limit) left, danger at 0 or over (DESIGN.md 7). No
+  limit is ever guessed; without one the raw count shows with "limit not set".
+- **Submitted** = Moodle's "submitted" or graded; a draft is not. A quiz counts once any
+  attempt is finished. If a status page fails, the last known state is kept.
+- **"Show done"** on Deadlines replaces "Watched VODs" and covers submitted work too.
+- **Course detail** shows sessions held so far only, newest first, and puts due items and
+  the grade above the long lists.
+- **INS debug logging** was removed now rather than after "a few days": INS loaded on every
+  refresh, and release builds never had it.
+- **Release key** generated at `C:\Users\User\.android\iut-release.jks` (password in the
+  git-ignored `android/key.properties`). Back both up: losing them means the phone app can't
+  be updated, only reinstalled.
 
 1. **Mail can be read.** Tapping a message opens it: sender, time, subject, plain-text
    body (`EwsClient.body` already exists), and links that open. Opening marks it read
