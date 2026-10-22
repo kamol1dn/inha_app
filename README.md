@@ -54,8 +54,10 @@ keyAlias=iut
 keyPassword=...
 ```
 
-Then `flutter build apk --release`. The APK is `build/app/outputs/flutter-apk/app-release.apk`; copy it to the
-phone and install it (Android asks to allow installs from that source once). Without `key.properties` the
+Then `flutter build apk --release --split-per-abi` and copy `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
+(about 20 MB; nearly every current phone is arm64) to the phone and install it (Android asks to allow installs from
+that source once). Plain `flutter build apk --release` makes one 55 MB APK for every CPU instead. Stick to one
+kind: a split APK's version code is 2001 for 1.0.0+1, so a universal APK (code 1) can't update it. Without `key.properties` the
 release build falls back to the debug key, which is fine for testing but cannot update an installed signed copy.
 
 ## Repository
