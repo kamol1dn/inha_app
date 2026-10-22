@@ -80,7 +80,10 @@ class FakeMail implements MailApi {
   }
 
   @override
-  Future<int> unreadCount() async => unread;
+  Future<int> unreadCount() async {
+    if (error != null) throw error!;
+    return unread;
+  }
 }
 
 /// An [AppData] over fakes and empty in-memory preferences.

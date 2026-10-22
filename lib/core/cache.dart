@@ -42,6 +42,8 @@ class JsonCache {
 
   /// Stores [value] as fetched [at] (now by default; an edit to cached data
   /// keeps the time it was fetched).
+  Future<void> remove(String key) => _prefs.remove('cache.$key');
+
   Future<Cached<T>> write<T>(String key, T value, Object? Function(T) encode,
       {DateTime? at}) async {
     at ??= DateTime.now();

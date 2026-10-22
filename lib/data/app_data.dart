@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -12,6 +13,21 @@ import '../services/eclass/eclass_api.dart';
 import '../services/edupage/timetable_api.dart';
 import '../services/ins/ins_api.dart';
 import '../services/mail/mail_api.dart';
+
+/// The last time a service answered with the saved login: [ok] when it let
+/// the app in, false when it rejected the username or password.
+class AccountCheck {
+  final bool ok;
+  final DateTime at;
+  const AccountCheck(this.ok, this.at);
+
+  Map<String, dynamic> toJson() => {'ok': ok, 'at': at.toIso8601String()};
+  static AccountCheck? fromJson(Object? j) {
+    if (j is! Map<String, dynamic>) return null;
+    final at = DateTime.tryParse(j['at'] as String? ?? '');
+    return at == null ? null : AccountCheck(j['ok'] == true, at);
+  }
+}
 
 /// User choices that aren't secrets.
 class Prefs {
@@ -57,6 +73,20 @@ class Prefs {
 
   bool get showWatchedVods => _p.getBool('deadlines.showWatched') ?? false;
   set showWatchedVods(bool v) => _p.setBool('deadlines.showWatched', v);
+
+  AccountCheck? accountCheck(Service s) {
+    final raw = _p.getString('account.${s.name}');
+    if (raw == null) return null;
+    try {
+      return AccountCheck.fromJson(jsonDecode(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void setAccountCheck(Service s, AccountCheck? c) => c == null
+      ? _p.remove('account.${s.name}')
+      : _p.setString('account.${s.name}', jsonEncode(c.toJson()));
 
   void resetDeadlineFilters() {
     _p.remove('deadlines.kinds');
@@ -147,6 +177,7 @@ class AppData extends ChangeNotifier {
       fetch: () => timetable.lessons(prefs.classGroup, excludeSubjects: prefs.excludedSubjects),
       key: 'lessons',
       encode: _encodeList,
+      service: Service.edupage,
     );
     await onReminderDataChanged?.call();
   }
@@ -165,6 +196,7 @@ class AppData extends ChangeNotifier {
         fetch: eclass.upcoming,
         key: 'deadlines',
         encode: _encodeList,
+        service: Service.eclass,
       ),
       _run<List<CourseAttendance>>(
         get: () => attendance,
@@ -175,6 +207,7 @@ class AppData extends ChangeNotifier {
         },
         key: 'attendance',
         encode: _encodeList,
+        service: Service.eclass,
       ),
     ]);
   }
@@ -185,6 +218,7 @@ class AppData extends ChangeNotifier {
         fetch: ins.grades,
         key: 'grades',
         encode: (v) => v.toJson(),
+        service: Service.ins,
       );
 
   Future<void> refreshMail() => Future.wait([
@@ -199,6 +233,7 @@ class AppData extends ChangeNotifier {
           },
           key: 'inbox',
           encode: _encodeList,
+          service: Service.mail,
         ),
         _run<int>(
           get: () => mailUnread,
@@ -206,8 +241,72 @@ class AppData extends ChangeNotifier {
           fetch: mail.unreadCount,
           key: 'mailUnread',
           encode: (v) => v,
+          service: Service.mail,
         ),
       ]);
+
+  /// Logs in to [s] with the saved login right away (the caller resets its
+  /// cookies first, so the login really runs) and records the result. On
+  /// success the service's data is refreshed. Returns the error, or null.
+  Future<Object?> testLogin(Service s) async {
+    try {
+      switch (s) {
+        case Service.eclass:
+          await eclass.ensureLoggedIn();
+        case Service.ins:
+          await ins.ensureLoggedIn();
+        case Service.mail:
+          await mail.unreadCount();
+        case Service.edupage:
+          return null;
+      }
+    } catch (e) {
+      if (e is LoginRequired) _check(s, ok: false);
+      notifyListeners();
+      return e;
+    }
+    _check(s, ok: true);
+    notifyListeners();
+    unawaited(switch (s) {
+      Service.eclass => refreshEclass(),
+      Service.ins => refreshGrades(),
+      Service.mail => refreshMail(),
+      Service.edupage => Future.value(),
+    });
+    return null;
+  }
+
+  /// After signing out of [s]: drops its cached data and its account check,
+  /// so nothing from that account stays on the phone.
+  Future<void> forget(Service s) async {
+    for (final key in _cacheKeys[s]!) {
+      await cache.remove(key);
+    }
+    prefs.setAccountCheck(s, null);
+    switch (s) {
+      case Service.eclass:
+        deadlines = const Snapshot();
+        attendance = const Snapshot();
+      case Service.ins:
+        grades = const Snapshot();
+      case Service.mail:
+        inbox = const Snapshot();
+        mailUnread = const Snapshot();
+        mailHasMore = true;
+      case Service.edupage:
+        lessons = const Snapshot();
+    }
+    notifyListeners();
+  }
+
+  static const _cacheKeys = {
+    Service.eclass: ['deadlines', 'attendance'],
+    Service.ins: ['grades'],
+    Service.mail: ['inbox', 'mailUnread'],
+    Service.edupage: ['lessons'],
+  };
+
+  void _check(Service s, {required bool ok}) => prefs.setAccountCheck(s, AccountCheck(ok, DateTime.now()));
 
   /// Appends the next inbox page. Kept in memory only: the cache holds the
   /// first page, which is what a refresh brings back.
@@ -260,6 +359,7 @@ class AppData extends ChangeNotifier {
     required Future<T> Function() fetch,
     required String key,
     required Object? Function(T) encode,
+    required Service service,
   }) async {
     if (get().loading) return;
     set(Snapshot(data: get().data, loading: true));
@@ -267,9 +367,12 @@ class AppData extends ChangeNotifier {
     try {
       final value = await fetch();
       set(Snapshot(data: await cache.write(key, value, encode)));
+      // Any fetch that got through is a working login (Settings shows when).
+      if (service.needsLogin) _check(service, ok: true);
     } catch (e) {
       if (kDebugMode) debugPrint('refresh $key failed: ${_debugDescribe(e)}');
       set(Snapshot(data: get().data, error: e));
+      if (e is LoginRequired && service.needsLogin) _check(service, ok: false);
     }
     notifyListeners();
   }
@@ -296,7 +399,7 @@ String describeError(Object e, String service) {
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.connectionError ||
         e.error is SocketException) {
-      return "Couldn't reach $service. Check the connection or VPN.";
+      return "Couldn't reach $service. Check the connection.";
     }
   }
   return "Couldn't load from $service.";

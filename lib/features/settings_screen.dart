@@ -7,6 +7,7 @@ import '../data/app_data.dart';
 import '../models/models.dart';
 import '../notifications/notifier.dart';
 import '../notifications/rules.dart';
+import '../ui/format/format.dart';
 import '../ui/theme/status_colors.dart';
 import 'common.dart';
 
@@ -78,8 +79,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SectionHeader('Accounts'),
         for (final s in Service.values.where((s) => s.needsLogin))
           ListTile(
+            minTileHeight: 72,
             title: Text(_accountTitle(s)),
-            subtitle: Text(_users[s] ?? 'Not signed in'),
+            subtitle: _accountStatus(s, data.prefs.accountCheck(s)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _editLogin(s),
           ),
@@ -138,71 +140,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Service.edupage => 'Timetable',
       };
 
+  /// "Signed in as U… · checked 08:41", "Sign-in rejected · 08:41" or
+  /// "Not set up" (DESIGN.md 8, Settings).
+  Widget _accountStatus(Service s, AccountCheck? check) {
+    final user = _users[s];
+    if (user == null) return const Text('Not set up');
+    if (check == null) return Text('$user · not checked yet');
+    if (check.ok) return Text('Signed in as $user · checked ${updatedAt(check.at)}');
+    return StatusLine(Status.danger, 'Sign-in rejected · checked ${updatedAt(check.at)}', padding: EdgeInsets.zero);
+  }
+
   Future<void> _editLogin(Service s) async {
-    final store = context.read<CredentialStore>();
-    final sessions = context.read<Sessions>();
-    final data = context.read<AppData>();
-    final existing = await store.read(s);
+    final existing = await context.read<CredentialStore>().read(s);
     if (!mounted) return;
-    final user = TextEditingController(text: existing?.username);
-    final pass = TextEditingController();
-    final saved = await showDialog<bool>(
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(_accountTitle(s)),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: user,
-            // All three services log in with the student ID, mail included.
-            decoration: const InputDecoration(labelText: 'Student ID'),
-            autocorrect: false,
-          ),
-          TextField(
-            controller: pass,
-            decoration: InputDecoration(
-                labelText: 'Password',
-                helperText: existing != null ? 'Leave empty to keep the saved one' : null),
-            obscureText: true,
-            autocorrect: false,
-            enableSuggestions: false,
-          ),
-        ]),
-        actions: [
-          if (existing != null)
-            TextButton(
-              onPressed: () async {
-                await store.clear(s);
-                if (ctx.mounted) Navigator.pop(ctx, true);
-              },
-              child: const Text('Sign out'),
-            ),
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () async {
-              final p = pass.text.isEmpty ? existing?.password : pass.text;
-              if (user.text.trim().isEmpty || p == null || p.isEmpty) return;
-              await store.write(s, Credentials(user.text.trim(), p));
-              if (ctx.mounted) Navigator.pop(ctx, true);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => _LoginSheet(service: s, title: _accountTitle(s), existing: existing),
     );
-    if (saved == true) {
-      await sessions.reset(s);
-      await _load();
-      switch (s) {
-        case Service.eclass:
-          data.refreshEclass();
-        case Service.ins:
-          data.refreshGrades();
-        case Service.mail:
-          data.refreshMail();
-        case Service.edupage:
-          break;
-      }
-    }
+    await _load();
   }
 
   /// Subjects EduPage lists for the group that the student doesn't take
@@ -270,5 +227,166 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {});
       data.refreshTimetable();
     }
+  }
+}
+
+/// Username, password and "Save and test": the login is saved, then tried
+/// at once, and the answer is shown here (DESIGN.md 8, Settings).
+class _LoginSheet extends StatefulWidget {
+  final Service service;
+  final String title;
+  final Credentials? existing;
+  const _LoginSheet({required this.service, required this.title, required this.existing});
+
+  @override
+  State<_LoginSheet> createState() => _LoginSheetState();
+}
+
+class _LoginSheetState extends State<_LoginSheet> {
+  late final _user = TextEditingController(text: widget.existing?.username);
+  final _pass = TextEditingController();
+  bool _showPassword = false;
+  bool _busy = false;
+  bool _tested = false;
+  Object? _error;
+  String? _missing;
+
+  @override
+  void dispose() {
+    _user.dispose();
+    _pass.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveAndTest() async {
+    final user = _user.text.trim();
+    final password = _pass.text.isEmpty ? widget.existing?.password : _pass.text;
+    if (user.isEmpty || password == null || password.isEmpty) {
+      setState(() => _missing = user.isEmpty ? 'Enter the student ID.' : 'Enter the password.');
+      return;
+    }
+    final store = context.read<CredentialStore>();
+    final sessions = context.read<Sessions>();
+    final data = context.read<AppData>();
+    setState(() {
+      _busy = true;
+      _missing = null;
+      _tested = false;
+    });
+    await store.write(widget.service, Credentials(user, password));
+    await sessions.reset(widget.service); // so the test really logs in
+    final error = await data.testLogin(widget.service);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _tested = true;
+      _error = error;
+    });
+  }
+
+  Future<void> _signOut() async {
+    final label = widget.service.label;
+    final store = context.read<CredentialStore>();
+    final sessions = context.read<Sessions>();
+    final data = context.read<AppData>();
+    final notifier = context.read<Notifier>();
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Sign out of $label?'),
+        content: Text('The saved login and the $label data are removed from this phone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    await store.clear(widget.service);
+    await sessions.reset(widget.service);
+    await data.forget(widget.service);
+    // Deadline and VOD reminders come from eClass data that is gone now.
+    if (widget.service == Service.eclass) {
+      await notifier.deliver(const [], cancelMissing: {vodKeyPrefix, dueKeyPrefix});
+    }
+    if (mounted) Navigator.pop(context);
+  }
+
+  Widget? _result() {
+    final label = widget.service.label;
+    if (_missing case final m?) return StatusLine(Status.danger, m, padding: EdgeInsets.zero);
+    if (!_tested) return null;
+    final e = _error;
+    if (e == null) return const StatusLine(Status.ok, 'Signed in', padding: EdgeInsets.zero);
+    if (e is LoginRequired) {
+      return StatusLine(Status.danger, '$label rejected this username or password.', padding: EdgeInsets.zero);
+    }
+    return StatusLine(Status.warning, '${describeError(e, label)} The login is saved and is tried again on the '
+        'next refresh.', padding: EdgeInsets.zero);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final result = _result();
+    final done = _tested && _error == null;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(widget.title, style: t.textTheme.titleMedium),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _user,
+              // All three services log in with the student ID, mail included.
+              decoration: const InputDecoration(labelText: 'Student ID', border: OutlineInputBorder()),
+              autocorrect: false,
+              enableSuggestions: false,
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _pass,
+              obscureText: !_showPassword,
+              autocorrect: false,
+              enableSuggestions: false,
+              onSubmitted: (_) => _busy ? null : _saveAndTest(),
+              decoration: InputDecoration(
+                labelText: 'Password',
+                border: const OutlineInputBorder(),
+                helperText: widget.existing != null ? 'Leave empty to keep the saved one' : null,
+                suffixIcon: IconButton(
+                  tooltip: _showPassword ? 'Hide password' : 'Show password',
+                  icon: Icon(_showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                  onPressed: () => setState(() => _showPassword = !_showPassword),
+                ),
+              ),
+            ),
+            if (result != null) ...[const SizedBox(height: 16), result],
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _busy ? null : (done ? () => Navigator.pop(context) : _saveAndTest),
+              child: _busy
+                  ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(done ? 'Done' : 'Save and test'),
+            ),
+            if (widget.existing != null) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: t.colorScheme.error),
+                onPressed: _busy ? null : _signOut,
+                child: const Text('Sign out'),
+              ),
+            ],
+          ]),
+        ),
+      ),
+    );
   }
 }

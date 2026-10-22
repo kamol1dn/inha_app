@@ -357,12 +357,15 @@ and "Limit not set", with no bar.
 - **INS grades** is a list of courses with their grades. The semester GPA is a plain row at the top, not a hero tile.
 
 **Settings (saved logins).**
-- **One row per service:** EduPage, eClass, Outlook mail, INS. The subtitle carries the status: `Signed in · checked 08:41`,
-  `Sign-in expired` (a danger `StatusLine`), or `Not set up`.
+- **One row per service that needs a login:** eClass, INS, University mail. The subtitle carries the status:
+  `Signed in as U… · checked 08:41`, `Sign-in rejected · checked 08:41` (a danger `StatusLine`), `U… · not checked yet`
+  or `Not set up`. Every refresh updates it: a fetch that gets through is a working login, a rejected one is not, and a
+  network failure says nothing.
 - **Tapping a row** opens a sheet with username, password (obscured, with a show toggle) and a `FilledButton` "Save and test". The
   result appears inline: `Signed in` or `eClass rejected this username or password.`
 - **Never display a saved password.**
-- **Sign out** is a `TextButton` in `error` color, behind a confirm dialog.
+- **Sign out** is a `TextButton` in `error` color, behind a confirm dialog. It removes the saved login, the service's
+  cookies and cached data, and (for eClass) the reminders planned from that data.
 - **Also in Settings:** notifications per channel, theme (System / Light / Dark), and absence limits per course.
 
 **Empty states.** One left-aligned `bodyLarge` sentence stating the fact, an optional `Checked 08:41`, and at most one `TextButton`.
