@@ -12,6 +12,9 @@ String _norm(String s) => s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim()
 /// Kinds that are something due. Class periods are only shown on request.
 bool isDue(Deadline d) => d.kind != DeadlineKind.classPeriod;
 
+/// Nothing left to do: handed in, attempted, or (a VOD) fully watched.
+bool isDone(Deadline d, List<CourseAttendance> att) => d.done || vodWatched(d, att) == true;
+
 /// The course's attendance record for a calendar event. Calendar course names
 /// can be cut short, so match on prefix either way.
 CourseAttendance? courseFor(String courseName, List<CourseAttendance> all) {
@@ -82,7 +85,7 @@ List<Deadline> needsAttention(List<Deadline> all, List<CourseAttendance> att, Da
     if (d.kind == DeadlineKind.vod) {
       return !left.isNegative && left <= vodTodayWindow && vodWatched(d, att) != true;
     }
-    return left > const Duration(hours: -24) && left <= deadlineTodayWindow;
+    return !d.done && left > const Duration(hours: -24) && left <= deadlineTodayWindow;
   }).toList()
     ..sort((a, b) => a.end.compareTo(b.end));
   return out;

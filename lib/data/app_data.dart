@@ -72,8 +72,9 @@ class Prefs {
   bool get notificationsAsked => _p.getBool('notify.asked') ?? false;
   set notificationsAsked(bool v) => _p.setBool('notify.asked', v);
 
-  bool get showWatchedVods => _p.getBool('deadlines.showWatched') ?? false;
-  set showWatchedVods(bool v) => _p.setBool('deadlines.showWatched', v);
+  /// Show submitted assignments, attempted quizzes and watched VODs too.
+  bool get showDone => _p.getBool('deadlines.showDone') ?? false;
+  set showDone(bool v) => _p.setBool('deadlines.showDone', v);
 
   /// Allowed absences per eClass course id, as the student set them.
   Map<int, int> get absenceLimits => Notifier.readAbsenceLimits(_p);
@@ -101,7 +102,7 @@ class Prefs {
   void resetDeadlineFilters() {
     _p.remove('deadlines.kinds');
     _p.remove('deadlines.course');
-    _p.remove('deadlines.showWatched');
+    _p.remove('deadlines.showDone');
   }
 }
 
@@ -203,7 +204,7 @@ class AppData extends ChangeNotifier {
       _run<List<Deadline>>(
         get: () => deadlines,
         set: (s) => deadlines = s,
-        fetch: eclass.upcoming,
+        fetch: () async => _withSubmissions(await eclass.upcoming()),
         key: 'deadlines',
         encode: _encodeList,
         service: Service.eclass,
@@ -220,6 +221,27 @@ class AppData extends ChangeNotifier {
         service: Service.eclass,
       ),
     ]);
+  }
+
+  /// Marks each assignment and quiz handed in or not, from its own page.
+  /// A page that fails keeps what the cache knew about that item, so a
+  /// network blip never brings back reminders for submitted work.
+  Future<List<Deadline>> _withSubmissions(List<Deadline> fresh) {
+    final known = {
+      for (final d in deadlines.data?.value ?? const <Deadline>[])
+        if (d.moduleId != null) d.moduleId!: d,
+    };
+    return Future.wait(fresh.map((d) async {
+      if (d.kind != DeadlineKind.assignment && d.kind != DeadlineKind.quiz) return d;
+      try {
+        final s = await eclass.submission(d);
+        return s == null ? d : d.withDone(s.done, s.at);
+      } catch (e) {
+        if (kDebugMode) debugPrint('submission ${d.moduleId} failed: ${_debugDescribe(e)}');
+        final before = known[d.moduleId];
+        return before == null ? d : d.withDone(before.done, before.doneAt);
+      }
+    }));
   }
 
   Future<void> refreshGrades() => _run<GradeReport>(

@@ -7,6 +7,7 @@ import '../models/models.dart';
 import '../services/eclass/eclass_links.dart';
 import '../ui/format/format.dart';
 import '../ui/theme/app_text.dart';
+import '../ui/theme/status_colors.dart';
 import 'common.dart';
 import 'course_detail_screen.dart';
 import 'deadline_tile.dart';
@@ -43,7 +44,7 @@ class _DeadlineSheet extends StatelessWidget {
     final att = data.attendance.data?.value ?? const <CourseAttendance>[];
     final course = courseFor(d.courseName, att)?.course;
     final vod = vodFor(d, att);
-    final status = deadlineStatus(d, now);
+    final status = d.done ? null : deadlineStatus(d, now);
     final muted = t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant);
     final item = eclassItemUrl(d);
     final link = item ?? (course == null ? null : eclassCourseUrl(course.id));
@@ -78,6 +79,13 @@ class _DeadlineSheet extends StatelessWidget {
             StatusLine(status, left, padding: const EdgeInsets.only(top: 4))
           else if (soon)
             Text(left, style: muted?.tnum),
+          if (d.kind == DeadlineKind.assignment || d.kind == DeadlineKind.quiz) ...[
+            const SizedBox(height: 16),
+            if (d.done)
+              StatusLine(Status.ok, doneText(d), padding: EdgeInsets.zero)
+            else
+              Text(d.kind == DeadlineKind.quiz ? 'Not attempted yet' : 'Not submitted yet', style: muted),
+          ],
           if (vod != null) ...[
             const SizedBox(height: 16),
             Text(

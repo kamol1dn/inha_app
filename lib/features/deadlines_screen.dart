@@ -35,16 +35,16 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
 
     final kinds = prefs.deadlineKinds;
     final course = prefs.deadlineCourse;
-    final showWatched = prefs.showWatchedVods;
+    final showDone = prefs.showDone;
     final shown = all.where((d) {
       if (!kinds.contains(d.kind)) return false;
       if (course != null && courseFor(d.courseName, att)?.course.name != course && d.courseName != course) {
         return false;
       }
-      if (!showWatched && vodWatched(d, att) == true) return false;
+      if (!showDone && isDone(d, att)) return false;
       return true;
     }).toList();
-    final filtered = kinds != Prefs.defaultDeadlineKinds || course != null || showWatched;
+    final filtered = kinds != Prefs.defaultDeadlineKinds || course != null || showDone;
 
     final overdue = shown.where((d) => d.end.isBefore(now)).toList();
     final groups = <String, List<Deadline>>{};
@@ -58,11 +58,11 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
         _FilterBar(
           kinds: kinds,
           course: course,
-          showWatched: showWatched,
+          showDone: showDone,
           courses: _courseNames(all, att),
           onKinds: (v) => setState(() => prefs.deadlineKinds = v),
           onCourse: (v) => setState(() => prefs.deadlineCourse = v),
-          onShowWatched: (v) => setState(() => prefs.showWatchedVods = v),
+          onShowDone: (v) => setState(() => prefs.showDone = v),
         ),
         SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
         if (data.deadlines.data != null && all.where(isDue).isEmpty && !filtered)
@@ -106,20 +106,20 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
 class _FilterBar extends StatelessWidget {
   final Set<DeadlineKind> kinds;
   final String? course;
-  final bool showWatched;
+  final bool showDone;
   final List<String> courses;
   final ValueChanged<Set<DeadlineKind>> onKinds;
   final ValueChanged<String?> onCourse;
-  final ValueChanged<bool> onShowWatched;
+  final ValueChanged<bool> onShowDone;
 
   const _FilterBar({
     required this.kinds,
     required this.course,
-    required this.showWatched,
+    required this.showDone,
     required this.courses,
     required this.onKinds,
     required this.onCourse,
-    required this.onShowWatched,
+    required this.onShowDone,
   });
 
   @override
@@ -139,9 +139,9 @@ class _FilterBar extends StatelessWidget {
           const SizedBox(width: 8),
         ],
         FilterChip(
-          label: const Text('Watched VODs'),
-          selected: showWatched,
-          onSelected: onShowWatched,
+          label: const Text('Show done'),
+          selected: showDone,
+          onSelected: onShowDone,
         ),
       ]),
     );

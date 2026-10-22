@@ -191,6 +191,70 @@ List<VodProgress> parseVodProgress(String html) {
   return out;
 }
 
+/// Whether an assignment is handed in, from `GET /mod/assign/view.php?id=`.
+///
+/// Moodle puts a `submissionstatus<state>` class on the "Submission status"
+/// cell once there is a submission: `submitted` (done), `draft` (not handed
+/// in), `reopened`, `new`. A graded assignment (`submissiongraded`) is done
+/// too. With no class there is no attempt. [at] is the "Last modified" time.
+({bool done, DateTime? at}) parseAssignSubmission(String html) {
+  final doc = html_parser.parse(html);
+  final table = doc.querySelector('.submissionstatustable table') ??
+      (doc.body?.id == 'page-mod-assign-view' ? doc.querySelector('#region-main table.generaltable') : null);
+  if (table == null) {
+    if (doc.body?.id == 'page-mod-assign-view') return (done: false, at: null);
+    throw ParseError('eClass assignment');
+  }
+  String? state;
+  for (final cell in table.querySelectorAll('td')) {
+    for (final c in cell.classes) {
+      if (c.startsWith('submissionstatus') && c.length > 'submissionstatus'.length) {
+        state ??= c.substring('submissionstatus'.length);
+      }
+    }
+  }
+  final graded = table.querySelector('td.submissiongraded') != null;
+  final done = state == 'submitted' || state == 'marked' || graded;
+  DateTime? at;
+  for (final row in table.querySelectorAll('tr')) {
+    final cells = row.querySelectorAll('td, th');
+    if (cells.length < 2) continue;
+    final label = _text(cells.first).toLowerCase();
+    if (label.contains('last modified') || label.contains('최종 수정')) at = _parseDateTime(_text(cells[1]));
+  }
+  return (done: done, at: done ? at : null);
+}
+
+/// Whether a quiz is done, from `GET /mod/quiz/view.php?id=`: any attempt
+/// in `table.quizattemptsummary` whose state is "Finished" (종료됨). [at] is
+/// the newest "Submitted ..." time in the state details.
+({bool done, DateTime? at}) parseQuizSubmission(String html) {
+  final doc = html_parser.parse(html);
+  if (doc.body?.id != 'page-mod-quiz-view' && doc.querySelector('.quizinfo') == null) {
+    throw ParseError('eClass quiz');
+  }
+  var done = false;
+  DateTime? at;
+  for (final row in doc.querySelectorAll('table.quizattemptsummary tbody tr')) {
+    final cell = row.querySelector('td');
+    if (cell == null) continue;
+    final text = _text(cell);
+    if (!RegExp(r'^(Finished|종료)', caseSensitive: false).hasMatch(text)) continue;
+    done = true;
+    final when = _parseDateTime(text);
+    if (when != null && (at == null || when.isAfter(at))) at = when;
+  }
+  return (done: done, at: at);
+}
+
+/// The first "2026-10-21 21:14" in [s], in device time (eClass shows times in
+/// the zone of the student's profile, the same as the device).
+DateTime? _parseDateTime(String s) {
+  final m = RegExp(r'(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})').firstMatch(s);
+  if (m == null) return null;
+  return DateTime(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!), int.parse(m[4]!), int.parse(m[5]!));
+}
+
 /// True for eClass's login page, which is also what a logged-out request
 /// for any other page ends up on.
 bool isLoginPage(String html) {

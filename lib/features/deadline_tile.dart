@@ -15,6 +15,13 @@ IconData deadlineIcon(DeadlineKind k) => switch (k) {
       DeadlineKind.classPeriod => Icons.class_outlined,
     };
 
+/// "Submitted Wed 21:14" for an assignment, "Attempted ..." for a quiz.
+String doneText(Deadline d) {
+  final verb = d.kind == DeadlineKind.quiz ? 'Attempted' : 'Submitted';
+  final at = d.doneAt;
+  return at == null ? verb : '$verb ${pastWhen(at)}';
+}
+
 /// Two-line deadline row: type icon, item, course; trailing due time and,
 /// under 48 h, the relative time in its status colour. With [showDay] (rows
 /// not under a day header) a later due time carries its weekday. Tapping it
@@ -31,29 +38,34 @@ class DeadlineTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final d = deadline;
-    final status = deadlineStatus(d, now);
+    final done = isDone(d, attendance);
+    final status = done ? null : deadlineStatus(d, now);
     final relColor = status == null ? t.colorScheme.onSurfaceVariant : statusColors(context).of(status).fg;
-    // For a VOD the watch state leads: it is the fact that matters, and a long
-    // course name would otherwise push it out of the line.
+    // The done state or, for a VOD, the watch state leads: it is the fact
+    // that matters, and a long course name would otherwise push it out.
     final vod = vodFor(d, attendance);
     final sub = [
-      if (vod != null) vod.done ? 'Watched' : '${vod.percent.floor()}% watched',
+      if (d.done) doneText(d) else if (vod != null) vod.done ? 'Watched' : '${vod.percent.floor()}% watched',
       d.courseName,
     ].join(' · ');
+    final muted = t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant);
     final showRel = d.end.difference(now).inHours < 48;
     return ListTile(
       minTileHeight: 72,
       leading: Icon(deadlineIcon(d.kind), color: t.colorScheme.onSurfaceVariant),
       title: Text(d.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
-      subtitle: Text(sub,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+      subtitle: done
+          ? Row(children: [
+              Icon(Icons.check_circle_outline, size: 18, color: statusColors(context).ok.fg),
+              const SizedBox(width: 8),
+              Expanded(child: Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: muted)),
+            ])
+          : Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: muted),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (showRel)
+          if (showRel && !done)
             Text(relative(d.end, now: now), style: t.textTheme.bodyMedium?.tnum.copyWith(color: relColor)),
           Text(
               '${d.kind == DeadlineKind.vod ? 'closes ' : ''}'

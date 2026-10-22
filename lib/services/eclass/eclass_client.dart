@@ -53,6 +53,19 @@ class EclassClient implements EclassApi {
     return CourseAttendance(course: course, classes: await classes, vods: await vods);
   }
 
+  @override
+  Future<({bool done, DateTime? at})?> submission(Deadline d) async {
+    final id = d.moduleId;
+    if (id == null) return null;
+    final (path, parse) = switch (d.kind) {
+      DeadlineKind.assignment => ('/mod/assign/view.php?id=$id', parseAssignSubmission),
+      DeadlineKind.quiz => ('/mod/quiz/view.php?id=$id', parseQuizSubmission),
+      _ => (null, null),
+    };
+    if (path == null || parse == null) return null;
+    return (await _fetchList(path, (html) => [parse(html)])).single;
+  }
+
   /// GETs [path] and parses it, logging in and retrying once if the session
   /// had expired. With [optional], a 404 or a redirect to some other page
   /// (the course does not have this page) gives an empty list.

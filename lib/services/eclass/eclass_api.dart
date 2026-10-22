@@ -16,4 +16,8 @@ abstract class EclassApi {
 
   /// Class attendance and VOD progress for one course.
   Future<CourseAttendance> attendance(Course course);
+
+  /// Whether an assignment was handed in or a quiz attempted, from the
+  /// item's own page. Null for items that have no such page.
+  Future<({bool done, DateTime? at})?> submission(Deadline d);
 }

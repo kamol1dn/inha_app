@@ -271,6 +271,7 @@ String _vodStatus(List<VodProgress> progress) {
 }
 
 Iterable<PlannedNotification> _deadlineReminders(DateTime now, Deadline d) sync* {
+  if (d.done) return; // handed in: nothing to remind about (pending ones are cancelled)
   final course = _courseName(d.courseName);
   final due = _dayTime.format(d.end.toLocal());
   final body = switch (d.kind) {

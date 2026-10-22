@@ -109,6 +109,11 @@ class Deadline {
   final int? moduleId; // eClass module id, for opening it
   final String? moduleType; // "assign", "quiz", "vod", "ubboard", ...
 
+  /// Handed in (an assignment) or attempted (a quiz), read from the item's
+  /// own eClass page, and when. False when unknown.
+  final bool done;
+  final DateTime? doneAt;
+
   const Deadline({
     required this.title,
     required this.courseName,
@@ -117,7 +122,20 @@ class Deadline {
     this.start,
     this.moduleId,
     this.moduleType,
+    this.done = false,
+    this.doneAt,
   });
+
+  Deadline withDone(bool done, DateTime? at) => Deadline(
+      title: title,
+      courseName: courseName,
+      kind: kind,
+      end: end,
+      start: start,
+      moduleId: moduleId,
+      moduleType: moduleType,
+      done: done,
+      doneAt: done ? at : null);
 
   Map<String, dynamic> toJson() => {
         'title': title,
@@ -127,6 +145,8 @@ class Deadline {
         'end': end.toIso8601String(),
         'moduleId': moduleId,
         'moduleType': moduleType,
+        'done': done,
+        'doneAt': doneAt?.toIso8601String(),
       };
   factory Deadline.fromJson(Map<String, dynamic> j) => Deadline(
         title: j['title'] as String,
@@ -136,6 +156,8 @@ class Deadline {
         end: DateTime.parse(j['end'] as String),
         moduleId: j['moduleId'] as int?,
         moduleType: j['moduleType'] as String?,
+        done: (j['done'] as bool?) ?? false,
+        doneAt: j['doneAt'] == null ? null : DateTime.parse(j['doneAt'] as String),
       );
 }
 

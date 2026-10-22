@@ -147,7 +147,9 @@ class _TodayScreenState extends State<TodayScreen> {
 
   Widget _nothingDue(List<Deadline> all, DateTime now) {
     if (all.isEmpty) return const StatusLine(Status.ok, 'No deadlines in eClass.');
-    final next = ([...all.where((d) => d.end.isAfter(now))]..sort((a, b) => a.end.compareTo(b.end))).firstOrNull;
+    final next = ([...all.where((d) => isDue(d) && !d.done && d.end.isAfter(now))]
+          ..sort((a, b) => a.end.compareTo(b.end)))
+        .firstOrNull;
     final tail = next == null ? '' : ' Next: ${next.title}, ${next.courseName}, ${dayDate(next.end)} ${clock(next.end)}.';
     return StatusLine(Status.ok, 'Nothing due in the next 3 days.$tail');
   }

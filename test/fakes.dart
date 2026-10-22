@@ -29,6 +29,20 @@ class FakeEclass implements EclassApi {
   @override
   Future<CourseAttendance> attendance(Course course) async =>
       attendanceById[course.id] ?? CourseAttendance(course: course);
+
+  /// Submission state by module id; a module listed in [failing] throws.
+  Map<int, ({bool done, DateTime? at})> submissions = {};
+  Set<int> failing = {};
+  final submissionChecks = <int>[];
+
+  @override
+  Future<({bool done, DateTime? at})?> submission(Deadline d) async {
+    final id = d.moduleId;
+    if (id == null) return null;
+    submissionChecks.add(id);
+    if (failing.contains(id)) throw Exception('eClass did not answer');
+    return submissions[id] ?? (done: false, at: null);
+  }
 }
 
 class FakeTimetable implements TimetableApi {
