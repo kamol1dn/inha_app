@@ -180,6 +180,7 @@ List<PlannedNotification> planNotifications({
   List<Lesson> lessons = const [],
   Set<String> sentKeys = const {},
   QuietHours? quietHours,
+  Map<int, int> absenceLimits = const {},
 }) {
   final out = <String, PlannedNotification>{};
   void add(PlannedNotification n) => out.putIfAbsent(n.key, () => n);
@@ -192,7 +193,7 @@ List<PlannedNotification> planNotifications({
     }
   }
   for (final course in attendance) {
-    for (final n in _absences(now, course)) {
+    for (final n in _absences(now, course, absenceLimits[course.course.id])) {
       // Nothing closes: an absence can always wait for the morning.
       _quiet([n], DateTime(9999), now, quietHours).forEach(add);
     }
@@ -288,10 +289,16 @@ Iterable<PlannedNotification> _deadlineReminders(DateTime now, Deadline d) sync*
   }
 }
 
-Iterable<PlannedNotification> _absences(DateTime now, CourseAttendance a) sync* {
+Iterable<PlannedNotification> _absences(DateTime now, CourseAttendance a, int? limit) sync* {
   final since = now.subtract(absenceLookback);
   final total = a.count(AttendanceMark.absent);
   final course = _clean(a.course.name);
+  final tally = switch (limit) {
+    null => '${total == 1 ? '1 absence' : '$total absences'} in this course so far.',
+    final l when total > l => '$total absences, over the limit of $l.',
+    final l when total == l => '$total of $l allowed absences used, none left.',
+    final l => '$total of $l allowed absences used, ${l - total} left.',
+  };
   for (final e in a.classes) {
     if (e.mark != AttendanceMark.absent || e.date.isBefore(since)) continue;
     final date = e.date.toLocal();
@@ -300,8 +307,7 @@ Iterable<PlannedNotification> _absences(DateTime now, CourseAttendance a) sync* 
     yield PlannedNotification(
       key: '$absenceKeyPrefix${a.course.id}|${_day(date)}|${_norm(label)}',
       title: 'Marked absent: $course, ${_dayMonth.format(date)}',
-      body: 'eClass recorded an absence for $what on ${_weekdayDayMonth.format(date)}. '
-          '${total == 1 ? '1 absence' : '$total absences'} in this course so far.',
+      body: 'eClass recorded an absence for $what on ${_weekdayDayMonth.format(date)}. $tally',
       when: now,
       channel: NotifyChannel.attendance,
     );

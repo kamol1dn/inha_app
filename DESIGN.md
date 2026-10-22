@@ -367,6 +367,10 @@ and "Limit not set", with no bar.
 - **Sign out** is a `TextButton` in `error` color, behind a confirm dialog. It removes the saved login, the service's
   cookies and cached data, and (for eClass) the reminders planned from that data.
 - **Also in Settings:** notifications per channel, theme (System / Light / Dark), and absence limits per course.
+- **Absence limits** is its own screen: every eClass course that takes attendance, with its limit or `Not set`;
+  tapping one asks for the number (empty clears it). Courses shows `Set limits` above the list while any course
+  lacks one, and course detail has `Set absence limit` / `Change limit`. The new-absence notification adds
+  `3 of 4 allowed absences used, 1 left.` once a limit is set.
 
 **Empty states.** One left-aligned `bodyLarge` sentence stating the fact, an optional `Checked 08:41`, and at most one `TextButton`.
 Examples:

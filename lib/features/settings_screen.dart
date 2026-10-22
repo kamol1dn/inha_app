@@ -9,6 +9,7 @@ import '../notifications/notifier.dart';
 import '../notifications/rules.dart';
 import '../ui/format/format.dart';
 import '../ui/theme/status_colors.dart';
+import 'absence_widgets.dart';
 import 'common.dart';
 
 /// What each notification switch covers, in the student's words (DESIGN.md 11).
@@ -111,6 +112,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (on) => _setNotify(n.copyWith(quietHours: on)),
           ),
         ],
+        const SectionHeader('Courses'),
+        ListTile(
+          title: const Text('Absence limits'),
+          subtitle: Text(_limitsSummary(data)),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AbsenceLimitsScreen())),
+        ),
         const SectionHeader('Timetable'),
         ListTile(
           title: const Text('Class group'),
@@ -131,6 +139,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ]),
     );
+  }
+
+  static String _limitsSummary(AppData data) {
+    final tracked = [...?data.attendance.data?.value.where((c) => c.classes.isNotEmpty)];
+    final set = tracked.where((c) => data.prefs.absenceLimits.containsKey(c.course.id)).length;
+    if (tracked.isEmpty) return 'For courses with attendance in eClass';
+    return set == 0 ? 'Not set' : '$set of ${tracked.length} courses set';
   }
 
   String _accountTitle(Service s) => switch (s) {

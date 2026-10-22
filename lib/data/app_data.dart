@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/cache.dart';
 import '../core/session.dart';
 import '../models/models.dart';
+import '../notifications/notifier.dart';
 import '../services/eclass/eclass_api.dart';
 import '../services/edupage/timetable_api.dart';
 import '../services/ins/ins_api.dart';
@@ -73,6 +74,15 @@ class Prefs {
 
   bool get showWatchedVods => _p.getBool('deadlines.showWatched') ?? false;
   set showWatchedVods(bool v) => _p.setBool('deadlines.showWatched', v);
+
+  /// Allowed absences per eClass course id, as the student set them.
+  Map<int, int> get absenceLimits => Notifier.readAbsenceLimits(_p);
+
+  void setAbsenceLimit(int courseId, int? limit) {
+    final all = absenceLimits;
+    limit == null ? all.remove(courseId) : all[courseId] = limit;
+    _p.setString(Notifier.absenceLimitsKey, jsonEncode({for (final e in all.entries) '${e.key}': e.value}));
+  }
 
   AccountCheck? accountCheck(Service s) {
     final raw = _p.getString('account.${s.name}');
@@ -305,6 +315,11 @@ class AppData extends ChangeNotifier {
     Service.mail: ['inbox', 'mailUnread'],
     Service.edupage: ['lessons'],
   };
+
+  void setAbsenceLimit(int courseId, int? limit) {
+    prefs.setAbsenceLimit(courseId, limit);
+    notifyListeners();
+  }
 
   void _check(Service s, {required bool ok}) => prefs.setAccountCheck(s, AccountCheck(ok, DateTime.now()));
 

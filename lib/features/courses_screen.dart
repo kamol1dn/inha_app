@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../data/absence.dart';
 import '../data/app_data.dart';
 import '../models/models.dart';
 import '../ui/theme/app_text.dart';
-import '../ui/theme/status_colors.dart';
+import 'absence_widgets.dart';
 import 'common.dart';
 import 'details.dart';
 
@@ -15,8 +16,9 @@ class CoursesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = context.watch<AppData>();
-    final courses = [...?data.attendance.data?.value]
-      ..sort((a, b) => b.count(AttendanceMark.absent).compareTo(a.count(AttendanceMark.absent)));
+    final limits = data.prefs.absenceLimits;
+    final courses = troubleOrder(data.attendance.data?.value ?? const [], limits, data.lessons.data?.value ?? const []);
+    final unset = courses.where((c) => c.classes.isNotEmpty && limits[c.course.id] == null).length;
     return RefreshIndicator(
       onRefresh: data.refreshEclass,
       child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
@@ -26,7 +28,26 @@ class CoursesScreen extends StatelessWidget {
             padding: EdgeInsets.all(16),
             child: Text('Sign in to eClass in Settings to see attendance and VOD progress.'),
           ),
-        for (final c in courses) _CourseTile(c),
+        if (unset > 0)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            child: Row(children: [
+              Expanded(
+                child: Text(
+                  unset == courses.where((c) => c.classes.isNotEmpty).length
+                      ? 'Set each course\'s allowed absences to see how many are left.'
+                      : '$unset ${unset == 1 ? 'course has' : 'courses have'} no absence limit set.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AbsenceLimitsScreen())),
+                child: const Text('Set limits'),
+              ),
+            ]),
+          ),
+        for (final c in courses) _CourseTile(c, AbsenceState.of(c, limits)),
         const SizedBox(height: 24),
       ]),
     );
@@ -35,39 +56,43 @@ class CoursesScreen extends StatelessWidget {
 
 class _CourseTile extends StatelessWidget {
   final CourseAttendance c;
-  const _CourseTile(this.c);
+  final AbsenceState absence;
+  const _CourseTile(this.c, this.absence);
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final muted = t.textTheme.bodyMedium?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant);
-    final absent = c.count(AttendanceMark.absent);
     final late = c.count(AttendanceMark.late);
     final present = c.count(AttendanceMark.present);
-    final attendanceLine = c.classes.isEmpty
-        ? 'No class attendance recorded'
-        : '$absent ${absent == 1 ? 'absence' : 'absences'} · $present present'
-            '${late > 0 ? ' · $late late' : ''} · limit not set';
     final unwatched = c.vods.where((v) => !v.done).toList();
     final vodLine = c.vods.isEmpty
         ? null
         : unwatched.isEmpty
             ? 'VOD: all ${c.vods.length} watched'
             : 'VOD: ${c.vods.length - unwatched.length} of ${c.vods.length} watched';
+    final status = absence.status;
     return ListTile(
       minTileHeight: 88,
       title: Row(children: [
         Expanded(
             child: Text(c.course.name,
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium)),
-        if (absent > 0) ...[
+        if (status != null) ...[
           const SizedBox(width: 8),
-          StatusTag(Status.info, '$absent absent'),
+          StatusTag(status, absence.tag!),
         ],
       ]),
       subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SizedBox(height: 2),
-        Text(attendanceLine, style: muted),
+        const SizedBox(height: 4),
+        if (c.classes.isEmpty)
+          Text('No class attendance recorded', style: muted)
+        else if (absence.limit == null)
+          Text('${absence.used} ${absence.used == 1 ? 'absence' : 'absences'} · $present present'
+              '${late > 0 ? ' · $late late' : ''} · limit not set', style: muted)
+        else
+          AbsenceLine(absence,
+              style: status == null ? muted : muted?.copyWith(color: statusColors(context).of(status).fg)),
         if (vodLine != null) Text(vodLine, style: muted),
       ]),
       onTap: () => openCourse(context, c.course),

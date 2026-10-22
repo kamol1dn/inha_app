@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../data/absence.dart';
 import '../data/app_data.dart';
 import '../data/urgency.dart';
 import '../models/models.dart';
@@ -8,6 +9,7 @@ import '../services/eclass/eclass_links.dart';
 import '../ui/format/format.dart';
 import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
+import 'absence_widgets.dart';
 import 'common.dart';
 import 'deadline_tile.dart';
 
@@ -44,12 +46,14 @@ class CourseDetailScreen extends StatelessWidget {
         ),
       );
     }
-    final absent = c.count(AttendanceMark.absent);
+    final absence = AbsenceState.of(c, data.prefs.absenceLimits);
+    final absent = absence.used;
+    final limit = absence.limit;
     final held = c.held(now);
     final due = courseDeadlines(c.course, data.deadlines.data?.value ?? const [], att, now);
     final grade = gradeFor(c.course, data.grades.data?.value);
     final facts = [
-      if (held.isNotEmpty) 'of ${held.length} ${held.length == 1 ? 'class' : 'classes'} so far',
+      if (held.isNotEmpty) '${limit == null ? 'of ' : ''}${held.length} ${held.length == 1 ? 'class' : 'classes'} so far',
       c.course.code,
       c.course.professor,
     ].where((s) => s.isNotEmpty).join(' · ');
@@ -64,20 +68,45 @@ class CourseDetailScreen extends StatelessWidget {
             child: Text(
                 c.classes.isEmpty
                     ? 'No class attendance'
-                    : '$absent ${absent == 1 ? 'absence' : 'absences'}',
+                    : limit == null || absent > limit
+                        ? '$absent ${absent == 1 ? 'absence' : 'absences'}'
+                        : '$absent of $limit',
                 style: c.classes.isEmpty ? t.textTheme.titleMedium : t.textTheme.headlineMedium),
           ),
+          if (c.classes.isNotEmpty && limit != null) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: Row(children: [
+                AbsenceBar(absence),
+                const SizedBox(width: 8),
+                Text(absent > limit ? 'limit $limit' : 'allowed absences used', style: muted),
+              ]),
+            ),
+            if (absence.status case final s?)
+              StatusLine(
+                  s,
+                  switch (absence.left!) {
+                    < 0 => 'Over the limit by ${-absence.left!}',
+                    0 => 'At the limit: one more absence is over it',
+                    1 => '1 absence left',
+                    final l => '$l absences left',
+                  }),
+          ],
           if (facts.isNotEmpty)
             Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text(facts, style: muted)),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8, top: 4),
-              child: TextButton(
+          Padding(
+            padding: const EdgeInsets.only(left: 8, top: 4),
+            child: Wrap(spacing: 8, children: [
+              TextButton(
                 onPressed: () => openUrl(context, eclassCourseUrl(c.course.id)),
                 child: const Text('Open in eClass'),
               ),
-            ),
+              if (c.classes.isNotEmpty)
+                TextButton(
+                  onPressed: () => editAbsenceLimit(context, c.course),
+                  child: Text(limit == null ? 'Set absence limit' : 'Change limit'),
+                ),
+            ]),
           ),
           if (due.isNotEmpty) ...[
             SectionHeader('Due', source: data.deadlines),

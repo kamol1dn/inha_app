@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../data/absence.dart';
 import '../data/app_data.dart';
 import '../data/urgency.dart';
 import '../models/models.dart';
 import '../ui/format/format.dart';
 import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
+import 'absence_widgets.dart';
 import 'common.dart';
 import 'deadline_tile.dart';
 import 'details.dart';
@@ -56,6 +58,11 @@ class _TodayScreenState extends State<TodayScreen> {
     final att = data.attendance.data?.value ?? const <CourseAttendance>[];
     final deadlines = data.deadlines.data?.value ?? const <Deadline>[];
     final attention = needsAttention(deadlines, att, now);
+    final limits = data.prefs.absenceLimits;
+    // Attendance trouble comes first in Needs attention (DESIGN.md 7).
+    final trouble = troubleOrder(att, limits, lessons).where((c) => AbsenceState.of(c, limits).trouble).toList();
+    final cardCourse = cardLesson == null ? null : courseFor(cardLesson.subject, att);
+    final cardAbsence = cardCourse == null ? null : AbsenceState.of(cardCourse, limits);
     final unread = (data.inbox.data?.value ?? const <MailHeader>[]).where((m) => m.unread).toList();
     final unreadTotal = data.mailUnread.data?.value ?? unread.length;
 
@@ -71,6 +78,7 @@ class _TodayScreenState extends State<TodayScreen> {
             now: now,
             nextDay: nextDay,
             loaded: data.lessons.data != null,
+            absence: cardAbsence?.trouble == true ? cardAbsence : null,
             onTap: () => widget.onOpenSchedule(cardLesson?.weekday ?? nextDay?.$2.weekday ?? now.weekday),
           ),
         ),
@@ -92,6 +100,7 @@ class _TodayScreenState extends State<TodayScreen> {
         ],
         SectionHeader('Needs attention', source: data.deadlines),
         SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
+        for (final c in trouble) _AbsenceRow(c, AbsenceState.of(c, limits)),
         for (final d in attention.take(5)) DeadlineTile(d, attendance: att, now: now, showDay: true),
         if (attention.length > 5)
           Align(
@@ -143,27 +152,39 @@ class _TodayScreenState extends State<TodayScreen> {
     return StatusLine(Status.ok, 'Nothing due in the next 3 days.$tail');
   }
 
-  /// Absence limits aren't published anywhere we can read, so the guide's rule
-  /// applies: show the real counts and never invent a limit.
+  /// The answer to "am I in attendance trouble" when nothing is: courses with
+  /// a limit are all within it (ok). Courses without one show their raw
+  /// count; a limit is never guessed (DESIGN.md 7).
   Widget _attendanceLine(BuildContext context, AppData data) {
     final att = data.attendance.data?.value;
     // One error row per failed service: the deadlines section already shows eClass's.
     if (data.attendance.error != null && data.deadlines.error != null) return const SizedBox.shrink();
     if (att == null) return SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass);
     if (data.attendance.error != null) return SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass);
-    final withAbs = att.where((c) => c.count(AttendanceMark.absent) > 0).toList()
-      ..sort((a, b) => b.count(AttendanceMark.absent).compareTo(a.count(AttendanceMark.absent)));
-    final text = withAbs.isEmpty
-        ? 'No absences recorded in ${att.length} courses.'
-        : withAbs
-            .map((c) => '${c.course.name}: ${c.count(AttendanceMark.absent)} '
-                '${c.count(AttendanceMark.absent) == 1 ? 'absence' : 'absences'}')
-            .join(' · ');
+    final limits = data.prefs.absenceLimits;
+    final tracked = att.where((c) => c.classes.isNotEmpty).toList();
+    if (tracked.any((c) => AbsenceState.of(c, limits).trouble)) return const SizedBox.shrink(); // rows above
+    final limited = tracked.where((c) => limits[c.course.id] != null).length;
+    final unlimited = [
+      for (final c in tracked)
+        if (limits[c.course.id] == null && c.count(AttendanceMark.absent) > 0) c,
+    ]..sort((a, b) => b.count(AttendanceMark.absent).compareTo(a.count(AttendanceMark.absent)));
+    final parts = [
+      if (limited > 0)
+        limited == tracked.length
+            ? 'All $limited courses within the absence limit.'
+            : '$limited ${limited == 1 ? 'course' : 'courses'} within the absence limit.',
+      if (unlimited.isNotEmpty)
+        '${limited > 0 ? 'No limit set: ' : ''}'
+            '${unlimited.map((c) => '${c.course.name}: ${c.count(AttendanceMark.absent)} '
+                '${c.count(AttendanceMark.absent) == 1 ? 'absence' : 'absences'}').join(' · ')}',
+      if (limited == 0 && unlimited.isEmpty) 'No absences recorded in ${tracked.length} courses.',
+    ];
     return InkWell(
       onTap: () => widget.onOpenTab(3),
       child: Padding(
         padding: const EdgeInsets.only(top: 8),
-        child: StatusLine(withAbs.isEmpty ? Status.ok : Status.info, text),
+        child: StatusLine(unlimited.isEmpty ? Status.ok : Status.info, parts.join(' ')),
       ),
     );
   }
@@ -201,6 +222,7 @@ class _NextClassCard extends StatelessWidget {
   final DateTime now;
   final (DateTime, Lesson)? nextDay;
   final bool loaded;
+  final AbsenceState? absence; // set only when this course is in attendance trouble
   final VoidCallback onTap;
   const _NextClassCard(
       {required this.lesson,
@@ -208,7 +230,8 @@ class _NextClassCard extends StatelessWidget {
       required this.now,
       required this.nextDay,
       required this.loaded,
-      required this.onTap});
+      required this.onTap,
+      this.absence});
 
   @override
   Widget build(BuildContext context) {
@@ -245,6 +268,7 @@ class _NextClassCard extends StatelessWidget {
         const SizedBox(height: 4),
         Text(l.subject, style: t.textTheme.titleMedium),
         if (l.teacher.isNotEmpty) Text(l.teacher, style: muted),
+        if (absence case final a?) StatusLine(a.status!, a.line, padding: const EdgeInsets.only(top: 8)),
       ];
     }
     return Card(
@@ -268,4 +292,31 @@ class _NextClassCard extends StatelessWidget {
   }
 
   String _dayWord(DateTime d) => dayHeader(d, now: now) == 'Tomorrow' ? 'Tomorrow' : weekdayShort(d.weekday);
+}
+
+/// A course near or over its absence limit, in Needs attention.
+class _AbsenceRow extends StatelessWidget {
+  final CourseAttendance c;
+  final AbsenceState absence;
+  const _AbsenceRow(this.c, this.absence);
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return ListTile(
+      minTileHeight: 72,
+      leading: Icon(Icons.event_busy_outlined, color: t.colorScheme.onSurfaceVariant),
+      title: Row(children: [
+        Expanded(child: Text(c.course.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium)),
+        const SizedBox(width: 8),
+        StatusTag(absence.status!, absence.tag!),
+      ]),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: AbsenceLine(absence,
+            style: t.textTheme.bodyMedium?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant)),
+      ),
+      onTap: () => openCourse(context, c.course),
+    );
+  }
 }

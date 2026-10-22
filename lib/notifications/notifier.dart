@@ -49,6 +49,24 @@ class Notifier {
   /// recorded without being announced.
   static const seenCoursesKey = 'notify.seenCourses.v1';
 
+  /// shared_preferences key holding the absence limits the student set,
+  /// `{"<course id>": <allowed absences>}`. Written by Settings (Prefs).
+  static const absenceLimitsKey = 'absenceLimits.v1';
+
+  static Map<int, int> readAbsenceLimits(SharedPreferences p) {
+    final raw = p.getString(absenceLimitsKey);
+    if (raw == null) return {};
+    try {
+      return {
+        for (final e in (jsonDecode(raw) as Map<String, dynamic>).entries)
+          if (int.tryParse(e.key) case final id?)
+            if (e.value case final int limit) id: limit,
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
   /// Items due within this long are shown now instead of scheduled; the
   /// plugin rejects schedule times that have passed by the time it runs.
   static const _showNowSlack = Duration(minutes: 1);
@@ -259,6 +277,7 @@ class Notifier {
       lessons: lessons ?? const [],
       sentKeys: await sentKeys(at),
       quietHours: settings.quietHours ? defaultQuietHours : null,
+      absenceLimits: readAbsenceLimits(prefs),
     );
 
     final seen = {...?prefs.getStringList(seenCoursesKey)?.map(int.tryParse).whereType<int>()};
