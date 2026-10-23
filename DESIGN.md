@@ -4,89 +4,101 @@ This guide covers every screen in `lib/`. The app is for one IUT student who ope
 to answer three questions: where do I need to be next, what is due, am I in attendance trouble. If a screen breaks a rule here, fix the
 screen or change this file in the same commit.
 
+The look is **Campus paper**: warm paper and ink, a serif for the words that answer the question, thin rules instead of boxes, and
+absences drawn as tally marks. Today and Schedule are a **day rail**: one vertical timeline from now through the day's classes into the
+next days. The student chose this mix from three directions in milestone 2 (canvas: B "Campus paper" with C's rail).
+
 ## 1. Principles
 
-1. **Answer first.** The first row on each screen answers its question: the next room and time until class on Today, the next item on
-   Deadlines, the course closest to the absence limit on Courses. Nothing goes above that row: no greeting, hero or summary tiles.
+1. **Answer first.** The first thing on each screen answers its question: the next room and time until class on Today, the next item on
+   Deadlines, the course closest to the absence limit on Courses. Nothing goes above it: no greeting, hero banner or summary tiles.
 2. **Specific, not decorative.** Use real names, real times, and numbers with their denominator ("3 of 4"). If an element carries no
    information and offers no action, delete it.
-3. **Neutral by default, colored by exception.** About 90% of a screen is neutral. Color is reserved for the accent's four jobs and the
+3. **Neutral by default, colored by exception.** About 90% of a screen is ink on paper. Color is reserved for the accent's jobs and the
    four statuses.
 4. **Never blank, never silent.** Show cached data first, show its age when that matters, and name every failure by service with a
    next step.
-5. **Readable while walking.** The room and the time until class are the largest text in the app. Everything else is 16sp or smaller.
+5. **Readable while walking.** The room is the largest text in the app, and the time until class sits right above it.
 
-Most anti-slop advice is written for marketing pages: distinctive display fonts, layered backgrounds, staggered reveals on load. It
-does not transfer to a utility opened 20 times a day. Here the opposite of generic is specific, not decorated.
+**Where the identity comes from.** Three things, and only these: the paper-and-ink palette, Fraunces for the words and numbers that
+answer a screen's question, and the tally mark. Everything else stays plain: Public Sans, Material icons, M3 components with their
+defaults. A screen gets its character from what it says and from those three, never from decoration added on top.
 
 ## 2. Slop patterns: don't / do
 
 | Don't | Do instead |
 |---|---|
-| A greeting header ("Good morning, Kamol") or a big date hero | A small app bar titled `Thu 23 Oct`, with the next class directly below it |
-| Gradients anywhere: hero cards, buttons, text, borders | Flat tonal surfaces. Color only for status and the accent |
-| A purple/indigo palette, or `ColorScheme.fromSeed` (the Flutter template seeds `Colors.deepPurple`) | The explicit schemes in section 3. Replace the `fromSeed` in `lib/app.dart` |
-| Everything in a rounded card, cards inside cards, one card per row | Plain lists on `surface`, grouped by section headers. At most one card per screen |
+| A greeting header ("Good morning" and a first name) or a big date hero | An app bar titled `Fri 23 Oct`, with the rail directly below it |
+| Gradients anywhere: hero cards, buttons, text, borders | Flat paper. Color only for status and the accent |
+| A purple/indigo palette, or `ColorScheme.fromSeed` | The explicit schemes in section 3 |
+| Content in rounded cards, cards inside cards, one card per row | Rows on paper, separated by thin rules and section headers. No `Card` anywhere |
 | Emoji in headings, labels, empty states or notifications | No emoji anywhere |
-| An icon in a tinted circle before every heading or row | Icons only for item type, status, navigation and actions. Headers have no icon |
-| Vanity or fake stats: "92% attendance" tiles, streaks, scores, progress rings | The real count with its denominator and limit: "3 of 4 absences used" |
+| An icon in a tinted circle before every heading or row | Icons only for status, navigation and actions. Headers have no icon (except Overdue's status icon) |
+| Vanity or fake stats: "92% attendance" tiles, streaks, scores, progress rings | The real count with its denominator and limit: "3 of 4 absences used", and its tally |
 | Vague, cheerful copy: "Oops! Something went wrong", "You're all caught up!" | What happened, which service, as of when, and what to do (section 10) |
-| Glassmorphism, `BackdropFilter`, glows, colored shadows | Opaque surfaces at elevation 0 |
-| Status dots, pulsing dots, or "New"/"Live" pills with no defined meaning | Only the four defined statuses, always shown as an icon plus words |
-| A thick colored stripe down one side of a card or row | A status icon and words. The current item gets `primary` text and the word "Now" |
-| A 20–28 radius and pill shapes on everything | Radius by role: 0 for rows, 8 for controls, 12 for the one card |
-| Uppercase, letter-spaced eyebrow labels ("UPCOMING") | Sentence-case `titleSmall` headers |
+| Glassmorphism, `BackdropFilter`, glows, shadows | Opaque paper at elevation 0 |
+| Status dots, pulsing dots, or "New"/"Live" pills with no defined meaning | Only the four statuses, always as an icon plus words. A rail node's color never stands alone |
+| A thick colored stripe down one side of a row | The rail's thin line, which is structure, not status |
+| Pill shapes and 20–28 radii on everything | Radius by role (section 5) |
+| Uppercase, letter-spaced eyebrow labels ("UPCOMING") | Sentence-case Fraunces headers |
 | Staggered list entrances, bounce, confetti, shimmer | Default M3 transitions. Motion only to show that something changed |
 | Illustrations or mascots in empty states | One sentence and at most one action |
 | Every button filled | At most one `FilledButton` per screen. Row actions use `TextButton` |
-| John Doe, Acme, or round invented numbers in mocks and golden tests | Real course names and realistic IUT rooms and times |
+| Paper texture, torn edges, handwriting fonts, drop caps | Paper is a color, not a picture |
+| John Doe, Acme, or round invented numbers in mocks and tests | Real course names and realistic IUT rooms and times |
 
 ## 3. Color
 
-- **Accent (`primary`):** `#1D4E89` in light mode, `#A9C7EF` in dark. It is taken from the deep blue of the IUT emblem, which uses sky
-  blue and deep blue. I found no official hex value, so these are our own. The hue (~212°) stays clear of indigo and violet (240–290°).
-- **The accent has exactly four jobs:** the "Next"/"Now" label and the current-time marker, the one filled button on a screen, text
-  buttons and links, and the `info` status. Headers, icons and backgrounds are never blue.
-- **`secondary`** is slate, used only implicitly by M3 (navigation indicator, selected chips). **`tertiary`** mirrors it and is never
-  referenced.
-- **No `fromSeed`, no `dynamic_color`, and no `Colors.*` or hex literals in widgets.** `fromSeed` invents tertiary and container tones
-  nobody has checked for contrast. Widgets read only `colorScheme` and `StatusColors`.
-- **`surfaceTint` is transparent.** Surfaces are told apart by their `surfaceContainer*` step, never by elevation tint.
-- **Dark mode is designed, not inverted.** Surfaces get lighter as they rise, statuses use lighter tones, and nothing is pure black.
-  Pure white is used only as text on `primary` or `error` in light mode.
+Paper and ink, with the IUT deep blue as the one accent. The values are our own: no official IUT hex exists, so the blue is taken from
+the deep blue of the emblem (hue about 212°, clear of indigo and violet).
+
+- **The accent (`primary`) has five jobs:** the "Now"/"Next" label and the now marker on the rails, the selected tab, the one filled
+  button on a screen, text buttons and links, and the `info` status. Headers, icons, rules and backgrounds are never blue.
+- **Ink, not black.** Text is `onSurface` (ink) or `onSurfaceVariant` (muted). Rules, the rail line and the unused part of a tally are
+  `outlineVariant`; they are decorative and never the only signal.
+- **No `fromSeed`, no `dynamic_color`, and no `Colors.*` or hex literals in widgets.** Widgets read only `colorScheme` and
+  `StatusColors`.
+- **`surfaceTint` is transparent** and elevation is 0, so surfaces differ only by their `surfaceContainer*` step.
+- **Dark mode is ink at night, designed, not inverted:** a warm near-black ground, paper-colored text, lighter status tones. Surfaces
+  get lighter as they rise; nothing is pure black, and pure white appears only on the light theme's filled button.
+- **Theme:** System by default; Settings offers System, Light and Dark.
 
 ```dart
 // lib/ui/theme/app_colors.dart
 const lightScheme = ColorScheme(brightness: Brightness.light,
-  primary: Color(0xFF1D4E89), onPrimary: Color(0xFFFFFFFF), primaryContainer: Color(0xFFD5E3F5), onPrimaryContainer: Color(0xFF0D2A4C),
-  secondary: Color(0xFF4A5868), onSecondary: Color(0xFFFFFFFF), secondaryContainer: Color(0xFFDCE3EB), onSecondaryContainer: Color(0xFF1D2833),
-  tertiary: Color(0xFF4A5868), onTertiary: Color(0xFFFFFFFF), // unused; mirrors secondary
-  error: Color(0xFFB42318), onError: Color(0xFFFFFFFF), errorContainer: Color(0xFFFBE3DF), onErrorContainer: Color(0xFF5A130B),
-  surface: Color(0xFFF7F8FA), onSurface: Color(0xFF191C20), onSurfaceVariant: Color(0xFF4A525C),
-  surfaceContainerLowest: Color(0xFFFDFDFE), surfaceContainerLow: Color(0xFFF1F3F5), surfaceContainer: Color(0xFFEBEEF1),
-  surfaceContainerHigh: Color(0xFFE5E8EC), surfaceContainerHighest: Color(0xFFDFE2E6),
-  surfaceDim: Color(0xFFD7DADE), surfaceBright: Color(0xFFF7F8FA), outline: Color(0xFF737B85), outlineVariant: Color(0xFFD8DCE1),
-  inverseSurface: Color(0xFF2D3136), onInverseSurface: Color(0xFFEEF0F3), inversePrimary: Color(0xFFA9C7EF),
+  primary: Color(0xFF1D4E89), onPrimary: Color(0xFFFFFFFF), primaryContainer: Color(0xFFDAE3EF), onPrimaryContainer: Color(0xFF0F2E52),
+  secondary: Color(0xFF5C584F), onSecondary: Color(0xFFFFFFFF), secondaryContainer: Color(0xFFE2DACA), onSecondaryContainer: Color(0xFF1C1B19),
+  tertiary: Color(0xFF5C584F), onTertiary: Color(0xFFFFFFFF), // unused; mirrors secondary
+  error: Color(0xFFA3321F), onError: Color(0xFFFFFFFF), errorContainer: Color(0xFFF6DDD5), onErrorContainer: Color(0xFF4F170D),
+  surface: Color(0xFFF5F2EA), onSurface: Color(0xFF1C1B19), onSurfaceVariant: Color(0xFF5C584F),
+  surfaceContainerLowest: Color(0xFFFBF9F4), surfaceContainerLow: Color(0xFFEFEBE1), surfaceContainer: Color(0xFFEAE5D9),
+  surfaceContainerHigh: Color(0xFFE4DED0), surfaceContainerHighest: Color(0xFFDED7C8),
+  surfaceDim: Color(0xFFDED7C8), surfaceBright: Color(0xFFFBF9F4), outline: Color(0xFF857E70), outlineVariant: Color(0xFFD8D1C2),
+  inverseSurface: Color(0xFF2E2C28), onInverseSurface: Color(0xFFF2EEE4), inversePrimary: Color(0xFF9DBDE6),
   shadow: Color(0xFF000000), scrim: Color(0xFF000000), surfaceTint: Color(0x00000000));
 
 const darkScheme = ColorScheme(brightness: Brightness.dark,
-  primary: Color(0xFFA9C7EF), onPrimary: Color(0xFF0D2A4C), primaryContainer: Color(0xFF1F4573), onPrimaryContainer: Color(0xFFD5E3F5),
-  secondary: Color(0xFFB5C0CC), onSecondary: Color(0xFF1F2A35), secondaryContainer: Color(0xFF353F4A), onSecondaryContainer: Color(0xFFDCE3EB),
-  tertiary: Color(0xFFB5C0CC), onTertiary: Color(0xFF1F2A35),
-  error: Color(0xFFFFB3A8), onError: Color(0xFF5A130B), errorContainer: Color(0xFF5E1A12), onErrorContainer: Color(0xFFFCD9D3),
-  surface: Color(0xFF121418), onSurface: Color(0xFFE2E4E8), onSurfaceVariant: Color(0xFFA8AFB8),
-  surfaceContainerLowest: Color(0xFF0C0E11), surfaceContainerLow: Color(0xFF181B1F), surfaceContainer: Color(0xFF1C1F24),
-  surfaceContainerHigh: Color(0xFF24282D), surfaceContainerHighest: Color(0xFF2C3036),
-  surfaceDim: Color(0xFF121418), surfaceBright: Color(0xFF383D44), outline: Color(0xFF878E98), outlineVariant: Color(0xFF353A41),
-  inverseSurface: Color(0xFFE2E4E8), onInverseSurface: Color(0xFF2D3136), inversePrimary: Color(0xFF1D4E89),
+  primary: Color(0xFF9DBDE6), onPrimary: Color(0xFF0F2E52), primaryContainer: Color(0xFF1D3F66), onPrimaryContainer: Color(0xFFD9E3F0),
+  secondary: Color(0xFFADA696), onSecondary: Color(0xFF2E2C28), secondaryContainer: Color(0xFF3A352C), onSecondaryContainer: Color(0xFFEDE7DA),
+  tertiary: Color(0xFFADA696), onTertiary: Color(0xFF2E2C28),
+  error: Color(0xFFF0A08C), onError: Color(0xFF4F170D), errorContainer: Color(0xFF4A1F16), onErrorContainer: Color(0xFFF8D3C8),
+  surface: Color(0xFF1A1814), onSurface: Color(0xFFEDE7DA), onSurfaceVariant: Color(0xFFADA696),
+  surfaceContainerLowest: Color(0xFF141210), surfaceContainerLow: Color(0xFF201E19), surfaceContainer: Color(0xFF25221D),
+  surfaceContainerHigh: Color(0xFF2C2923), surfaceContainerHighest: Color(0xFF34302A),
+  surfaceDim: Color(0xFF1A1814), surfaceBright: Color(0xFF2C2923), outline: Color(0xFF857E70), outlineVariant: Color(0xFF423D35),
+  inverseSurface: Color(0xFFEDE7DA), onInverseSurface: Color(0xFF2E2C28), inversePrimary: Color(0xFF1D4E89),
   shadow: Color(0xFF000000), scrim: Color(0xFF000000), surfaceTint: Color(0x00000000));
 ```
 
-**Measured WCAG contrast:**
-- `onSurface` on `surface`: 16.1:1 light, 14.5:1 dark.
-- `onSurfaceVariant` and `primary` on the darkest container: at least 6.0:1.
-- `outline` (input and selection borders): at least 3.3:1 on every surface.
-- `outlineVariant` is decorative only: dividers and empty bar cells.
+**Where each surface is used:** `surface` is the paper of every screen, the app bar and the navigation bar. `surfaceBright` is a raised
+sheet: bottom sheets and dialogs. `surfaceContainerHigh` is the offline row. `surfaceContainerHighest` is skeleton blocks only; no text
+sits on it.
+
+**Measured WCAG contrast** (light / dark):
+- `onSurface` on `surface`: 15.4 / 14.4. `onSurfaceVariant` on `surface`: 6.3 / 7.3, and at least 5.3 / 6.0 on every surface text sits on.
+- `primary` on `surface`: 7.5 / 9.2.
+- `outline` (text field and chip borders): 3.6 / 4.4 on `surface`, at least 3.0 / 3.6 on any surface.
+- `outlineVariant` is decorative only: rules, the rail line, the unused part of a tally, empty progress tracks.
 
 ```dart
 // lib/ui/theme/status_colors.dart
@@ -98,316 +110,362 @@ class StatusColors extends ThemeExtension<StatusColors> {
   const StatusColors({required this.ok, required this.warning, required this.danger, required this.info});
   final StatusTone ok, warning, danger, info;
   static const light = StatusColors(
-    ok:      (fg: Color(0xFF1A6B3A), container: Color(0xFFD9EFE0), onContainer: Color(0xFF0E3D20)),
-    warning: (fg: Color(0xFF8A5000), container: Color(0xFFFBEAC6), onContainer: Color(0xFF4A2C00)),
-    danger:  (fg: Color(0xFFB42318), container: Color(0xFFFBE3DF), onContainer: Color(0xFF5A130B)),
-    info:    (fg: Color(0xFF1D4E89), container: Color(0xFFD5E3F5), onContainer: Color(0xFF0D2A4C)));
+    ok:      (fg: Color(0xFF2F6B3A), container: Color(0xFFDDEBDC), onContainer: Color(0xFF173A1F)),
+    warning: (fg: Color(0xFF8A5300), container: Color(0xFFF4E3C3), onContainer: Color(0xFF452A00)),
+    danger:  (fg: Color(0xFFA3321F), container: Color(0xFFF6DDD5), onContainer: Color(0xFF4F170D)),
+    info:    (fg: Color(0xFF1D4E89), container: Color(0xFFDAE3EF), onContainer: Color(0xFF0F2E52)));
   static const dark = StatusColors(
-    ok:      (fg: Color(0xFF7DCB96), container: Color(0xFF163A23), onContainer: Color(0xFFC4EACF)),
-    warning: (fg: Color(0xFFEDB65A), container: Color(0xFF3E2B07), onContainer: Color(0xFFF8E2B5)),
-    danger:  (fg: Color(0xFFFFB3A8), container: Color(0xFF5E1A12), onContainer: Color(0xFFFCD9D3)),
-    info:    (fg: Color(0xFFA9C7EF), container: Color(0xFF1F4573), onContainer: Color(0xFFD5E3F5)));
+    ok:      (fg: Color(0xFF8FC79A), container: Color(0xFF1F3524), onContainer: Color(0xFFCBE8D0)),
+    warning: (fg: Color(0xFFE3AE5B), container: Color(0xFF3D2C0E), onContainer: Color(0xFFF5DDB0)),
+    danger:  (fg: Color(0xFFF0A08C), container: Color(0xFF4A1F16), onContainer: Color(0xFFF8D3C8)),
+    info:    (fg: Color(0xFF9DBDE6), container: Color(0xFF1D3F66), onContainer: Color(0xFFD9E3F0)));
   StatusTone of(Status s) => switch (s) { Status.ok => ok, Status.warning => warning, Status.danger => danger, Status.info => info };
   @override StatusColors copyWith() => this;
   @override StatusColors lerp(StatusColors? other, double t) => t < 0.5 ? this : (other ?? this);
 }
 ```
 
-| Status | Icon (always shown) | Means | `fg` on the darkest surface, light / dark | `fg` on its container |
+| Status | Icon (always shown) | Means | `fg` on `surface`, light / dark | `fg` on the offline row, light / dark |
 |---|---|---|---|---|
-| ok | `check_circle_outline` | Submitted, watched, within limits | 5.0 / 6.9 | 5.4 / 6.5 |
-| warning | `warning_amber_rounded` | Act soon; data is stale | 5.0 / 7.2 | 5.5 / 7.4 |
-| danger | `error_outline` | Due within hours, overdue, at or over the absence limit, sign-in broken | 5.1 / 7.8 | 5.4 / 7.5 |
-| info | `info_outline` | Notable but nothing wrong ("VOD window opens Mon") | 6.5 / 7.6 | 6.5 / 5.6 |
+| ok | `check_circle_outline` | Submitted, watched, within limits | 5.7 / 9.1 | 4.8 / 7.5 |
+| warning | `warning_amber_rounded` | Act soon; data is stale | 5.7 / 8.8 | 4.7 / 7.2 |
+| danger | `error_outline` | Due within hours, overdue, at or over the absence limit, sign-in broken | 6.2 / 8.5 | 5.2 / 7.0 |
+| info | `info_outline` | Notable but nothing wrong ("No limit set") | 7.5 / 9.2 | 6.3 / 7.5 |
 
-All `onContainer` pairs are at least 9.6:1. `ColorScheme.error` uses the danger color.
+All `onContainer` pairs are at least 8.3:1. `ColorScheme.error` is the danger color.
 
-- **Status is always rendered by one of two widgets.** `StatusLine` is an 18dp icon, an 8dp gap and `bodyMedium` text in `fg`. `StatusTag`
-  is a container fill with `onContainer` text in `labelMedium`, height 20, radius 4.
-- **Colored text alone is acceptable only when the words state the condition** ("in 2 h", "Over limit", "1 left"). A dot, stripe, border,
-  bar or tint is never the only signal.
-- **In light mode, warning and danger have the same lightness on purpose** (1.0:1 between them). The icon shape and the wording tell
-  them apart.
-- **Tinted containers are only for `StatusTag` and the offline row.** Never tint a whole row or card.
+- **Status is rendered by `StatusLine`:** a 16dp icon, a 6dp gap and `bodyMedium` text, both in `fg`. `StatusTag` (a `container` fill
+  with `onContainer` `labelMedium` text, radius 4) is kept for the rare word that must stand apart in a row ("Cancelled").
+- **Colored text alone is acceptable only when the words state the condition** ("in 2 h", "6 of 8", "Over limit"). A rail node, tally
+  mark, bar or tint is never the only signal: the same row always says it in words.
+- **Warning and danger have about the same lightness on purpose.** The icon shape and the wording tell them apart.
+- **Tinted containers are only for `StatusTag` and the offline row.** Never tint a whole row.
 
 ## 4. Typography
 
-**Font: the platform default, Roboto. Do not add `google_fonts`.** Roboto appears on "overused font" lists, but those lists are about
-web pages, where the typeface is the brand. In a native Android utility the system font is the right choice:
-- **No startup cost.** Nothing to bundle or fetch, and no layout shift, in an app opened 20 times a day.
-- **Script coverage.** Course and professor names and Inha pages can be Korean, Cyrillic or Uzbek Latin. System Noto fallback matches
-  Roboto's metrics; a bundled font would mix with mismatched fallback glyphs.
-- **It matches notifications and the status bar.**
-- **Tabular digits.** Roboto supports `tnum`, and we still set it explicitly so alignment never depends on a font default.
+**Two bundled faces: Fraunces (serif) and Public Sans (sans).** Fraunces carries the answers: the room, app bar and section titles,
+course names, and the numbers people scan (times on the rails, absence counts, grades). Public Sans carries everything else: item
+titles, secondary lines, buttons, settings, mail.
 
-The deliberate part is the scale, not the typeface. These 9 styles are the only ones allowed, in weights 400, 500 and 700 only.
-`display*`, `headlineLarge` and `headlineSmall` are never used.
+- **Bundled, never fetched.** The fonts live in `assets/fonts/` with their OFL licence files. The app promises it only talks to IUT
+  services, so there is no `google_fonts` and no runtime download.
+- **Static instances.** `tool/make_fonts.py` cuts static TTFs from the upstream variable fonts (google/fonts, `ofl/fraunces` and
+  `ofl/publicsans`): Fraunces at optical size 20 in Regular, SemiBold and Italic; "Fraunces Display" at optical size 72 in SemiBold for
+  the room; Public Sans Regular, Medium and SemiBold. Fraunces keeps its defaults (SOFT 0, WONK 1).
+- **Tabular figures.** Public Sans has `tnum`. Fraunces has no `tnum` feature and proportional digits, so `make_fonts.py` adds one:
+  tabular copies of 0–9, centred on the widest digit's advance. `.tnum` therefore works the same in both faces.
+- **Other scripts fall back to the system.** Neither face has Cyrillic, Hangul or Uzbek's `ʻ` (U+02BB) in Fraunces. Fraunces styles
+  list `serif` as their fallback, so a Cyrillic course name continues in Noto Serif rather than Roboto; Public Sans falls back to the
+  system sans (Roboto, Noto Sans CJK for Korean). Mixed lines are expected and acceptable.
+- **The size cost** is about 0.7 MB in the APK, paid once.
 
-| Style | Size / line (sp) | Weight | Used for |
-|---|---|---|---|
-| `headlineMedium` | 28 / 34 | 500, tnum | Only Today's room and time until class, and the absence count on course detail |
-| `titleLarge` | 22 / 28 | 500 | App bar titles |
-| `titleMedium` | 16 / 22 | 500 | A row's primary line (course name, item title) |
-| `titleSmall` | 14 / 20 | 700 | Section and day headers ("Needs attention", "Tomorrow") |
-| `bodyLarge` | 16 / 24 | 400 | Paragraphs: mail body, item description |
-| `bodyMedium` | 14 / 20 | 400 | A row's secondary line in `onSurfaceVariant`; `StatusLine` |
-| `bodySmall` | 12 / 16 | 400 | Metadata: "Updated 08:41", "as of Tue 18:04" |
-| `labelLarge` | 14 / 20 | 500 | Buttons |
-| `labelMedium` | 12 / 16 | 500 | Tags, chips, navigation labels |
+These styles are the only ones allowed. Every style sets its family, size, line height, weight and letter spacing, so nothing depends
+on the M3 defaults (which assume Roboto). `displayLarge`, `displaySmall` and `headlineLarge` are never used.
 
-```dart
-// lib/ui/theme/app_text.dart. Pass as ThemeData.textTheme; M3 typography supplies color and letter spacing.
-const _tnum = [FontFeature.tabularFigures()];
-const appTextTheme = TextTheme(
-  headlineMedium: TextStyle(fontSize: 28, height: 34 / 28, fontWeight: FontWeight.w500, fontFeatures: _tnum),
-  titleLarge: TextStyle(fontSize: 22, height: 28 / 22, fontWeight: FontWeight.w500),
-  titleMedium: TextStyle(fontSize: 16, height: 22 / 16, fontWeight: FontWeight.w500),
-  titleSmall: TextStyle(fontSize: 14, height: 20 / 14, fontWeight: FontWeight.w700),
-  bodyLarge: TextStyle(fontSize: 16, height: 24 / 16), bodyMedium: TextStyle(fontSize: 14, height: 20 / 14),
-  bodySmall: TextStyle(fontSize: 12, height: 16 / 12),
-  labelLarge: TextStyle(fontSize: 14, height: 20 / 14, fontWeight: FontWeight.w500),
-  labelMedium: TextStyle(fontSize: 12, height: 16 / 12, fontWeight: FontWeight.w500));
-extension Tnum on TextStyle { TextStyle get tnum => copyWith(fontFeatures: _tnum); }
-```
+| Style | Face | Size / line (sp) | Weight | Used for |
+|---|---|---|---|---|
+| `displayMedium` | Fraunces Display | 60 / 64, tnum | 600 | Today's room, and nothing else. Scales down to fit one line |
+| `headlineMedium` | Fraunces | 32 / 38, tnum | 600 | The absence count on course detail; the GPA |
+| `headlineSmall` | Fraunces | 24 / 30 | 600 | App bar titles, dialog titles, the heading of a pushed detail or sheet |
+| `titleLarge` | Fraunces Italic | 20 / 26 | 400 | The course name under Today's room |
+| `titleMedium` | Fraunces | 19 / 24 | 600 | Section and day headers; a course name as a row's primary line; a grade letter |
+| `titleSmall` | Public Sans | 16 / 22 | 600 | An item's primary line (a deadline title, an unread subject) |
+| `bodyLarge` | Public Sans | 16 / 24 | 400 | Paragraphs, the mail body, settings rows, a read subject |
+| `bodyMedium` | Public Sans | 14 / 20 | 400 | A row's secondary line in `onSurfaceVariant`; `StatusLine` |
+| `bodySmall` | Public Sans | 12 / 16 | 400 | Metadata: "Updated 08:41", "as of Tue 18:04" |
+| `labelLarge` | Public Sans | 15 / 20 | 600 | Buttons; the rail's "Next · in 40 min" in `primary` |
+| `labelMedium` | Public Sans | 12 / 16 | 500 | Navigation labels, tags, the week strip's weekdays |
+| `labelSmall` | Public Sans | 11 / 16 | 500 | The unread badge |
+| `numeral` | Fraunces | 16 / 22, tnum | 400 | Start times on the rails and Deadlines; the count beside a tally |
+| `numeralSmall` | Fraunces | 14 / 20, tnum | 400 | End times on the rails |
+
+`numeral` and `numeralSmall` are getters on `TextTheme` in `lib/ui/theme/app_text.dart`, next to the theme.
 
 - **`.tnum` on every number:** times, countdowns, counts, percentages and room numbers.
-- **Sentence case everywhere.** No `toUpperCase()` and no added letter spacing.
-- **Per row:** at most 3 sizes and 2 weights. No bold inside a sentence.
-- **Text scaling up to `textScaler` 2.0.** Never set a fixed height on anything holding text; use minimum heights. Course names
-  ellipsize to one line in rows and wrap on detail screens.
+- **Sentence case everywhere.** No `toUpperCase()`. Letter spacing is 0 except the two largest Fraunces sizes, which are set slightly
+  tight (−1 and −0.5).
+- **Per row:** at most two faces, three sizes and two weights. No bold inside a sentence.
+- **Even leading.** Every style uses `TextLeadingDistribution.even`, so the two faces sit on the same line in a row.
+- **Text scaling up to `textScaler` 2.0.** Never set a fixed height on anything holding text; use minimum heights. The rail's time
+  column grows with the text scale. Course names ellipsize to one line in rows and wrap on detail screens.
 
-## 5. Spacing, shape, density
+## 5. Spacing, rules, shape
 
-**Spacing:** `4, 8, 12, 16, 24, 32, 48` only.
+**Spacing:** `4, 8, 12, 16, 20, 24, 32, 48` only.
 
 | Where | Spacing |
 |---|---|
-| Gutter | 16 |
-| Section header | 24 above (16 for the first) and 8 below |
+| Gutter | 20 for text; 16 before the rail's time column |
+| Section header | 16 above (after its rule) and 4 below |
 | Between lines within a row | 2–4 |
-| Card padding | 16 |
-| Icon to text | 16 in rows, 8 in `StatusLine` |
+| Icon to text | 16 in rows, 6 in `StatusLine` |
 | After the last row | 24 |
 
-**Rows** use the M3 `ListTile` heights, with `contentPadding: EdgeInsets.symmetric(horizontal: 16)`:
+**Rules instead of boxes.** There are no cards. Structure comes from thin rules (`Divider(height: 1, thickness: 1)` in `outlineVariant`):
+- under the app bar, across the full width;
+- above every section header except the first on a screen, inset by the 20dp gutter on both sides;
+- between rows of a uniform list: Courses, Mail, Grades, attendance sessions, absence limits. Not between rail rows, which the rail
+  line already joins;
+- the navigation bar's top edge, which is a 1dp rule in `onSurface`: the one strong line in the app, like the bottom of a printed page.
+
+**The rail** (Today and Schedule) is three columns:
+
+| Column | Width | Holds |
+|---|---|---|
+| Time | 16 gutter + 48 (grows with text scale) | Start time in `numeral`, end time below it in `numeralSmall`, right-aligned |
+| Node | 28 | A 2dp line in `outlineVariant` through the centre, and the row's node |
+| Content | the rest, 20 to the right edge | The row's text |
+
+| Node | Drawn as | For |
+|---|---|---|
+| Now | 10dp dot in `primary`; the row reads "Now" in `primary` with a 1dp `primary` line to the right edge | The current time |
+| Class | 12dp ring, 2dp stroke in `onSurface` (`onSurfaceVariant` once past) | A class |
+| Class in progress | 12dp dot in `primary` | The class happening now |
+| Due | 8dp dot in `onSurface`, or the status `fg` when warning or danger | A deadline or VOD window |
+| none | the line only | Day headers, "Free for the rest of the day", breaks |
+
+The line starts at the first node and ends at the last. The node sits on the centre of the row's first text line.
+
+**Rows** keep a minimum height of 48 and are one tap target each; the only extra control allowed is a trailing `TextButton`.
 
 | Row type | Minimum height | Used for |
 |---|---|---|
-| One-line | 56 (48 when dense) | Settings rows; Today's "Later today" rows, which are dense |
-| Two-line | 72 | Deadline, mail and Needs attention rows |
-| Three-line | 88 | Course rows: name, absence bar, VOD line |
-
-Tap targets are at least 48×48. The whole row is one target; the only extra control allowed is a trailing `TextButton`.
-
-**Lists, dividers and cards.**
-- **The default is a plain list:** rows on `surface`, grouped by section headers and 24dp gaps. Multi-line rows have no dividers.
-- **Dividers** only in uniform one-line lists: mail, attendance by session, Settings. Use `Divider(height: 1, indent: 16)` in
-  `outlineVariant`. Never next to a header or between sections.
-- **Exactly one card in the app:** Today's next class. `Card.filled` in `surfaceContainerLow`, elevation 0, radius 12, no border, no
-  shadow. Never a card per row, never nested cards, never shadow, border and tint together.
+| One-line | 48 | Rail day headers, settings rows, attendance sessions |
+| Two-line | 56 | Rail and deadline rows, mail on Today |
+| Three-line | 72 | Course rows, mail rows |
 
 **Radius:**
 
 | Element | Radius |
 |---|---|
-| Rows (full-bleed ripple) | 0 |
-| Absence bar cells | 2 |
+| Rows (full-bleed ripple), rules, the app and navigation bars | 0 |
 | `StatusTag`, skeleton blocks | 4 |
 | Chips, buttons (override the M3 stadium shape), fields, snack bars | 8 |
-| The card | 12 |
-| Top corners of sheets and dialogs | 16, not the M3 default of 28 |
+| Top corners of sheets, and dialogs | 16 |
 
-**Elevation** is 0 everywhere, including `AppBarTheme(scrolledUnderElevation: 0)`. Menus, dialogs and sheets keep their M3 defaults.
+**Elevation** is 0 everywhere, including `AppBarTheme(scrolledUnderElevation: 0)`. Sheets and dialogs are `surfaceBright` paper over the
+scrim, with no shadow.
 
 ## 6. Navigation
 
-Use a `NavigationBar` with 4 destinations. Labels are always shown. Icons are outlined, and filled when selected.
+A `NavigationBar` with 4 destinations, on `surface`, under the 1dp `onSurface` rule. No indicator pill: the selected tab is `primary`,
+its icon filled and its label 600; the others are `onSurfaceVariant`, outlined, 500. Labels are always shown.
 
 | Tab | Icon | Answers | Notes |
 |---|---|---|---|
 | Today | `today` | Where next, what's urgent | The start screen. App bar actions: Mail (unread `Badge`) and Settings (gear) |
-| Schedule | `calendar_view_day` | The day's classes and rooms | One day at a time, using the week strip or a swipe |
+| Schedule | `calendar_view_day` | The day's classes and rooms | One day at a time on a rail, using the week strip or a swipe |
 | Deadlines | `assignment` | Everything due, eClass VOD windows included | Grouped by day |
 | Courses | `school` | Attendance, VOD progress and grades by course | App bar action "Grades" opens INS grades |
 
 - **Settings and Mail are pushed screens, not tabs.** Settings is reached only from the gear on Today (tooltip "Settings"). Mail is
   reached from Today's app bar or its mail rows.
-- **Each tab keeps its own stack and scroll position** (`StatefulShellRoute` or `IndexedStack`). Tapping the active tab scrolls to the
-  top.
+- **Each tab keeps its own scroll position** (`IndexedStack`).
 - **Back** from another tab goes to Today; back on Today exits.
 - **Tapping a notification** opens the item's detail on top of the tab that owns it.
 
 ## 7. Today screen
 
 ```
-Thu 23 Oct                                          [mail 3] [gear]
+Fri 23 Oct                                     [mail 8] [gear]
+──────────────────────────────────────────────────────────────  rule
 [offline row, only when offline]
-+--------------------------------------------------------------+
-| Next  10:30–11:50                                            |  labelLarge, primary; tnum
-| B-305                                              in 25 min |  headlineMedium both sides, tnum
-| Multimedia Computing                                         |  titleMedium
-| Lecture · Prof. Kim                                          |  bodyMedium, onSurfaceVariant
-| [!] 3 of 4 absences used                                     |  StatusLine, only at warning/danger
-+--------------------------------------------------------------+
-Later today                                                         titleSmall
-13:00   Deep Learning for CV                              A-201     dense rows, 48dp time column
-Needs attention                                                     only if non-empty, max 5 rows
-[x] Artificial Intelligence                           [At limit]    attendance first
-    4 of 4 allowed absences used
-[doc] Lab 5: JPEG quantization                           in 5 h     then by time left
-    Multimedia Computing · not submitted                  23:59
-All 8 deadlines                                                     TextButton, only if more than 5
-Unread mail                                                         only if unread > 0, max 2 rows
-Updated 08:41                                                       bodySmall, onSurfaceVariant
+ 13:20  ●  Now ───────────────────────────────────────────────   primary
+ 14:00  ○  Next · in 40 min                                      labelLarge, primary
+ 15:30  │  B202                                                  displayMedium
+        │  Embedded Software & Design                            titleLarge (italic)
+        │  Lecture · J. Hong                                     bodyMedium, muted
+ 15:30  │  Free for the rest of the day                          bodyMedium, muted
+        │
+        │  Sun 25 Oct                                            titleMedium
+ 23:55  •  Assignment 1                                          titleSmall
+        │  Not submitted · Multimedia Computing                  bodyMedium, muted
+ 23:59  •  Video 7 closes                                        status dot
+        │  [!] 62% watched · in 2 d                              StatusLine
+        │  Distinguished Lecture in Social Science and Art
+        │  Mon 26 Oct
+ 13:00  ○  Artificial Intelligence                               titleMedium
+ 14:30     B101 Conf · Lecture
+           [!] 6 of 8 absences used · 2 left                     StatusLine on this course's next class
+──────────────────────────────────────────────────────────────
+Attendance                                                       titleMedium
+Artificial Intelligence                           |||| / | : :   tally, status fg + faint
+[!] 2 left · next Mon 13:00                               6 of 8
+[ok] The other 3 courses are within their limit.
+──────────────────────────────────────────────────────────────
+8 unread
+IMPORTANT NOTICE                                         10 Oct
+Fall 2026 semester drop-retake period                    14 Sep
+6 more                                                           TextButton
+Updated 13:18                                                    bodySmall, muted
 ```
 
-1. **App bar:** small, titled with the date. It never collapses and has no subtitle.
-2. **Next-class card.**
-   - **Before or between classes:** "Next".
-   - **During a class:** "Now · until 11:50", with `40 min left` on the right. The following class becomes the first "Later today"
-     row.
-   - **After the last class:** the card shrinks to "No more classes today" and "Tomorrow 09:00 · Multimedia Computing · B-305", with no
-     big numbers.
-   - **No classes today:** the next class day.
-   - **Attendance trouble:** if this course is at warning or danger, its `StatusLine` goes inside the card.
-   - **Countdown** ticks on the minute.
-3. **Later today:** the remaining classes, each with start time, course and room. Past classes are not listed.
-4. **Needs attention:** attendance items first, then deadlines and VOD windows ordered by time left. The leading icon gives the type
-   (`assignment_outlined`, `quiz_outlined`, `play_circle_outline`, `event_busy_outlined`). The trailing column shows relative and
-   absolute time, colored per the thresholds below.
-5. **No attendance trouble:** show `[ok] All 6 courses within the absence limit` in place of attendance rows; it taps through to
-   Courses. The student opens the app partly to ask this, so the answer is always on screen.
-6. **Mail:** shown only when there is unread mail. Two rows (sender and time, then subject) plus "3 more". Room changes often arrive by
-   mail.
-7. **Footer:** `Updated 08:41`, or `Updating…` during a refresh.
+1. **App bar:** titled with the date in `headlineSmall`. It never collapses and has no subtitle.
+2. **The rail** runs top to bottom in time order:
+   - **Overdue** items (not done, due in the last 24 h) come first, under a danger "Overdue" header, because on a timeline the past is
+     above now.
+   - **Now.** While a class is in progress there is no separate Now row: that class is the hero, labelled
+     `Now · until 15:30 · 40 min left`, with a `primary` dot. Otherwise the Now row (current time, `primary` dot, "Now") comes first.
+   - **The hero** is the class in progress or the next class today: label (`Next · in 40 min`), the room in `displayMedium`, the course
+     in `titleLarge`, then `Lecture · J. Hong`. With no room in EduPage it reads "Room not set". The countdown ticks on the minute.
+   - **Later classes today** are ordinary class rows: the course in `titleMedium`, then `B202 · Lecture`.
+   - **Deadlines and VOD windows due today** sit at their due time among the classes.
+   - **After the last class** of the day: `Free for the rest of the day`, at the time it ends.
+   - **No class today:** `No classes today` (or `No more classes today`) right after the Now row.
+   - **The next days** follow under day headers ("Tomorrow", "Sun 25 Oct"). A day holds what is due on it within the next 72 h, the
+     first class of the next day that has classes, and the next class of every course in attendance trouble. Days with nothing are left
+     out, and the rail ends at its last item.
+   - **Attendance trouble** goes on the course's next class on the rail (hero or row) as a `StatusLine`: `6 of 8 absences used · 2 left`.
+   - **Nothing due in the next 3 days:** after the rail, one ok `StatusLine`:
+     `Nothing due in the next 3 days. Next: Lab 6, Multimedia Computing, Mon 3 Nov 23:59.`, or `No deadlines in eClass`. Never a
+     celebration, never empty space.
+3. **Attendance:** every course in trouble as a row with its tally and count, then one line for the rest:
+   `The other 3 courses are within their limit.`, `All 4 courses are within their limit.`, or, while limits are missing, an info line
+   with the raw counts (`No limit set: Artificial Intelligence 6 · Multimedia Computing 2`). The section taps through to Courses. The
+   student opens the app partly to ask this, so the answer is always on screen.
+4. **Unread mail:** shown only when there is unread mail, headed by the count (`8 unread`). Two rows (subject, then date), then
+   `6 more`. Room changes often arrive by mail.
+5. **Footer:** `Updated 08:41`, or `Updating…` during a refresh.
+
+**Rail rows by kind:**
+- **Class:** time column start and end; course in `titleMedium` (one line), `B202 · Lecture` in muted `bodyMedium`.
+- **Deadline:** time column the due time; title in `titleSmall`; then `Not submitted · Multimedia Computing` muted. When it is warning or
+  danger the second line is a `StatusLine` (`Due in 5 h · not submitted`) and the course moves to a third line. VODs read
+  `Video 7 closes` with `62% watched` as their state.
 
 | Item | Shown on Today when | Plain | Warning | Danger |
 |---|---|---|---|---|
 | Deadline, not submitted | Due within 72 h | 24–72 h left | 3–24 h left | Under 3 h left, or overdue (kept for 24 h, then only on Deadlines) |
-| VOD window, not fully watched | Closes within 48 h | — | 12–48 h left | Under 12 h left |
+| VOD window, not fully watched | Closes within 72 h | — | 12–72 h left | Under 12 h left |
 | Attendance | Remaining allowed absences ≤ max(1, 25% of the allowance) | — | That condition holds | 0 remaining, or over the limit |
 
-The absence allowance comes from data or the course config. **Never hardcode or guess it.** If it is unknown, show the raw counts
-and "Limit not set", with no bar.
+VOD windows use 72 h rather than 48 h: a missed window is a recorded absence, and "closes Sunday" needs to be seen by Friday.
 
-**Nothing urgent:** one ok `StatusLine` takes the place of Needs attention:
-`Nothing due in the next 3 days. Next: Lab 6, Multimedia Computing, Mon 3 Nov 23:59.` If eClass has no deadlines at all, show
-`No deadlines in eClass`. Never a celebration, never empty space.
+The absence allowance comes from the limit the student sets. **Never hardcode or guess it.** If it is unknown, show the raw count and
+"limit not set": the tally then shows the used marks only, with no faint remainder.
 
 **Stale and failed data.** Always render from cache first.
 
 | Source | Feeds | Stale after |
 |---|---|---|
-| EduPage | Card, Later today, Schedule | 24 h |
+| EduPage | The rails' classes, Schedule | 24 h |
 | eClass | Deadlines, VOD windows, attendance | 3 h |
-| Outlook Web | Mail | 30 min |
+| Exchange mail | Mail | 30 min |
 | INS | Grades | 24 h |
 
 - **A stale or failed section** gets a trailing `bodySmall` marker on its header: `sync_problem` plus `as of Tue 18:04`, in warning
-  `fg`. Fresh sections get no marker.
-- **A failed service** gets one error row, under the first section it feeds (for example `eClass sign-in expired.` with "Sign in").
-  Its other sections get only the marker.
-- **With no cache,** the error row replaces that section's content and every other section still renders. No service failure blanks
-  the screen.
+  `fg`. The rail has no header, so its marker is a line of its own at the top: `Timetable as of Tue 18:04`.
+- **A failed service** gets one error row, at the top of the first part it feeds (for example `eClass sign-in needed.` with "Sign in").
+  Its other parts get only the marker.
+- **With no cache,** the error row replaces that part's content and every other part still renders. No service failure blanks the
+  screen.
 
 ## 8. Screen patterns
 
-**Schedule (day view).**
-- **Week strip:** Mon–Sat with weekday and date (tnum). The selected day uses `secondaryContainer`; today uses `primary` text. A
-  `PageView` swipes between days.
-- **Day list:** an agenda list, not an hour grid. Each row has a 56dp time column (start above end, tnum), the course in `titleMedium`,
-  and `B-305 · Lecture · Prof. Kim`.
-- **Breaks** of 30 min or more show as a `bodySmall` row: "Break 1 h 10 min".
-- **Now:** a 1dp `primary` divider labelled `Now 10:52` sits between rows. The current class has a "Now" label and its time in
-  `primary`.
-- **Past classes** use `onSurfaceVariant`.
+**Schedule (day rail).**
+- **Week strip:** Mon–Fri as a `TabBar`: the weekday in `labelMedium`, the date in `titleMedium` (tnum). Today's date is `primary`; the
+  selected day has a 2dp `onSurface` underline. Swiping the rail changes the day. On the weekend it shows next week.
+- **The day** is a rail like Today's: class rows with start and end, breaks of 30 min or more as a muted `Break 1 h 10 min` line with no
+  node, and, on today, the Now row between the classes it falls between. The class in progress has the `primary` dot and a
+  `Now · until 11:50` label; past classes are muted.
 - **Changes:** a room change gets a warning `StatusLine` ("Room changed to A-201"). A cancelled class is struck through and gets a
-  `StatusTag` "Cancelled".
+  `StatusTag` "Cancelled". (EduPage publishes neither yet.)
+- **Tapping a class** opens its course.
 
 **Deadlines.**
-- **Grouping:** sticky day headers. `Overdue` comes first with a danger header, only when something is overdue. Then `Today`,
-  `Tomorrow`, `Sat 25 Oct`. Empty days are omitted (Fantastical's day ticker does the same by default). Beyond 14 days, group by
-  `Week of 3 Nov`.
-- **Row:** a type icon, the eClass item name, and the course name (plus `1 of 3 watched` for VODs). The trailing column has `23:59`,
-  with the relative time below it when under 48 h.
-- **Done items** are hidden behind a `FilterChip` "Show done"; when shown, they carry an ok `StatusLine`: "Submitted Tue 21:14".
-- **Tapping a row** opens detail: description, window, status, and a `FilledButton` "Open in eClass".
+- **Filters** first: a course chip and kind chips, then "Show done".
+- **Grouping:** day sections with rules and `titleMedium` headers. `Overdue` comes first, in danger `fg` with its icon, only when
+  something is overdue. Then `Today`, `Tomorrow`, `Sat 25 Oct`. Empty days are omitted.
+- **Row:** the rail's deadline row without the line: the due time in `numeral` on the left, the title, then state and course.
+- **Done items** are hidden behind "Show done"; when shown, they carry an ok `StatusLine`: `Submitted Tue 21:14`.
+- **Tapping a row** opens the deadline sheet: the kind (icon and word), the title in `headlineSmall`, the course, a rule, the due time or
+  watch window, the status, submission or watch progress (a 4dp `onSurface` bar on `outlineVariant`), and a `FilledButton`
+  "Open in eClass", with "Course attendance and grade" as a `TextButton` below.
 
 **Courses (attendance and VOD).**
 - **Order:** danger, then warning, then everything else in timetable order. This tab exists to answer "am I in trouble".
-- **Row:**
-  1. The course name, with a trailing `StatusTag` ("1 left", "At limit", "Over limit").
-  2. The absence bar and `3 of 4 absences used`.
-  3. `VOD: week 7 1 of 3 watched · closes Fri 23:59`, or `VOD: all watched`.
-- **Absence bar:** one cell per allowed absence, each 12×6dp with 2dp gaps. Used cells take the status `fg`; empty cells use
-  `outlineVariant`. Over the limit, every cell is danger and the text reads `5 absences · limit 4`. The bar always appears next to its
-  text and carries `Semantics(label: '3 of 4 allowed absences used')`.
-- **Course detail** (opened from a course row, a lesson in Schedule or Today, or a deadline's sheet):
-  - The absence count in `headlineMedium` ("3 of 4"), counted over the sessions held so far, and "Open in eClass".
+- **Intro line:** `Absences against the limits you set, as of 13:20.` While any course lacks a limit: `Set limits` instead.
+- **Row**, ruled from the next:
+  1. The course name in `titleMedium` (up to two lines).
+  2. A `StatusLine` when in trouble (`2 left · next Mon 13:00`), otherwise the next class in muted `bodyMedium`
+     (`Today 14:00 · B202`, `Next Mon 14:30`), or `No class attendance in eClass`.
+  3. `VOD 10 of 12 watched`, when the course has VODs.
+  4. On the right, the tally and below it the count in `numeral`: `6 of 8` in the status `fg` when in trouble, otherwise
+     `onSurfaceVariant`; `6` with "limit not set" in the second line when there is no limit.
+- **The tally:** one stroke per absence, in gates of five (four uprights and a diagonal through them). Used strokes are `onSurface`, or the
+  status `fg` in trouble; the strokes still allowed are `outlineVariant`. Over the limit every stroke is danger and the count reads
+  `10 of 8`. Strokes are 16dp tall (28 on course detail), 2dp wide, 7dp apart, with 10dp between gates. More than 20 marks are not drawn;
+  the words stand alone. It always appears next to its words and carries `Semantics(label: '6 of 8 allowed absences used')`.
+- **Course detail** (opened from a course row, a class, or a deadline's sheet):
+  - The course name in `headlineSmall` (wrapping), with the code and professor below it.
+  - The absence count in `headlineMedium` (`6 of 8`) with the large tally, a `StatusLine` for what is left, and the classes held so
+    far. Then "Open in eClass" and "Set absence limit" / "Change limit" as text buttons.
   - The course's deadlines, then the INS grade: both short, so they come before the long lists.
-  - VOD weeks, each with `38 / 75 min`, a 4dp `LinearProgressIndicator`, and the window dates.
-  - A divided list of the eClass attendance sessions held so far, newest first: date plus Present, Absent, Late or
-    Other, each as icon and word. eClass also lists the semester's future sessions; they are not shown.
-- **A lesson with no eClass course** (Mental Education) opens a sheet with its time, room and teacher, and says
-  there is no attendance record for it.
+  - VOD weeks, each with `38 / 75 min`, a 4dp bar, and the window dates.
+  - A ruled list of the eClass attendance sessions held so far, newest first: date plus Present, Absent, Late or Other, each as icon
+    and word. eClass also lists the semester's future sessions; they are not shown.
+- **A class with no eClass course** (Mental Education) opens a sheet with its time, room and teacher, and says there is no
+  attendance record for it.
 
-**Mail and grades.**
-- **Mail** is a divided list of sender, time, subject and a one-line preview. Unread subjects use `titleMedium`, read ones `bodyLarge`.
-  No unread dot.
-- **INS grades** is a list of courses with their grades. The semester GPA is a plain row at the top, not a hero tile.
+**Mail.**
+- **List:** ruled rows: the sender in muted `bodyMedium` with the time on the right, the subject (`titleSmall` when unread, `bodyLarge`
+  when read), and a one-line preview. No unread dot: weight carries it.
+- **Message:** the subject in `headlineSmall`, the sender and time, attachments (name and size), a rule, then the body in `bodyLarge`
+  with tappable links. "Mark as unread" is in the app bar.
 
-**Settings (saved logins).**
+**Grades.** The GPA first, as a plain line: `3.87` in `headlineMedium` with `of 4.5 · 98 credits · year 3` beside it. Then each term,
+newest first, under a `titleMedium` header: ruled rows with the course in `bodyLarge`, its credits in muted `bodyMedium`, and the letter
+in `titleMedium` on the right ("Not graded" in muted `bodyMedium`). The letter is the answer, so it is the Fraunces part.
+
+**Settings.**
+- **Sections:** Accounts, Notifications, Courses, Timetable, Appearance, each under a ruled `titleMedium` header.
 - **One row per service that needs a login:** eClass, INS, University mail. The subtitle carries the status:
   `Signed in as U… · checked 08:41`, `Sign-in rejected · checked 08:41` (a danger `StatusLine`), `U… · not checked yet`
-  or `Not set up`. Every refresh updates it: a fetch that gets through is a working login, a rejected one is not, and a
-  network failure says nothing.
-- **Tapping a row** opens a sheet with username, password (obscured, with a show toggle) and a `FilledButton` "Save and test". The
-  result appears inline: `Signed in` or `eClass rejected this username or password.`
+  or `Not set up`. Every refresh updates it.
+- **Tapping a row** opens a sheet: the service in `headlineSmall`, username, password (obscured, with a show toggle) and a
+  `FilledButton` "Save and test". The result appears inline: `Signed in` or `eClass rejected this username or password.`
 - **Never display a saved password.**
-- **Sign out** is a `TextButton` in `error` color, behind a confirm dialog. It removes the saved login, the service's
-  cookies and cached data, and (for eClass) the reminders planned from that data.
-- **Also in Settings:** notifications per channel, theme (System / Light / Dark), and absence limits per course.
-- **Absence limits** is its own screen: every eClass course that takes attendance, with its limit or `Not set`;
-  tapping one asks for the number (empty clears it). Courses shows `Set limits` above the list while any course
-  lacks one, and course detail has `Set absence limit` / `Change limit`. The new-absence notification adds
-  `3 of 4 allowed absences used, 1 left.` once a limit is set.
+- **Sign out** is a `TextButton` in `error` color, behind a confirm dialog. It removes the saved login, the service's cookies and
+  cached data, and (for eClass) the reminders planned from that data.
+- **Notifications:** a switch per channel and one for quiet hours.
+- **Appearance:** Theme, with System, Light and Dark in a dialog.
+- **Absence limits** is its own screen: every eClass course that takes attendance, ruled, with its limit or `Not set`; tapping one asks
+  for the number (empty clears it).
 
 **Empty states.** One left-aligned `bodyLarge` sentence stating the fact, an optional `Checked 08:41`, and at most one `TextButton`.
-Examples:
 - `No classes on Sunday. Next: Mon 27 Oct, 09:00 Multimedia Computing, B-305.`
 - `No unread mail.`
 - `Sign in to eClass to see deadlines and attendance.`, with a "Sign in" button.
 
 **Loading.**
 - **Cache first.** Never replace visible data with a loader.
-- **Background refresh:** show nothing for the first second. After that, show a 2dp `LinearProgressIndicator` under the app bar and
-  `Updating…` in the footer.
-- **First run with no cache:** a static skeleton that mirrors the real rows (`surfaceContainerHighest` blocks, radius 4, no shimmer).
-- **Spinners:** never a full-screen `CircularProgressIndicator` on a tab. A small spinner is allowed only inside a button whose action
-  is running.
+- **Background refresh:** a 2dp `LinearProgressIndicator` in `primary` under the app bar rule, and `Updating…` in the footer.
+- **First run with no cache:** a static skeleton that mirrors the real rows (`surfaceContainerHighest` blocks, radius 4, no shimmer):
+  the rail's time column and two lines of text per row.
+- **Spinners:** never a full-screen `CircularProgressIndicator`. A small spinner is allowed only inside a button whose action is running.
 - **Timeout:** 15 s per service.
 
 **Errors.** One row per failed service, in the form `<what happened>. <what you are seeing>.` plus one action. Raw exceptions and HTTP
-codes go only in a "Details" sheet.
+codes never reach the screen.
 
 | Cause | Row text | Action |
 |---|---|---|
 | Timeout or server error | `Couldn't reach INS. Showing data from Tue 18:04.` | Retry |
-| Sign-in expired or rejected | `eClass sign-in expired.` | Sign in |
-| Page layout changed, so parsing failed | `Couldn't read the eClass page; it may have changed. Showing data from 08:12.` | Details |
-| Failed with no cache | `Couldn't load your timetable from EduPage.` | Retry |
+| Sign-in expired or rejected | `eClass sign-in needed.` | Sign in |
+| Page layout changed, so parsing failed | `Couldn't read the eClass page; it may have changed. Showing data from 08:12.` | Retry |
+| Failed with no cache | `Couldn't reach EduPage. Check the connection.` | Retry |
 
 **Pull to refresh.**
 - **Every tab has a `RefreshIndicator`** with `AlwaysScrollableScrollPhysics`, so short lists can still be pulled.
 - **Scope:** Today refreshes every service; other tabs refresh only their own.
-- **Completion:** the indicator stays until every service finishes or times out. No success snack bar; the footer time is the
-  feedback.
+- **Completion:** the indicator stays until every service finishes or times out. No success snack bar; the footer time is the feedback.
 
 **Offline.**
-- **Detection:** failed requests, not only `connectivity_plus`.
-- **Display:** one non-dismissible row at the top of Today, Deadlines and Courses: `cloud_off_outlined` plus
-  `Offline. Showing data from 08:12.` on `surfaceContainerHigh`.
-- **Recovery:** retry automatically when the connection returns. "Open in eClass" stays enabled.
+- **Detection:** failed requests. The app counts as offline when both EduPage and eClass failed with a network error on their last
+  refresh: two different hosts failing together means the connection, not a service.
+- **Display:** one row at the top of Today, Schedule, Deadlines and Courses: `cloud_off_outlined` plus
+  `Offline. Showing data from 08:12.` on `surfaceContainerHigh`, with "Retry". It replaces those services' own network error rows.
+- **Recovery:** the next refresh (pull, Retry, or returning to the app) clears it. "Open in eClass" stays enabled.
 
 ## 9. Time and number formats
 
@@ -437,7 +495,7 @@ codes go only in a "Details" sheet.
 | Don't forget your assignment! | Lab 5 due in 3 h |
 | SOC4020 HW3 | Lab 3, Multimedia Computing |
 | Attendance: 75% | 3 of 4 absences used · 1 left |
-| Loading your awesome schedule… | (nothing for 1 s, then a 2dp progress bar) |
+| Loading your awesome schedule… | (a 2dp progress bar, then the data) |
 | Invalid credentials | eClass rejected this username or password. |
 | Last synced: 2026-10-22T03:41:00Z | Updated 08:41 |
 
@@ -449,34 +507,30 @@ success, re-engagement, greetings, errors that recover on their own, or anything
 | Channel | Importance | Fires when | Default |
 |---|---|---|---|
 | Deadlines | DEFAULT | 24 h and 3 h before a deadline that isn't submitted | On |
-| VOD windows | DEFAULT | 24 h before a window closes while the VOD isn't fully watched | On |
-| Attendance | DEFAULT | A new absence is recorded, or remaining absences reach 1 or 0 | On |
-| Classes | LOW | 10 min before each class, with the room in the title | Off |
-| Grades | LOW | A new grade is posted in INS | On |
-| Sign-in problems | LOW | A saved login stops working (at most once a day per service) | On |
+| VOD windows | DEFAULT | 48 h and 6 h before a window closes while the VOD isn't fully watched | On |
+| Attendance | DEFAULT | A new absence is recorded | On |
+| Classes | LOW | 15 min before each class, with the room in the title | Off |
 
 - **Wording:** title at most 30 characters, body at most 40. The most important fact goes first and the course name goes in the body.
   No app name, no emoji, no exclamation marks.
-- **One notification per item,** with a stable id, so the 3 h reminder replaces the 24 h one. Group a channel's notifications once
-  more than 2 are showing.
+- **One notification per item,** with a stable id, so the 3 h reminder replaces the 24 h one.
 - **Check before posting.** Re-sync first; if that sync fails, use the last known status. Never notify about something already
   submitted or watched.
 - **Quiet hours:** 23:00–07:30. If a deadline falls inside them, its last reminder goes out at 22:00.
-- **Lock screen:** Grades and Attendance use `VISIBILITY_PRIVATE`, with the public text "New grade posted" or "Attendance updated".
-- **Tapping** opens the item's detail. At most one action ("Open in eClass").
+- **The status-bar icon** (`ic_stat_notify`) is white on transparent; Android tints it.
+- **Tapping** opens the item's detail.
 
 | Title | Body |
 |---|---|
 | `Lab 5 due in 3 h` | `Multimedia Computing · 23:59` |
 | `Week 7 VOD closes tomorrow` | `Deep Learning for CV · 1 of 3 watched` |
 | `Absence: Multimedia Computing` | `3 of 4 used · 1 left` |
-| `B-305 in 10 min` | `Multimedia Computing · 10:30–11:50` |
-| `eClass sign-in expired` | `Deadlines aren't updating` |
-| `New grade posted` | `Artificial Intelligence midterm` |
+| `B-305 in 15 min` | `Multimedia Computing · 10:30–11:50` |
 
 Never send: "Don't forget!", "Hey, you have a deadline", "Sync complete", "You have 3 classes today", or course codes.
+`docs/NOTIFICATIONS.md` has the details.
 
-## 12. Motion and icons
+## 12. Motion, icons, launcher
 
 - **Motion:**
   - Keep the M3 page transitions and ripples.
@@ -484,28 +538,33 @@ Never send: "Don't forget!", "Hey, you have a deadline", "Sync complete", "You h
   - No list entrance animations. Changing numbers update in place.
   - Honor `MediaQuery.disableAnimations`.
 - **Icons:**
-  - Flutter `Icons` in the outlined style: 24dp in rows, 18dp in `StatusLine`. Color them `onSurfaceVariant` unless they show a status.
-  - Use icons only for navigation, item type, status and app bar actions. Every icon-only button has a `tooltip`.
+  - Flutter `Icons` in the outlined style: 24dp in rows and bars, 16dp in `StatusLine`. Color them `onSurfaceVariant` unless they show a
+    status or the selected tab.
+  - Use icons only for navigation, status, actions and the deadline sheet's kind. Every icon-only button has a `tooltip`.
+- **Launcher icon and splash:** "IUT" in Fraunces SemiBold, ink on paper, with a short IUT-blue rule under it; the themed (monochrome)
+  layer is the letters alone. The splash is the paper (ink at night) with the icon in the middle. `tool/make_icons.py` draws all of
+  them.
 
 ## 13. Review checklist
 
-1. Does the first row below the app bar answer the screen's question, with no greeting, hero or stat tiles above it?
-2. Is the widget code free of `Colors.*`, hex literals, `fromSeed`, gradients, `BackdropFilter` and `BoxShadow`?
+1. Does the first thing below the app bar answer the screen's question, with no greeting, hero banner or stat tiles above it?
+2. Is the widget code free of `Colors.*`, hex literals, `fromSeed`, gradients, `BackdropFilter`, `BoxShadow` and `Card`?
 3. Is every string free of emoji, including notifications and test fixtures?
-4. Is there at most one `Card` (no card per row, no nested cards) and at most one `FilledButton`?
-5. Is every status shown as icon plus words through `StatusLine` or `StatusTag`, never as a colored dot, stripe or tint alone?
+4. Is there at most one `FilledButton` on the screen, and is structure made with rules, not boxes?
+5. Is every status shown as icon plus words through `StatusLine`, never as a colored node, tally, dot or tint alone?
 6. Does the screen render in both light and dark, using only `colorScheme` and `StatusColors` roles?
-7. Do times, counts, percentages and rooms use `.tnum`? Are times 24-hour, in device time, and formatted by `lib/ui/format/`?
-8. Are courses named, never shown by code?
-9. Does the screen work at `textScaler` 2.0 without clipping? Are all targets at least 48dp, and do all icon buttons have tooltips?
-10. Were all states built: first load with no cache, cached while refreshing, empty, stale, one service failed, offline, signed out?
-11. Is there never a blank screen, a full-screen spinner, or raw exception text?
-12. Does every error row name the service, show the age of the data, and offer an action?
-13. Does pull to refresh work even on a short list?
-14. Is the copy free of exclamation marks and of the banned words in section 10?
-15. Do absence counts and limits come from data, never invented or hardcoded?
-16. Do mocks and screenshots use realistic names, rooms and times?
-17. Is there no motion beyond the M3 defaults, and is `disableAnimations` respected?
+7. Is Fraunces used only for its roles (room, titles, headers, course names, numerals, grade letters) and Public Sans for the rest?
+8. Do times, counts, percentages and rooms use `.tnum`? Are times 24-hour, in device time, and formatted by `lib/ui/format/`?
+9. Are courses named, never shown by code?
+10. Does the screen work at `textScaler` 2.0 without clipping? Are all targets at least 48dp, and do all icon buttons have tooltips?
+11. Were all states built: first load with no cache, cached while refreshing, empty, stale, one service failed, offline, signed out?
+12. Is there never a blank screen, a full-screen spinner, or raw exception text?
+13. Does every error row name the service, show the age of the data, and offer an action?
+14. Does pull to refresh work even on a short list?
+15. Is the copy free of exclamation marks and of the banned words in section 10?
+16. Do absence counts and limits come from data, never invented or hardcoded?
+17. Do mocks and screenshots use realistic names, rooms and times?
+18. Is there no motion beyond the M3 defaults, and is `disableAnimations` respected?
 
 ## Sources
 
@@ -519,3 +578,4 @@ Never send: "Don't forget!", "Hey, you have a deadline", "Sync complete", "You h
 8. MacStories on the Transit app's answer-first home screen: https://www.macstories.net/reviews/transit-is-still-the-best-designed-transit-app-on-the-iphone-in-2024/
 9. W3C, WCAG 2.2 Understanding 1.4.1 "Use of Color": https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html
 10. Flutter API, the `ColorScheme` constructor and its current roles: https://api.flutter.dev/flutter/material/ColorScheme/ColorScheme.html
+11. Fraunces (Undercase Type, OFL): https://github.com/undercasetype/Fraunces; Public Sans (USWDS, OFL): https://github.com/uswds/public-sans
