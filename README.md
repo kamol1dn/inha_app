@@ -26,6 +26,9 @@ connects directly to:
 - `ins.inha.uz` (form login, grades),
 - `mail.inha.uz` (Exchange Web Services with Basic auth over HTTPS).
 
+The two typefaces, Fraunces and Public Sans (both under the SIL Open Font License), are bundled in the app;
+nothing is downloaded at run time.
+
 Logins are typed only in the app's Settings and kept in Android's encrypted storage on the phone; each password
 is sent only to the service it belongs to. `ins.inha.uz` still serves a certificate that expired on 2024-11-16;
 the app accepts that one certificate, pinned by its SHA-256, and nothing else (see `docs/ENDPOINTS.md`).
@@ -68,6 +71,9 @@ release build falls back to the debug key, which is fine for testing but cannot 
 | `lib/data/` | `AppData`: cached data per source, refresh, the rules that decide what is urgent |
 | `lib/features/` | Screens |
 | `lib/notifications/` | Reminder rules (pure), the notifier, the WorkManager background refresh |
+| `lib/ui/` | Theme (colours, type, status tones) and the one formatter for times and dates |
+| `assets/fonts/` | The bundled fonts and their OFL licences |
+| `tool/` | `make_fonts.py` cuts the fonts from the upstream variable files; `make_icons.py` draws the icons and splash |
 | `DESIGN.md` | The design guide every screen follows |
 | `docs/ENDPOINTS.md` | What each site exposes and how the app reads it |
 | `docs/NOTIFICATIONS.md` | Which reminders go out, when, and why |

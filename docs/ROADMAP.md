@@ -1,8 +1,8 @@
 # Roadmap
 
-Status as of 2026-10-23, branch `v2` (commits `8445505`, `d87fabb`). Milestone 2 has
-two phases, in this order: **A. finish the functionality**, then **B. overhaul the UI**.
-Don't start B until A is done and checked on the emulator against the live services.
+Status as of 2026-10-23, branch `v2`. Milestone 2 had two phases, in this order:
+**A. finish the functionality**, then **B. overhaul the UI**. Both are done; nothing is
+pushed yet.
 
 ## Done (milestone 1)
 
@@ -32,8 +32,6 @@ release build). What is left from it:
   tests cover it), a rejected password (lockout risk), and a submitted assignment (none
   this term; the parser follows Moodle's markup and was checked on a finished quiz).
 - **Attachments** are listed with name and size but don't open yet.
-- **The launcher icon** is a provisional "IUT" wordmark (`tool/make_icons.py`); Phase B
-  replaces it.
 - **Waiting on the student:** installing the phone APK (sent as
   `app-arm64-v8a-release.apk`) and signing in on the phone; real absence limits per course
   (Settings > Absence limits); choosing a Phase B direction.
@@ -102,10 +100,43 @@ Nice to have, if time allows: the exam schedule (the student's Telegram bot
 `D:\coding\inha_timetable` already parses the Fall 2026 exam PDFs), eClass announcements,
 and a home-screen widget for the next class.
 
-## Phase B: UI overhaul
+## Phase B: UI overhaul (done 2026-10-23)
 
-The student's verdict on the current UI: **it looks generic**. DESIGN.md was followed, but
-following a restraint-first guide literally produced a plain Material list app. Phase B
+The student chose direction **B "Campus paper"** (warm paper and ink, Fraunces and Public
+Sans, thin rules, tally marks) with **C's day rail** for Today. The canvas with the three
+directions and the merged Today (light and dark) is
+https://claude.ai/artifact/5hHauAoXKHBJNm9ad3k1rg. Commits `9b270f7` (DESIGN.md first)
+through `fd0d3ea` (icon and splash):
+
+- **Fonts** are bundled, cut by `tool/make_fonts.py` (about 0.5 MB), with a `tnum`
+  feature added to Fraunces. Cyrillic falls back to Noto Serif in serif styles, Korean
+  to the system CJK face; checked on the emulator.
+- **Every screen** is restyled in light and a designed dark mode, with skeletons,
+  signed-out notes, stale markers, error rows and an offline row.
+  `test/screens_test.dart` renders each one at text scale 2.0 in both themes; 252 tests.
+- **Today and Schedule are rails** (`lib/data/rail.dart`, tested in `test/rail_test.dart`).
+- **Settings** gained Theme (System, Light, Dark) and the open-source licences.
+- At the student's request, **course detail and mail messages** fade their name into the
+  app bar once the heading scrolls away.
+
+Calls made without the student, to review:
+
+- **The rail's reach:** what is due in the next 72 h, the first class of the next day
+  with classes, and the next class of every course in attendance trouble (that class
+  carries the warning). Nothing later.
+- **The hero opens Schedule** on its day (Phase A behaviour); other classes open their course.
+- **Schedule uses the rail too**, with breaks and the Now row between classes.
+- **Without a limit, the tally draws only the absences** in ink, no faint allowance.
+- **eClass titles are shown as eClass writes them** ("[QUIZ] 2 Week 6 - 2% (Quiz
+  closes)"), not tidied as the mockups showed; tidying them is a possible follow-up.
+- **No type icons on deadline rows**; the deadline sheet shows the kind.
+- **The unread badge is ink**, not red or blue: a count, not an alarm.
+- **The status-bar icon stays the block wordmark**; Fraunces serifs vanish at 24 dp.
+- **The dark palette** (warm near-black `#1A1814`, paper text `#EDE7DA`) is our own.
+
+The brief it started from. The student's verdict on the old UI: **it looks generic**.
+DESIGN.md was followed, but following a restraint-first guide literally produced a plain
+Material list app. Phase B
 keeps what is right about the guide (answer first, honest data, status as icon and words, no
 slop) and gives the app an identity.
 
