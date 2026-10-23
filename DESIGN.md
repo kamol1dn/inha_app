@@ -134,12 +134,12 @@ class StatusColors extends ThemeExtension<StatusColors> {
 
 All `onContainer` pairs are at least 8.3:1. `ColorScheme.error` is the danger color.
 
-- **Status is rendered by `StatusLine`:** a 16dp icon, a 6dp gap and `bodyMedium` text, both in `fg`. `StatusTag` (a `container` fill
-  with `onContainer` `labelMedium` text, radius 4) is kept for the rare word that must stand apart in a row ("Cancelled").
+- **Status is rendered by `StatusLine`:** a 16dp icon, a 6dp gap and `bodyMedium` text, both in `fg`. There are no status pills or
+  tags; the `container` tones are for a tinted row, should one ever be needed.
 - **Colored text alone is acceptable only when the words state the condition** ("in 2 h", "6 of 8", "Over limit"). A rail node, tally
   mark, bar or tint is never the only signal: the same row always says it in words.
 - **Warning and danger have about the same lightness on purpose.** The icon shape and the wording tell them apart.
-- **Tinted containers are only for `StatusTag` and the offline row.** Never tint a whole row.
+- **The offline row is the only tinted row** (`surfaceContainerHigh`). Never tint a row to show its status.
 
 ## 4. Typography
 
@@ -157,7 +157,7 @@ titles, secondary lines, buttons, settings, mail.
 - **Other scripts fall back to the system.** Neither face has Cyrillic, Hangul or Uzbek's `ʻ` (U+02BB) in Fraunces. Fraunces styles
   list `serif` as their fallback, so a Cyrillic course name continues in Noto Serif rather than Roboto; Public Sans falls back to the
   system sans (Roboto, Noto Sans CJK for Korean). Mixed lines are expected and acceptable.
-- **The size cost** is about 0.7 MB in the APK, paid once.
+- **The size cost** is about 0.5 MB in the APK (seven files), paid once.
 
 These styles are the only ones allowed. Every style sets its family, size, line height, weight and letter spacing, so nothing depends
 on the M3 defaults (which assume Roboto). `displayLarge`, `displaySmall` and `headlineLarge` are never used.
@@ -239,7 +239,7 @@ The line starts at the first node and ends at the last. The node sits on the cen
 | Element | Radius |
 |---|---|
 | Rows (full-bleed ripple), rules, the app and navigation bars | 0 |
-| `StatusTag`, skeleton blocks | 4 |
+| Skeleton blocks | 4 |
 | Chips, buttons (override the M3 stadium shape), fields, snack bars | 8 |
 | Top corners of sheets, and dialogs | 16 |
 
@@ -258,6 +258,7 @@ its icon filled and its label 600; the others are `onSurfaceVariant`, outlined, 
 | Deadlines | `assignment` | Everything due, eClass VOD windows included | Grouped by day |
 | Courses | `school` | Attendance, VOD progress and grades by course | App bar action "Grades" opens INS grades |
 
+- **The unread badge is ink** (`inverseSurface` with `onInverseSurface` text): a count, not an alarm.
 - **Settings and Mail are pushed screens, not tabs.** Settings is reached only from the gear on Today (tooltip "Settings"). Mail is
   reached from Today's app bar or its mail rows.
 - **Each tab keeps its own scroll position** (`IndexedStack`).
@@ -308,6 +309,7 @@ Updated 13:18                                                    bodySmall, mute
      `Now · until 15:30 · 40 min left`, with a `primary` dot. Otherwise the Now row (current time, `primary` dot, "Now") comes first.
    - **The hero** is the class in progress or the next class today: label (`Next · in 40 min`), the room in `displayMedium`, the course
      in `titleLarge`, then `Lecture · J. Hong`. With no room in EduPage it reads "Room not set". The countdown ticks on the minute.
+     Tapping it opens Schedule on its day; any other class opens its course.
    - **Later classes today** are ordinary class rows: the course in `titleMedium`, then `B202 · Lecture`.
    - **Deadlines and VOD windows due today** sit at their due time among the classes.
    - **After the last class** of the day: `Free for the rest of the day`, at the time it ends.
@@ -324,14 +326,16 @@ Updated 13:18                                                    bodySmall, mute
    with the raw counts (`No limit set: Artificial Intelligence 6 · Multimedia Computing 2`). The section taps through to Courses. The
    student opens the app partly to ask this, so the answer is always on screen.
 4. **Unread mail:** shown only when there is unread mail, headed by the count (`8 unread`). Two rows (subject, then date), then
-   `6 more`. Room changes often arrive by mail.
+   `6 more`. Room changes often arrive by mail. When Exchange fails, this section gets only the stale marker; the error row is on the
+   Mail screen.
 5. **Footer:** `Updated 08:41`, or `Updating…` during a refresh.
 
 **Rail rows by kind:**
 - **Class:** time column start and end; course in `titleMedium` (one line), `B202 · Lecture` in muted `bodyMedium`.
-- **Deadline:** time column the due time; title in `titleSmall`; then `Not submitted · Multimedia Computing` muted. When it is warning or
-  danger the second line is a `StatusLine` (`Due in 5 h · not submitted`) and the course moves to a third line. VODs read
-  `Video 7 closes` with `62% watched` as their state.
+- **Deadline:** time column the due time; title in `titleSmall` (up to two lines); then `Not submitted · Multimedia Computing` muted
+  (`Not attempted` for a quiz, `Closes · 62% watched` for a VOD). When it is warning or danger the second line is a `StatusLine`
+  (`Due in 5 h · not submitted`, `Overdue 2 h · not attempted`, for a VOD `62% watched, 21 min left`), the due time and the node take
+  the status colour, and the course moves to a third line.
 
 | Item | Shown on Today when | Plain | Warning | Danger |
 |---|---|---|---|---|
@@ -368,8 +372,8 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
 - **The day** is a rail like Today's: class rows with start and end, breaks of 30 min or more as a muted `Break 1 h 10 min` line with no
   node, and, on today, the Now row between the classes it falls between. The class in progress has the `primary` dot and a
   `Now · until 11:50` label; past classes are muted.
-- **Changes:** a room change gets a warning `StatusLine` ("Room changed to A-201"). A cancelled class is struck through and gets a
-  `StatusTag` "Cancelled". (EduPage publishes neither yet.)
+- **Changes:** EduPage publishes neither room changes nor cancellations yet. When it does, a room change gets a warning `StatusLine`
+  ("Room changed to A-201") and a cancelled class is struck through with a danger `StatusLine` "Cancelled".
 - **Tapping a class** opens its course.
 
 **Deadlines.**
@@ -388,20 +392,22 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
 - **Row**, ruled from the next:
   1. The course name in `titleMedium` (up to two lines).
   2. A `StatusLine` when in trouble (`2 left · next Mon 13:00`), otherwise the next class in muted `bodyMedium`
-     (`Today 14:00 · B202`, `Next Mon 14:30`), or `No class attendance in eClass`.
+     (`Today 14:00 · B202`, `Next Mon 14:30 · A305`, led by `Limit not set` while there is none), or `No class attendance in eClass`.
   3. `VOD 10 of 12 watched`, when the course has VODs.
   4. On the right, the tally and below it the count in `numeral`: `6 of 8` in the status `fg` when in trouble, otherwise
      `onSurfaceVariant`; `6` with "limit not set" in the second line when there is no limit.
 - **The tally:** one stroke per absence, in gates of five (four uprights and a diagonal through them). Used strokes are `onSurface`, or the
   status `fg` in trouble; the strokes still allowed are `outlineVariant`. Over the limit every stroke is danger and the count reads
-  `10 of 8`. Strokes are 16dp tall (28 on course detail), 2dp wide, 7dp apart, with 10dp between gates. More than 20 marks are not drawn;
-  the words stand alone. It always appears next to its words and carries `Semantics(label: '6 of 8 allowed absences used')`.
+  `10 of 8`. Strokes are 16dp tall (28 on course detail), 2dp wide, 7dp apart, with 10dp between gates; the faint strokes are painted
+  first, so a faint diagonal never cuts an inked upright. More than 20 marks are not drawn; the words stand alone. It always appears
+  next to its words and carries `Semantics(label: '6 of 8 allowed absences used')`.
 - **Course detail** (opened from a course row, a class, or a deadline's sheet):
-  - The course name in `headlineSmall` (wrapping), with the code and professor below it.
+  - The course name in `headlineSmall` (wrapping), with the code and professor below it. The app bar starts empty; once the name has
+    scrolled under it, the name fades in there (section 12).
   - The absence count in `headlineMedium` (`6 of 8`) with the large tally, a `StatusLine` for what is left, and the classes held so
     far. Then "Open in eClass" and "Set absence limit" / "Change limit" as text buttons.
   - The course's deadlines, then the INS grade: both short, so they come before the long lists.
-  - VOD weeks, each with `38 / 75 min`, a 4dp bar, and the window dates.
+  - VOD lectures, each with `Week 7 · 38 / 75 min` and a 4dp bar in `onSurface` on `outlineVariant`.
   - A ruled list of the eClass attendance sessions held so far, newest first: date plus Present, Absent, Late or Other, each as icon
     and word. eClass also lists the semester's future sessions; they are not shown.
 - **A class with no eClass course** (Mental Education) opens a sheet with its time, room and teacher, and says there is no
@@ -410,15 +416,16 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
 **Mail.**
 - **List:** ruled rows: the sender in muted `bodyMedium` with the time on the right, the subject (`titleSmall` when unread, `bodyLarge`
   when read), and a one-line preview. No unread dot: weight carries it.
-- **Message:** the subject in `headlineSmall`, the sender and time, attachments (name and size), a rule, then the body in `bodyLarge`
-  with tappable links. "Mark as unread" is in the app bar.
+- **Message:** the subject in `headlineSmall` (it fades into the empty app bar once scrolled away), the sender in `titleSmall` and the
+  time, attachments (name and size), a rule, then the body in `bodyLarge` with tappable links. "Mark as unread" is in the app bar.
 
-**Grades.** The GPA first, as a plain line: `3.87` in `headlineMedium` with `of 4.5 · 98 credits · year 3` beside it. Then each term,
+**Grades.** The GPA first, as a plain line: `3.87` in `headlineMedium` with `GPA of 4.5 · 98 credits · year 3` beside it. Then each term,
 newest first, under a `titleMedium` header: ruled rows with the course in `bodyLarge`, its credits in muted `bodyMedium`, and the letter
 in `titleMedium` on the right ("Not graded" in muted `bodyMedium`). The letter is the answer, so it is the Fraunces part.
 
 **Settings.**
-- **Sections:** Accounts, Notifications, Courses, Timetable, Appearance, each under a ruled `titleMedium` header.
+- **Sections:** Accounts, Notifications, Courses, Timetable, Appearance, About (the open-source licences, the fonts' OFL included),
+  each under a ruled `titleMedium` header.
 - **One row per service that needs a login:** eClass, INS, University mail. The subtitle carries the status:
   `Signed in as U… · checked 08:41`, `Sign-in rejected · checked 08:41` (a danger `StatusLine`), `U… · not checked yet`
   or `Not set up`. Every refresh updates it.
@@ -435,7 +442,8 @@ in `titleMedium` on the right ("Not graded" in muted `bodyMedium`). The letter i
 **Empty states.** One left-aligned `bodyLarge` sentence stating the fact, an optional `Checked 08:41`, and at most one `TextButton`.
 - `No classes on Sunday. Next: Mon 27 Oct, 09:00 Multimedia Computing, B-305.`
 - `No unread mail.`
-- `Sign in to eClass to see deadlines and attendance.`, with a "Sign in" button.
+- `Sign in to eClass to see deadlines and attendance.`, with a "Sign in" button. Signed out with nothing cached, this note stands in
+  for the service's error row, so the screen offers one "Sign in", not two.
 
 **Loading.**
 - **Cache first.** Never replace visible data with a loader.
@@ -534,6 +542,9 @@ Never send: "Don't forget!", "Hey, you have a deadline", "Sync complete", "You h
 
 - **Motion:**
   - Keep the M3 page transitions and ripples.
+  - **One addition, the scroll title:** a pushed screen whose name is a heading in its body (course detail, a mail message) starts with
+    an empty app bar; once that heading scrolls under the bar, the same name fades into it (200 ms, `easeInOut`, instant with
+    animations off). The bar never sits empty while the name is off screen.
   - Animate only opacity and transform, for 150–250 ms with standard easing. No overshoot.
   - No list entrance animations. Changing numbers update in place.
   - Honor `MediaQuery.disableAnimations`.
@@ -564,7 +575,7 @@ Never send: "Don't forget!", "Hey, you have a deadline", "Sync complete", "You h
 15. Is the copy free of exclamation marks and of the banned words in section 10?
 16. Do absence counts and limits come from data, never invented or hardcoded?
 17. Do mocks and screenshots use realistic names, rooms and times?
-18. Is there no motion beyond the M3 defaults, and is `disableAnimations` respected?
+18. Is there no motion beyond the M3 defaults and the scroll title, and is `disableAnimations` respected?
 
 ## Sources
 
