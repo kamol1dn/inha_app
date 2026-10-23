@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/cache.dart';
@@ -67,6 +68,11 @@ class Prefs {
   String? get deadlineCourse => _p.getString('deadlines.course');
   set deadlineCourse(String? v) =>
       v == null ? _p.remove('deadlines.course') : _p.setString('deadlines.course', v);
+
+  /// Light, dark, or following the system (the default).
+  ThemeMode get themeMode =>
+      ThemeMode.values.where((m) => m.name == _p.getString('theme')).firstOrNull ?? ThemeMode.system;
+  set themeMode(ThemeMode v) => _p.setString('theme', v.name);
 
   /// Whether the Android notification permission prompt was shown once.
   bool get notificationsAsked => _p.getBool('notify.asked') ?? false;
@@ -340,6 +346,11 @@ class AppData extends ChangeNotifier {
 
   void setAbsenceLimit(int courseId, int? limit) {
     prefs.setAbsenceLimit(courseId, limit);
+    notifyListeners();
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    prefs.themeMode = mode;
     notifyListeners();
   }
 

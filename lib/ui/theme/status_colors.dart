@@ -9,15 +9,15 @@ class StatusColors extends ThemeExtension<StatusColors> {
   const StatusColors({required this.ok, required this.warning, required this.danger, required this.info});
   final StatusTone ok, warning, danger, info;
   static const light = StatusColors(
-    ok:      (fg: Color(0xFF1A6B3A), container: Color(0xFFD9EFE0), onContainer: Color(0xFF0E3D20)),
-    warning: (fg: Color(0xFF8A5000), container: Color(0xFFFBEAC6), onContainer: Color(0xFF4A2C00)),
-    danger:  (fg: Color(0xFFB42318), container: Color(0xFFFBE3DF), onContainer: Color(0xFF5A130B)),
-    info:    (fg: Color(0xFF1D4E89), container: Color(0xFFD5E3F5), onContainer: Color(0xFF0D2A4C)));
+    ok:      (fg: Color(0xFF2F6B3A), container: Color(0xFFDDEBDC), onContainer: Color(0xFF173A1F)),
+    warning: (fg: Color(0xFF8A5300), container: Color(0xFFF4E3C3), onContainer: Color(0xFF452A00)),
+    danger:  (fg: Color(0xFFA3321F), container: Color(0xFFF6DDD5), onContainer: Color(0xFF4F170D)),
+    info:    (fg: Color(0xFF1D4E89), container: Color(0xFFDAE3EF), onContainer: Color(0xFF0F2E52)));
   static const dark = StatusColors(
-    ok:      (fg: Color(0xFF7DCB96), container: Color(0xFF163A23), onContainer: Color(0xFFC4EACF)),
-    warning: (fg: Color(0xFFEDB65A), container: Color(0xFF3E2B07), onContainer: Color(0xFFF8E2B5)),
-    danger:  (fg: Color(0xFFFFB3A8), container: Color(0xFF5E1A12), onContainer: Color(0xFFFCD9D3)),
-    info:    (fg: Color(0xFFA9C7EF), container: Color(0xFF1F4573), onContainer: Color(0xFFD5E3F5)));
+    ok:      (fg: Color(0xFF8FC79A), container: Color(0xFF1F3524), onContainer: Color(0xFFCBE8D0)),
+    warning: (fg: Color(0xFFE3AE5B), container: Color(0xFF3D2C0E), onContainer: Color(0xFFF5DDB0)),
+    danger:  (fg: Color(0xFFF0A08C), container: Color(0xFF4A1F16), onContainer: Color(0xFFF8D3C8)),
+    info:    (fg: Color(0xFF9DBDE6), container: Color(0xFF1D3F66), onContainer: Color(0xFFD9E3F0)));
   StatusTone of(Status s) => switch (s) { Status.ok => ok, Status.warning => warning, Status.danger => danger, Status.info => info };
   @override StatusColors copyWith() => this;
   @override StatusColors lerp(StatusColors? other, double t) => t < 0.5 ? this : (other ?? this);

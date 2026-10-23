@@ -25,51 +25,110 @@ class NotificationTaps extends ValueNotifier<String?> {
 class InhaApp extends StatelessWidget {
   const InhaApp({super.key});
 
-  // DESIGN.md sections 3-5: explicit schemes, no seed, elevation 0, radius by role.
+  static final _light = _theme(lightScheme, StatusColors.light);
+  static final _dark = _theme(darkScheme, StatusColors.dark);
+
+  // DESIGN.md sections 3-6: explicit schemes, paper and rules, elevation 0,
+  // radius by role, the bundled faces on every component.
   static ThemeData _theme(ColorScheme scheme, StatusColors status) {
+    final text = appTextTheme.apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
     final r8 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
+    final rule = BorderSide(color: scheme.outlineVariant);
     return ThemeData(
       colorScheme: scheme,
       useMaterial3: true,
-      textTheme: appTextTheme,
+      textTheme: text,
       scaffoldBackgroundColor: scheme.surface,
       extensions: [status],
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
+        titleTextStyle: text.headlineSmall,
+        shape: Border(bottom: rule),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: scheme.surfaceContainer,
+        backgroundColor: scheme.surface,
         elevation: 0,
+        height: 72,
+        indicatorColor: const Color(0x00000000),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
+            size: 24, color: s.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant)),
+        labelTextStyle: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
+            ? text.labelMedium!.copyWith(color: scheme.primary, fontWeight: FontWeight.w600)
+            : text.labelMedium!.copyWith(color: scheme.onSurfaceVariant)),
       ),
-      cardTheme: CardThemeData(
-        elevation: 0,
-        color: scheme.surfaceContainerLow,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      tabBarTheme: TabBarThemeData(
+        indicator: UnderlineTabIndicator(borderSide: BorderSide(width: 2, color: scheme.onSurface)),
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: scheme.outlineVariant,
+        labelColor: scheme.onSurface,
+        unselectedLabelColor: scheme.onSurfaceVariant,
       ),
-      filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(shape: r8)),
-      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(shape: r8)),
-      chipTheme: ChipThemeData(shape: r8),
+      filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(shape: r8, textStyle: text.labelLarge, minimumSize: const Size(64, 48))),
+      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(shape: r8, textStyle: text.labelLarge)),
+      chipTheme: ChipThemeData(
+        shape: r8,
+        side: BorderSide(color: scheme.outline),
+        labelStyle: text.bodyMedium!.copyWith(fontWeight: FontWeight.w500),
+        backgroundColor: scheme.surface,
+        selectedColor: scheme.secondaryContainer,
+      ),
       dialogTheme: DialogThemeData(
+        backgroundColor: scheme.surfaceBright,
+        elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        titleTextStyle: text.headlineSmall,
+        contentTextStyle: text.bodyMedium!.copyWith(color: scheme.onSurfaceVariant),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: scheme.surfaceBright,
+        modalBackgroundColor: scheme.surfaceBright,
+        elevation: 0,
+        modalElevation: 0,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       ),
       dividerTheme: DividerThemeData(color: scheme.outlineVariant, space: 1, thickness: 1),
-      listTileTheme: const ListTileThemeData(contentPadding: EdgeInsets.symmetric(horizontal: 16)),
-      progressIndicatorTheme: ProgressIndicatorThemeData(linearMinHeight: 2, color: scheme.primary),
+      listTileTheme: ListTileThemeData(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+        titleTextStyle: text.bodyLarge,
+        subtitleTextStyle: text.bodyMedium!.copyWith(color: scheme.onSurfaceVariant),
+        iconColor: scheme.onSurfaceVariant,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: scheme.outline)),
+        enabledBorder:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: scheme.outline)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: scheme.primary, width: 2)),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: r8,
+        backgroundColor: scheme.inverseSurface,
+        contentTextStyle: text.bodyMedium!.copyWith(color: scheme.onInverseSurface),
+      ),
+      // The unread count is neutral: ink on paper, not an alarm.
+      badgeTheme: BadgeThemeData(
+        backgroundColor: scheme.inverseSurface,
+        textColor: scheme.onInverseSurface,
+        textStyle: text.labelSmall,
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+          linearMinHeight: 2, color: scheme.primary, linearTrackColor: scheme.outlineVariant),
     );
   }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'IUT',
-        theme: _theme(lightScheme, StatusColors.light),
-        darkTheme: _theme(darkScheme, StatusColors.dark),
+        theme: _light,
+        darkTheme: _dark,
+        themeMode: context.select<AppData, ThemeMode>((d) => d.prefs.themeMode),
         home: const HomeShell(),
       );
 }
@@ -196,7 +255,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           ],
           bottom: _anyLoading(data)
               ? const PreferredSize(
-                  preferredSize: Size.fromHeight(2), child: LinearProgressIndicator())
+                  preferredSize: Size.fromHeight(2),
+                  child: LinearProgressIndicator(backgroundColor: Color(0x00000000)))
               : null,
         ),
         body: IndexedStack(
@@ -214,7 +274,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             const CoursesScreen(),
           ],
         ),
-        bottomNavigationBar: NavigationBar(
+        // The one strong line in the app: ink above the tabs (DESIGN.md 5).
+        bottomNavigationBar: DecoratedBox(
+          position: DecorationPosition.foreground,
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: Theme.of(context).colorScheme.onSurface))),
+          child: NavigationBar(
           selectedIndex: _tab,
           onDestinationSelected: (i) => setState(() => _tab = i),
           destinations: const [
@@ -231,6 +295,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             NavigationDestination(
                 icon: Icon(Icons.school_outlined), selectedIcon: Icon(Icons.school), label: 'Courses'),
           ],
+          ),
         ),
       ),
     );

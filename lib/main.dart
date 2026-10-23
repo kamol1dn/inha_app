@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'app.dart';
@@ -9,6 +11,7 @@ import 'notifications/notifier.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(_fontLicences);
   final services = await AppServices.open();
   final data = services.data;
 
@@ -37,6 +40,13 @@ Future<void> main() async {
   // today's refresh fails; the refresh then re-plans them with fresh data.
   await _syncReminders(notifier, data);
   data.refreshAll();
+}
+
+/// The bundled fonts' OFL texts (DESIGN.md 4), for the app's licence page.
+Stream<LicenseEntry> _fontLicences() async* {
+  for (final (font, file) in [('Fraunces', 'OFL-Fraunces.txt'), ('Public Sans', 'OFL-PublicSans.txt')]) {
+    yield LicenseEntryWithLineBreaks([font], await rootBundle.loadString('assets/fonts/$file'));
+  }
 }
 
 /// Sync passes run one after another: the timetable and eClass refreshes
