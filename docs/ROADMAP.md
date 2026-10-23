@@ -1,8 +1,9 @@
 # Roadmap
 
-Status as of 2026-10-23, branch `v2`. Milestone 2 had two phases, in this order:
-**A. finish the functionality**, then **B. overhaul the UI**. Both are done; nothing is
-pushed yet.
+Status as of 2026-10-23, branch `main` (the default on GitHub; `master` is the old milestone 1
+line, `v2` is where A and B were built). Milestone 2 had three phases, in this order:
+**A. finish the functionality**, **B. overhaul the UI**, **C. Android integrations**. All three
+are done.
 
 ## Done (milestone 1)
 
@@ -154,10 +155,56 @@ slop) and gives the app an identity.
    offline states and dark mode. Run DESIGN.md's review checklist on each screen.
 4. **App icon and splash** to match.
 
+## Phase C: Android integrations (done 2026-10-23)
+
+Built on branch `claude/phase-c-integrations-c11a93`, merged into `main`. Details in
+`docs/WIDGETS.md` and `docs/APPFUNCTIONS.md`.
+
+- **Shared native data layer** (`android/.../campus/`): reads `FlutterSharedPreferences.xml`
+  directly, no Dart engine, and ports the app's rules (urgency, absence, the today rail) and
+  wording. 50 JVM tests (`./gradlew :app:testDebugUnitTest`), synthetic data.
+- **Three Glance widgets**: Up next (small, wide, tall), Today (rail, overdue first, a
+  `Tomorrow` part for what falls due within 24 h so midnight homework shows the evening before),
+  Attendance (trouble first, tallies, VOD windows closing). Light and dark, real cached data,
+  taps open the item through the notification-tap routing. Checked on `Pixel_8_API_36` with
+  the student's data: placed, both themes, all three tap kinds.
+- **Five read-only AppFunctions** (`androidx.appfunctions` 1.0.0-beta01): next class, schedule,
+  deadlines, attendance, grades summary. Registered and executed through
+  `adb shell cmd app_function` on a second emulator, `Pixel_8_API_36_1` (Android 16 QPR2), the
+  first image having no shell command for it.
+- **CI**: `.github/workflows/release.yml` builds the signed release APKs on pushes to `main` and
+  `v*` tags (README, "CI"); the keystore goes in four repository secrets.
+
+Calls made without the student, to review:
+
+- **Fraunces in widgets is drawn as bitmaps.** Launchers inflate widget layouts in a restricted
+  context that ignores font resources, so the Fraunces lines are tinted bitmaps (text as their
+  content description, from the fonts the Flutter app already ships). Secondary lines are
+  real text in the system sans (Roboto), not Public Sans.
+- **Widgets follow the system theme**, not the app's Theme setting.
+- **Countdowns refresh with inexact, non-waking alarms** (every 5 min near a class, else at the
+  next change), so "in 40 min" can lag a few minutes; the start time next to it is exact. No
+  exact-alarm permission.
+- **Course names lose eClass's suffix even with a badge after it**: the dashboard titled one
+  course `Artificial Intelligence[202602-SOC4040-001]NEW`, which the app showed whole, with no
+  code. `Course.fromTitle` now drops anything after the bracket (Dart and Kotlin).
+- **compileSdk is 37** (the AppFunctions library needs it); targetSdk stays Flutter's 36.
+- **AppFunction results carry the data's age** (`timetableAsOf`, `eclassAsOf`, `insAsOf`) and
+  nothing beyond the question: no mail, logins, name, student ID or course codes.
+
+Waiting on the student: the phone model and Android version (Gemini's use of the functions is a
+preview on the Pixel 10 and Galaxy S26 in the US and Korea for now), and the four signing
+secrets for CI.
+
 ## How to work on this
 
-- **Repo:** `D:\coding\inha_app`, branch `v2`. Commit in small steps. Never add a Claude
-  co-author line. Don't push without the student's OK.
+- **Repo:** `D:\coding\inha_app`, branch `main` (GitHub default; public). Commit in small
+  steps. Never add a Claude co-author line. Don't push without the student's OK.
+- **Two emulators:** `Pixel_8_API_36` has the student's logins (use it for the app and the
+  widgets); `Pixel_8_API_36_1` (Android 16 QPR2) is the one with `cmd app_function`. The SDK
+  needs `platforms/android-37.0`; install with the `android` CLI
+  (`C:\Users\User\.android\bin\android-cli.exe --sdk=D:\ProgramFiles\Android\Sdk sdk install <pkg> < /dev/null`):
+  `sdkmanager.bat` from Git Bash splits `platforms;android-37.0` at the `;`.
 - **Never commit personal data.** Real eClass pages live in `test/fixtures/private/`
   (git-ignored); committed fixtures are anonymized or synthetic. Before committing, grep the
   staged files for the student's name and ID.

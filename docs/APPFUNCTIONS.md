@@ -19,8 +19,8 @@ classes, deadlines, attendance and grades without opening the app. Code:
   (targetSdk stays Flutter's).
 - **`adb shell cmd app_function` needs Android 16 QPR2 (API 36.1) or newer.** The first Android
   16 emulator image (BE2A.250530, the one with the student's logins) has the `app_function`
-  service but answers "No shell command implementation". Testing used a second emulator on the
-  36.1 image (below).
+  service but answers "No shell command implementation". Testing used a second emulator,
+  `Pixel_8_API_36_1` on the 36.1 image (BE4B.251210), with the app's cache copied over (below).
 
 ## What is exposed
 
@@ -67,16 +67,30 @@ when no course matches (the message lists the course names), and
 
 Unit tests: `cd android && ./gradlew :app:testDebugUnitTest` (includes `CampusFunctionsTest`).
 
-On a device or emulator with Android 16 QPR2+:
+On a device or emulator with Android 16 QPR2+. The function id is the annotated class's name
+(`BaseCampusAppFunctionService`, not the generated one), and a date is an object, not a string.
+From Git Bash, set `MSYS_NO_PATHCONV=1` and quote the whole shell command so the JSON survives:
 
 ```
-adb shell cmd app_function list-app-functions | grep -A3 inha_app
-adb shell cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.CampusAppFunctionService#getNextClass' --parameters '{}'
-adb shell cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.CampusAppFunctionService#getSchedule' --parameters '{"day":"2026-10-26"}'
-adb shell cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.CampusAppFunctionService#getUpcomingDeadlines' --parameters '{"withinDays":7}'
-adb shell cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.CampusAppFunctionService#getAttendance' --parameters '{"course":"multimedia"}'
-adb shell cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.CampusAppFunctionService#getGradesSummary' --parameters '{}'
+adb shell cmd app_function list-app-functions
+adb shell "cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.BaseCampusAppFunctionService#getNextClass' --parameters '{}' --brief-yaml"
+adb shell "cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.BaseCampusAppFunctionService#getSchedule' --parameters '{\"day\":{\"year\":2026,\"month\":10,\"dayOfMonth\":26}}' --brief-yaml"
+adb shell "cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.BaseCampusAppFunctionService#getUpcomingDeadlines' --parameters '{\"withinDays\":7}' --brief-yaml"
+adb shell "cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.BaseCampusAppFunctionService#getAttendance' --parameters '{\"course\":\"multimedia\"}' --brief-yaml"
+adb shell "cmd app_function execute-app-function --package uz.inha.kamol1dn.inha_app --function 'uz.inha.kamol1dn.inha_app.appfunctions.BaseCampusAppFunctionService#getGradesSummary' --parameters '{}' --brief-yaml"
 ```
 
-Add `--brief-yaml` for shorter output. `adb shell cmd app_function help` lists the rest
-(`set-enabled` turns one off for testing).
+`adb shell cmd app_function help` lists the rest (`set-enabled` turns one off for testing).
+
+**Checked on 2026-10-23** (36.1 emulator, the student's cache): all five are listed, enabled by
+default, with their KDoc as descriptions, and all five return the cached data (next class with
+room and teacher; Monday's two classes with the attendance warning on Artificial Intelligence;
+three open items with urgency and watch progress; one course's absences, limit and next class;
+GPA, credits and the last graded term). `getAttendance` with an unknown course returns code 1500
+with the list of course names; `withinDays: 0` returns code 1001 with the allowed range.
+
+To test without the student's phone: install the debug APK on the 36.1 emulator, copy the
+app's prefs from the other emulator (`run-as uz.inha.kamol1dn.inha_app cat
+shared_prefs/FlutterSharedPreferences.xml`, then `cat >` into the same path with `run-as` on
+the 36.1 one, app stopped), set `cmd alarm set-timezone Asia/Tashkent`, and afterwards
+`pm clear uz.inha.kamol1dn.inha_app` and delete the copy: it holds personal data.
