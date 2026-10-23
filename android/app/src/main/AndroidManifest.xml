@@ -89,6 +89,27 @@
         <receiver
             android:name=".widget.WidgetTickReceiver"
             android:exported="false" />
+
+        <!-- Gemini AppFunctions, Android 16+, read-only. KSP generates the service class and
+             assets/campus_app_functions.xml. See docs/APPFUNCTIONS.md. -->
+        <service
+            android:name=".appfunctions.CampusAppFunctionService"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE"
+            android:exported="true"
+            tools:targetApi="36">
+            <property
+                android:name="android.app.appfunctions.schema"
+                android:value="app_functions_schema.xsd" />
+            <property
+                android:name="android.app.appfunctions.v2"
+                android:value="campus_app_functions.xml" />
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+        <property
+            android:name="android.app.appfunctions.app_metadata"
+            android:resource="@xml/app_metadata" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

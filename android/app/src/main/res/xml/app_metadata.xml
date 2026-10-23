@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What an agent (Gemini) reads about the app as a whole (docs/APPFUNCTIONS.md). -->
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:instructions="Provides a university student's own data at Inha University in Tashkent (IUT), read from what the IUT app has cached on the phone: the class timetable, open coursework on eClass, class attendance against the absence limits the student set, and grades.
+Operational Patterns:
+  - 'getNextClass' answers where and when the next class is; 'getSchedule' lists one day.
+  - 'getUpcomingDeadlines' lists open work only; submitted assignments, attempted quizzes and fully watched lecture videos are left out.
+  - 'getAttendance' with a course name answers about one course; without one it lists every course, those near their absence limit first.
+Constraints:
+  - Read-only. The functions never go online, sign in or change anything; each result says when its data was last fetched.
+  - Times are the phone's local time (Asia/Tashkent, UTC+5).
+  - Absence limits come only from the student; when none is set the result says so and no limit is assumed.
+  - When data is missing the error says what the user can do in the IUT app."
+    appfn:displayDescription="@string/app_functions_display_description" />
