@@ -76,6 +76,27 @@ that source once). Plain `flutter build apk --release` makes one 55 MB APK for e
 kind: a split APK's version code is 2001 for 1.0.0+1, so a universal APK (code 1) can't update it. Without `key.properties` the
 release build falls back to the debug key, which is fine for testing but cannot update an installed signed copy.
 
+### CI
+
+`.github/workflows/release.yml` runs on every push to `main`, on `v*` tags and by hand (Actions,
+"Release APK", Run workflow). It runs `flutter analyze`, `flutter test`, builds
+`flutter build apk --release --split-per-abi`, runs the Android unit tests and uploads the APKs as an
+artifact; a `v*` tag also attaches them to a GitHub release.
+
+It signs with the same keystore as a local release build, read from four repository secrets. Set them
+once from Git Bash in the repository (each `gh secret set` without `--body` asks for the value, so no
+password lands in the shell history):
+
+```
+base64 -w0 /c/Users/User/.android/iut-release.jks | gh secret set IUT_KEYSTORE_BASE64
+gh secret set IUT_KEYSTORE_PASSWORD
+gh secret set IUT_KEY_ALIAS --body iut
+gh secret set IUT_KEY_PASSWORD
+```
+
+Without them a branch build still runs, but its APK is signed with a debug key (the artifact name ends
+in `-debug-key`) and cannot update the signed app on the phone; a tag build fails instead.
+
 ## Repository
 
 | Path | What |

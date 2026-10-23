@@ -1,0 +1,97 @@
+# Builds the signed release APKs (README, "CI"). Runs on every push to main, on v* tags (which
+# also attach the APKs to a GitHub release) and by hand from the Actions tab.
+name: Release APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # attach the APKs to the release on a tag
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+
+      # Platform 37 for the AppFunctions library (compileSdk 37), and the NDK Flutter 3.47 expects.
+      - name: Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null
+          "$sdkmanager" "platforms;android-37.0" "ndk;28.2.13676358" > /dev/null
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      # The keystore lives only in the repository secrets. Without them the build still runs, but
+      # Gradle falls back to the debug key; that APK cannot update a copy installed from a signed
+      # one, so the artifact says so in its name, and a tag fails instead.
+      - name: Release key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.IUT_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.IUT_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.IUT_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.IUT_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              echo "::error::A release tag needs the IUT_KEYSTORE_* secrets (README, CI)."
+              exit 1
+            fi
+            echo "::warning::No IUT_KEYSTORE_BASE64 secret: this APK is signed with a debug key and cannot update an installed signed copy (README, CI)."
+            echo "APK_SUFFIX=-debug-key" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/iut-release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/iut-release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=${KEY_ALIAS:-iut}"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+          echo "APK_SUFFIX=" >> "$GITHUB_ENV"
+
+      - run: flutter build apk --release --split-per-abi
+
+      # The Android side's JVM tests (campus/, appfunctions/); flutter build made the wrapper.
+      - name: Android unit tests
+        working-directory: android
+        run: ./gradlew :app:testReleaseUnitTest --console=plain
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: iut-apk-${{ github.ref_name }}-${{ github.run_number }}${{ env.APK_SUFFIX }}
+          path: build/app/outputs/flutter-apk/*-release.apk
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: build/app/outputs/flutter-apk/*-release.apk
+
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/iut-release.jks" android/key.properties
