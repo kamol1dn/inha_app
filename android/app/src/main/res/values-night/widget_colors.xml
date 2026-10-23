@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DESIGN.md 3, dark scheme: ink at night. -->
+<resources>
+    <color name="w_paper">#1A1814</color>
+    <color name="w_ink">#EDE7DA</color>
+    <color name="w_muted">#ADA696</color>
+    <color name="w_rule">#423D35</color>
+    <color name="w_primary">#9DBDE6</color>
+    <color name="w_ok">#8FC79A</color>
+    <color name="w_warning">#E3AE5B</color>
+    <color name="w_danger">#F0A08C</color>
+</resources>

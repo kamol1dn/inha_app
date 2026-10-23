@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Start and due times, counts beside a tally (numeral). -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@id/w_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fontFamily="@font/fraunces_regular"
+    android:textSize="15sp"
+    android:textColor="@color/w_ink"
+    android:includeFontPadding="false"
+    android:maxLines="1"
+    android:ellipsize="end"
+    android:fontFeatureSettings="tnum"
+    android:gravity="end" />

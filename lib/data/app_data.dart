@@ -138,6 +138,13 @@ class AppData extends ChangeNotifier {
   /// reminders are planned from. The app hooks the notifier in here.
   Future<void> Function()? onReminderDataChanged;
 
+  /// Called after a cache write the home-screen widgets read, a sign-out that
+  /// clears one, or a change to the absence limits. The app hooks the widget
+  /// update in here (docs/WIDGETS.md).
+  Future<void> Function()? onWidgetDataChanged;
+
+  static const _widgetCacheKeys = {'lessons', 'deadlines', 'attendance', 'grades'};
+
   void _readCache() {
     lessons = Snapshot(data: cache.read('lessons', _decodeList(Lesson.fromJson)));
     deadlines = Snapshot(data: cache.read('deadlines', _decodeList(Deadline.fromJson)));
@@ -321,6 +328,7 @@ class AppData extends ChangeNotifier {
       await cache.remove(key);
     }
     prefs.setAccountCheck(s, null);
+    unawaited(onWidgetDataChanged?.call());
     switch (s) {
       case Service.eclass:
         deadlines = const Snapshot();
@@ -346,6 +354,7 @@ class AppData extends ChangeNotifier {
 
   void setAbsenceLimit(int courseId, int? limit) {
     prefs.setAbsenceLimit(courseId, limit);
+    unawaited(onWidgetDataChanged?.call());
     notifyListeners();
   }
 
@@ -415,6 +424,7 @@ class AppData extends ChangeNotifier {
     try {
       final value = await fetch();
       set(Snapshot(data: await cache.write(key, value, encode)));
+      if (_widgetCacheKeys.contains(key)) unawaited(onWidgetDataChanged?.call());
       // Any fetch that got through is a working login (Settings shows when).
       if (service.needsLogin) _check(service, ok: true);
     } catch (e) {

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The TextView in every w_text_* layout. -->
+    <item name="w_text" type="id" />
+</resources>

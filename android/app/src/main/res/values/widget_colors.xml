@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widgets' palette: DESIGN.md 3, light scheme. values-night has the dark one. The launcher
+     resolves these with its own day/night setting, so the widgets follow the system theme. -->
+<resources>
+    <color name="w_paper">#F5F2EA</color>          <!-- surface -->
+    <color name="w_ink">#1C1B19</color>            <!-- onSurface -->
+    <color name="w_muted">#5C584F</color>          <!-- onSurfaceVariant -->
+    <color name="w_rule">#D8D1C2</color>           <!-- outlineVariant: rules, the rail line, faint tally strokes -->
+    <color name="w_primary">#1D4E89</color>        <!-- the accent: "Now"/"Next", the info status -->
+    <color name="w_ok">#2F6B3A</color>
+    <color name="w_warning">#8A5300</color>
+    <color name="w_danger">#A3321F</color>
+</resources>

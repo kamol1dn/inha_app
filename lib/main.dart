@@ -7,6 +7,7 @@ import 'app.dart';
 import 'data/app_data.dart';
 import 'data/services.dart';
 import 'notifications/background.dart';
+import 'notifications/home_widgets.dart';
 import 'notifications/notifier.dart';
 
 Future<void> main() async {
@@ -17,11 +18,15 @@ Future<void> main() async {
 
   final notifier = Notifier();
   // A tap while the app runs arrives here; one that started the app is the
-  // launch payload. HomeShell opens the item.
+  // launch payload. HomeShell opens the item. Home-screen widget taps carry
+  // the same keys and take the same path.
   final taps = NotificationTaps();
   await notifier.init(onTap: (r) => taps.value = r.payload);
   taps.value ??= await notifier.launchPayload();
+  taps.value ??= await widgetLaunchKey();
+  widgetTaps().listen((key) => taps.value = key);
   data.onReminderDataChanged = () => _syncReminders(notifier, data);
+  data.onWidgetDataChanged = updateHomeWidgets;
   await initBackground(backgroundMain);
   await registerPeriodicRefresh();
 
@@ -73,6 +78,7 @@ void backgroundMain() {
 Future<RefreshResult> refreshInBackground() async {
   final data = (await AppServices.open()).data;
   await Future.wait([data.refreshTimetable(), data.refreshEclass()]);
+  await updateHomeWidgets(); // awaited here: the isolate may end soon after
   return RefreshResult(
     deadlines: data.deadlines.data?.value,
     attendance: data.attendance.data?.value,

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The course under the room (titleLarge). -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@id/w_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fontFamily="@font/fraunces_italic"
+    android:textSize="16sp"
+    android:textColor="@color/w_ink"
+    android:includeFontPadding="false"
+    android:maxLines="1"
+    android:ellipsize="end" />

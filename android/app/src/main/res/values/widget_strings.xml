@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget picker (DESIGN.md 10: the fact, no exclamation marks). -->
+    <string name="w_up_next_name">Up next</string>
+    <string name="w_up_next_description">The next class with its room and time, and the next thing due</string>
+    <string name="w_today_name">Today</string>
+    <string name="w_today_description">The rest of today\'s classes and what is due today</string>
+    <string name="w_attendance_name">Attendance</string>
+    <string name="w_attendance_description">Absences against your limits, courses in trouble first, and VOD windows closing soon</string>
+</resources>

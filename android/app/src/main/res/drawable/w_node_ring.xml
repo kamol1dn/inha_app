@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rail node for a class: a 12 dp ring with a 2 dp stroke (DESIGN.md 5). White; tinted. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <size android:width="12dp" android:height="12dp" />
+    <stroke android:width="2dp" android:color="#FFFFFFFF" />
+</shape>

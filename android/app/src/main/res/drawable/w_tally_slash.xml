@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The fifth stroke of a tally gate: a diagonal through the four uprights (DESIGN.md 8).
+     A gate is 23 x 16 dp: four 2 dp strokes, 7 dp apart. White; the widget tints it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="23dp"
+    android:height="16dp"
+    android:viewportWidth="23"
+    android:viewportHeight="16">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M1,14.5L22,1.5" />
+</vector>

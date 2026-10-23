@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The room on Up next (displayMedium, scaled down for a widget). -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@id/w_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fontFamily="@font/fraunces_display_semibold"
+    android:textSize="30sp"
+    android:textColor="@color/w_ink"
+    android:includeFontPadding="false"
+    android:maxLines="1"
+    android:ellipsize="end"
+    android:fontFeatureSettings="tnum"
+    android:letterSpacing="-0.02" />

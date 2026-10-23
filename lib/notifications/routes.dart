@@ -27,11 +27,15 @@ class ScheduleTarget extends NotificationTarget {
   const ScheduleTarget(this.weekday);
 }
 
-/// The item is gone (submitted, moved, the course dropped): its tab.
+/// The item is gone (submitted, moved, the course dropped): its tab. A
+/// home-screen widget opens a tab directly with `tab:<n>`.
 class TabTarget extends NotificationTarget {
-  final int tab; // 1 Schedule, 2 Deadlines, 3 Courses
+  final int tab; // 0 Today, 1 Schedule, 2 Deadlines, 3 Courses
   const TabTarget(this.tab);
 }
+
+/// A widget's "open this tab" key (docs/WIDGETS.md).
+const tabKeyPrefix = 'tab:';
 
 NotificationTarget? notificationTarget(
   String key, {
@@ -54,6 +58,10 @@ NotificationTarget? notificationTarget(
   if (key.startsWith(classKeyPrefix)) {
     final day = DateTime.tryParse(key.substring(classKeyPrefix.length).split('|').first);
     return day == null ? const TabTarget(1) : ScheduleTarget(day.weekday);
+  }
+  if (key.startsWith(tabKeyPrefix)) {
+    final tab = int.tryParse(key.substring(tabKeyPrefix.length));
+    return tab != null && tab >= 0 && tab <= 3 ? TabTarget(tab) : null;
   }
   return null;
 }

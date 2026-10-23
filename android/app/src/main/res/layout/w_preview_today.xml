@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget picker's preview: the widget's paper and what it shows, no invented data. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/w_paper"
+    android:orientation="vertical"
+    android:padding="16dp">
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/fraunces_semibold"
+        android:textColor="@color/w_ink"
+        android:textSize="18sp"
+        android:text="@string/w_today_name" />
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="@color/w_rule" />
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/public_sans_regular"
+        android:textColor="@color/w_muted"
+        android:textSize="13sp"
+        android:text="@string/w_today_description" />
+</LinearLayout>
