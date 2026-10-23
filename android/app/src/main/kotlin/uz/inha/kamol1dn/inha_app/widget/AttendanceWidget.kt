@@ -8,9 +8,11 @@ import androidx.glance.GlanceModifier
 import androidx.glance.LocalState
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
@@ -41,6 +43,9 @@ import uz.inha.kamol1dn.inha_app.campus.eclassStaleAfter
  * the other courses. Each row taps through to its course or its VOD.
  */
 class AttendanceWidget : GlanceAppWidget() {
+    // Exact: every Fraunces line's width budget comes from the real size.
+    override val sizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             LocalState.current // read so that every update() recomposes and the cache is read again
@@ -85,12 +90,12 @@ fun AttendanceContent(c: Campus, now: LocalDateTime) {
 
     PaperFrame(TapKeys.tab(3)) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            PText("Attendance", Face.HEADLINE, GlanceModifier.defaultWeight())
+            Box(GlanceModifier.defaultWeight()) { PText("Attendance", Face.HEADLINE, maxWidth = lineWidth() - 110.dp) }
             asOf(c.attendance, now, eclassStaleAfter)?.let { StaleMarker(it) }
         }
         Spacer(GlanceModifier.height(8.dp))
         Rule()
-        LazyColumn(GlanceModifier.fillMaxWidth()) {
+        LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
             items(entries.size) { i -> EntryView(entries[i], now) }
         }
     }
@@ -125,7 +130,8 @@ private fun CourseRow(line: CourseLine, now: LocalDateTime) {
         verticalAlignment = Alignment.Top,
     ) {
         Column(GlanceModifier.defaultWeight()) {
-            PText(line.c.course.name, Face.COURSE)
+            val side = if (line.c.classes.isEmpty()) 0 else maxOf(tallyWidth(a), 48) + 12
+            PText(line.c.course.name, Face.COURSE, maxWidth = lineWidth() - side.dp)
             val text = Words.courseLine(line, now)
             if (status != null) StatusLine(status, text) else PText(text, Face.BODY)
             Words.vodLine(line.c)?.let { PText(it, Face.BODY) }
@@ -138,7 +144,7 @@ private fun CourseRow(line: CourseLine, now: LocalDateTime) {
             ) {
                 Tally(a)
                 Spacer(GlanceModifier.height(4.dp))
-                PText(a.count, Face.NUMERAL, GlanceModifier.width(64.dp), color = status?.color() ?: R.color.w_muted)
+                PText(a.count, Face.NUMERAL, color = status?.color() ?: R.color.w_muted, maxWidth = 64.dp)
             }
         }
     }
@@ -154,10 +160,12 @@ private fun VodRow(r: DueRow, now: LocalDateTime) {
         Column(GlanceModifier.defaultWeight()) {
             PText(Fmt.rowTitle(d.title), Face.ITEM)
             val text = Words.dueWarning(d, r.vod, now)
-            if (r.status != null) StatusLine(r.status, text) else PText(text, Face.BODY)
+            if (r.status != null) StatusLine(r.status, text, maxLines = 2) else PText(text, Face.BODY, maxLines = 2)
             PText(courseName(d.courseName), Face.BODY)
         }
         Spacer(GlanceModifier.width(12.dp))
-        PText(Fmt.relative(d.end, now), Face.NUMERAL, GlanceModifier.width(84.dp), color = r.status?.color())
+        Box(GlanceModifier.width(84.dp), contentAlignment = Alignment.TopEnd) {
+            PText(Fmt.relative(d.end, now), Face.NUMERAL, color = r.status?.color(), maxWidth = 84.dp)
+        }
     }
 }

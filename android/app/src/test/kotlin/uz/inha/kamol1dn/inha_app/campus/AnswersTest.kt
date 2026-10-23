@@ -58,6 +58,21 @@ class AnswersTest {
     }
 
     @Test
+    fun todayLooks24HoursAheadSoMidnightWorkShowsTheEveningBefore() {
+        val midnight = Deadline("Homework 3", "Multimedia Computing", DeadlineKind.ASSIGNMENT, at(24, 0), moduleId = 107)
+        val all = deadlines + midnight
+        val evening = todayPlan(lessons, all, att, c.limits, at(23, 19))
+        assertEquals(listOf("Homework 3"), evening.tomorrow.map { it.deadline.title })
+        assertEquals(Status.WARNING, evening.tomorrow.single().status)
+        // Not counted twice: today's rows end at midnight.
+        assertTrue(evening.rows.none { it is DueRow && it.deadline.title == "Homework 3" })
+        // Due tomorrow at 23:59, more than 24 h after 13:20: not yet.
+        assertTrue(todayPlan(lessons, all, att, c.limits, fri).tomorrow.none { it.deadline.title.startsWith("[QUIZ]") })
+        // Within 24 h it is.
+        assertTrue(todayPlan(lessons, all, att, c.limits, at(24, 0).plusMinutes(1)).rows.any { it is DueRow && it.deadline.title.startsWith("[QUIZ]") })
+    }
+
+    @Test
     fun todayAfterTheLastClassPointsToTheNextDay() {
         val p = todayPlan(lessons, deadlines, att, c.limits, at(23, 18))
         assertEquals(NoteRow(NoteKind.NO_MORE_CLASSES, null), p.rows.first())

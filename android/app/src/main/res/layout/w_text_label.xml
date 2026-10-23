@@ -4,7 +4,7 @@
     android:id="@id/w_text"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:fontFamily="@font/public_sans_semibold"
+    android:fontFamily="sans-serif-medium"
     android:textSize="13sp"
     android:textColor="@color/w_primary"
     android:includeFontPadding="false"

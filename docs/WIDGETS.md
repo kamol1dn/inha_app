@@ -6,13 +6,14 @@ Three widgets, drawn on the Android side from the app's cache. Code:
 | Widget | Default size | Shows | A tap opens |
 |---|---|---|---|
 | **Up next** | 2 × 2 (resizes from 110 dp) | The class in progress or the next one: `Next · in 40 min`, the room, the course, and the next open eClass item with its due time. Tall, it adds the time, kind, teacher and the course's attendance warning; wide, class and item sit side by side | The class: Schedule on its day. The item: its deadline sheet. Elsewhere: Today |
-| **Today** | 3 × 2 | Today's date, then a small rail: overdue items first, the class in progress (`Now · until 15:30`), the classes still to come and what is due today, in time order, then `Free for the rest of the day` or `No more classes today` and `Next: Mon 26 Oct, 09:00 Multimedia Computing, B-305.` Scrolls | A class: Schedule on its day. An item: its deadline sheet. Elsewhere: Today |
+| **Today** | 3 × 2 | Today's date, then a small rail: overdue items first, the class in progress (`Now · until 15:30`), the classes still to come and what is due today, in time order, then `Free for the rest of the day` or `No more classes today`; then, under `Tomorrow`, whatever falls due after midnight but within 24 h (so homework due at 00:00 shows the evening before), and `Next: Mon 26 Oct, 09:00 Multimedia Computing, B-305.` Scrolls | A class: Schedule on its day. An item: its deadline sheet. Elsewhere: Today |
 | **Attendance** | 3 × 2 | Courses at or near their absence limit (tally, `6 of 8`, `2 left · next Mon 13:00`), then the unwatched VOD windows closing within 72 h, then the other courses in timetable order. Scrolls | A course: course detail. A VOD: its deadline sheet. Elsewhere: Courses |
 
 They follow DESIGN.md: paper and ink in light and dark (the launcher picks with the system theme),
-Fraunces for rooms, course names and numbers, Public Sans for the rest, thin rules, status as icon
-plus words through a `StatusLine`, the rail's nodes and line, and the tally drawn with the
-uprights and diagonal of section 8. Nothing on them is invented: every value is from the cache.
+Fraunces for titles, rooms, course names and numbers, thin rules, status as icon plus words through
+a `StatusLine`, the rail's nodes and line, and the tally drawn with the uprights and diagonal of
+section 8. Nothing on them is invented: every value is from the cache. The one departure: the
+secondary lines are in the system sans (Roboto), not Public Sans (see below).
 
 ## How they work
 
@@ -33,11 +34,18 @@ Flutter app / WorkManager refresh ──cache.write──▶ FlutterSharedPrefer
   courses named, never coded (an eClass `[202602-AIE3010-001]` suffix is cut). The wording
   (`Due in 5 h · not submitted`, `62% watched, 21 min left`, `2 left · next Mon 13:00`) is the
   app's, from `lib/features/rail_rows.dart` and `courses_screen.dart`.
-- **Text in the app's faces.** Glance's own `Text` can only use system fonts, so each text style
-  is a one-`TextView` layout (`res/layout/w_text_*.xml`) with a font resource (`res/font/`,
-  copies of the bundled Fraunces and Public Sans, about 430 KB), embedded with
-  `AndroidRemoteViews`. It is real text: TalkBack reads it and it follows the system font size.
-  Colours are resources with a `values-night` twin (`widget_colors.xml`).
+- **Fonts.** A widget's layout is inflated by the launcher in a restricted context, where
+  `TextView` ignores font resources (`android:fontFamily="@font/..."` silently falls back to
+  Roboto), and Glance's own `Text` only knows system families. So the Fraunces roles (titles,
+  the room, course names, times, counts) are drawn by `widget/Serif.kt` into a white mask bitmap
+  with the Fraunces files the Flutter app already ships (`flutter_assets/assets/fonts`, nothing
+  bundled twice), at the system font scale, with tabular figures, ellipsized to the width the
+  row has, and shown as an `Image` tinted with the theme colour; its content description is the
+  text, so TalkBack reads it. The Public Sans roles (item titles, secondary lines) stay real
+  `TextView`s (`res/layout/w_text_*.xml`) in the system sans. Colours are resources with a
+  `values-night` twin (`widget_colors.xml`).
+- **Sizes.** `SizeMode.Exact`, so the layout (Up next: small, wide or tall) and each Fraunces
+  line's width come from the widget's real size.
 - **Refresh.** The app calls `updateHomeWidgets()` (`lib/notifications/home_widgets.dart`)
   after every cache write the widgets read (timetable, deadlines, attendance, grades), after
   signing out of a service and after an absence limit changes (`AppData.onWidgetDataChanged`).
@@ -89,5 +97,8 @@ They never go blank. Without data they say what is missing and what to do:
   colours with its configuration.
 - **Below Android 12** the widget has square corners and the colours are fixed when it is drawn
   (they update on the next redraw after a theme change).
-- **The picker preview** is a static paper card with the widget's name and description; it
-  shows no data until the widget is placed.
+- **The picker preview** is a static paper card with the widget's name and description (in the
+  system serif and sans; a preview can't load fonts either); it shows no data until the widget
+  is placed.
+- **Long names are cut to one line** in rows, as in the app; the course's own screen has the
+  full name.

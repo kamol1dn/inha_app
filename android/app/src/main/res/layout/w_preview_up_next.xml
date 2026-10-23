@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The widget picker's preview: the widget's paper and what it shows, no invented data. -->
+<!-- The widget picker's preview: the widget's paper and what it shows, no invented data.
+     RemoteViews allow only some view classes, so the rule is a FrameLayout, not a View. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -9,11 +10,12 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:fontFamily="@font/fraunces_semibold"
+        android:fontFamily="serif"
+        android:textStyle="bold"
         android:textColor="@color/w_ink"
         android:textSize="18sp"
         android:text="@string/w_up_next_name" />
-    <View
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginTop="8dp"
@@ -22,7 +24,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:fontFamily="@font/public_sans_regular"
+        android:fontFamily="sans-serif"
         android:textColor="@color/w_muted"
         android:textSize="13sp"
         android:text="@string/w_up_next_description" />

@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Rail node for a class: a 12 dp ring with a 2 dp stroke (DESIGN.md 5). White; tinted. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <size android:width="12dp" android:height="12dp" />
-    <stroke android:width="2dp" android:color="#FFFFFFFF" />
-</shape>
+<!-- Rail node for a class: a 12 dp ring with a 2 dp stroke (DESIGN.md 5). White; tinted.
+     A vector, not a shape: a tinted stroke-only shape drawable is drawn filled. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="12dp"
+    android:height="12dp"
+    android:viewportWidth="12"
+    android:viewportHeight="12">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:pathData="M6,1A5,5 0 1,1 6,11A5,5 0 1,1 6,1Z" />
+</vector>

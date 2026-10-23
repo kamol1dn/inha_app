@@ -13,6 +13,7 @@ import androidx.glance.LocalState
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -54,6 +55,9 @@ import uz.inha.kamol1dn.inha_app.campus.todayPlan
  * the next one.
  */
 class TodayWidget : GlanceAppWidget() {
+    // Exact: every Fraunces line's width budget comes from the real size.
+    override val sizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             LocalState.current // read so that every update() recomposes and the cache is read again
@@ -91,6 +95,11 @@ fun TodayContent(c: Campus, now: LocalDateTime) {
             plan.overdue.forEachIndexed { i, r -> add(Line.Item(r, i > 0, i < plan.overdue.lastIndex)) }
         }
         plan.rows.forEachIndexed { i, r -> add(Line.Item(r, i > 0, i < plan.rows.lastIndex)) }
+        if (plan.tomorrow.isNotEmpty()) {
+            // Due after midnight but within 24 h, so work due at 00:00 shows the evening before.
+            add(Line.Header("Tomorrow", null))
+            plan.tomorrow.forEachIndexed { i, r -> add(Line.Item(r, i > 0, i < plan.tomorrow.lastIndex)) }
+        }
         plan.next?.let { s ->
             val room = s.lesson.room.ifEmpty { "room not set" }
             add(Line.Note("Next: ${Fmt.dayDate(s.start, now)}, ${s.lesson.start} ${s.lesson.subject}, $room.", TapKeys.schedule(s.day)))
@@ -101,7 +110,7 @@ fun TodayContent(c: Campus, now: LocalDateTime) {
         PText(Fmt.dayDate(now, now), Face.HEADLINE)
         Spacer(GlanceModifier.height(8.dp))
         Rule()
-        LazyColumn(GlanceModifier.fillMaxWidth()) {
+        LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
             items(lines.size) { i -> LineView(lines[i], now) }
         }
     }
@@ -115,7 +124,7 @@ private fun LineView(line: Line, now: LocalDateTime) {
                 Image(ImageProvider(line.status.icon()), null, GlanceModifier.size(16.dp), colorFilter = tint(line.status.color()))
                 Spacer(GlanceModifier.width(6.dp))
             }
-            PText(line.text, Face.COURSE, color = line.status?.color())
+            PText(line.text, Face.COURSE, color = line.status?.color(), maxWidth = lineWidth() - 22.dp)
         }
         is Line.Note -> {
             val m = GlanceModifier.fillMaxWidth().padding(vertical = 6.dp)
@@ -132,7 +141,7 @@ private fun LineView(line: Line, now: LocalDateTime) {
                     onClick = open(TapKeys.schedule(r.slot.day)),
                 ) {
                     if (r.current) PText(Words.classLabel(r.slot, now), Face.LABEL)
-                    PText(l.subject, Face.COURSE)
+                    PText(l.subject, Face.COURSE, maxWidth = lineWidth() - 66.dp)
                     PText(Words.lessonMeta(l).ifEmpty { "Room not set" }, Face.BODY)
                     r.trouble?.let { StatusLine(it.status!!, Words.absenceWarning(it), maxLines = 2) }
                 }
@@ -194,9 +203,9 @@ private fun RailRow(
 ) {
     val m = GlanceModifier.fillMaxWidth()
     Row(if (onClick != null) m.clickable(onClick) else m) {
-        Column(GlanceModifier.width(42.dp).padding(top = 6.dp)) {
-            if (start != null) PText(start, Face.NUMERAL, color = timeColor)
-            if (end != null) PText(end, Face.NUMERAL_SMALL)
+        Column(GlanceModifier.width(42.dp).padding(top = 6.dp), horizontalAlignment = Alignment.End) {
+            if (start != null) PText(start, Face.NUMERAL, color = timeColor, maxWidth = 42.dp)
+            if (end != null) PText(end, Face.NUMERAL_SMALL, maxWidth = 42.dp)
         }
         Box(GlanceModifier.width(24.dp).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
             Column(GlanceModifier.width(2.dp).fillMaxHeight()) {

@@ -7,6 +7,7 @@ import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
 import androidx.annotation.LayoutRes
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.glance.ColorFilter
@@ -14,6 +15,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.AndroidRemoteViews
@@ -32,6 +34,8 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.layout.wrapContentHeight
+import androidx.glance.layout.wrapContentWidth
 import androidx.glance.unit.ColorProvider
 import es.antonborri.home_widget.actionStartActivity
 import uz.inha.kamol1dn.inha_app.MainActivity
@@ -60,23 +64,37 @@ fun Status.icon(): Int = when (this) {
     Status.INFO -> R.drawable.w_ic_info
 }
 
-/** The text styles of DESIGN.md 4, scaled for a widget. Each is a layout with one TextView. */
-enum class Face(@LayoutRes val layout: Int) {
-    ROOM(R.layout.w_text_room),
-    HEADLINE(R.layout.w_text_headline),
-    COURSE_ITALIC(R.layout.w_text_course_italic),
-    COURSE(R.layout.w_text_course),
+/**
+ * The text styles of DESIGN.md 4, scaled for a widget. Fraunces roles are drawn by [Serif];
+ * the Public Sans roles are a layout with one TextView in the system sans, since a widget can't
+ * load the app's fonts as resources.
+ */
+enum class Face(@LayoutRes val layout: Int = 0, val serif: SerifFace? = null, @ColorRes val color: Int = R.color.w_ink) {
+    ROOM(serif = SerifFace.ROOM),
+    HEADLINE(serif = SerifFace.HEADLINE),
+    COURSE_ITALIC(serif = SerifFace.COURSE_ITALIC),
+    COURSE(serif = SerifFace.COURSE),
     ITEM(R.layout.w_text_item),
-    BODY(R.layout.w_text_body),
-    LABEL(R.layout.w_text_label),
-    NUMERAL(R.layout.w_text_numeral),
-    NUMERAL_SMALL(R.layout.w_text_numeral_small),
-    SMALL(R.layout.w_text_small),
+    BODY(R.layout.w_text_body, color = R.color.w_muted),
+    LABEL(R.layout.w_text_label, color = R.color.w_primary),
+    NUMERAL(serif = SerifFace.NUMERAL),
+    NUMERAL_SMALL(serif = SerifFace.NUMERAL_SMALL, color = R.color.w_muted),
+    SMALL(R.layout.w_text_small, color = R.color.w_muted),
 }
 
+/** The widget's width minus PaperFrame's padding: what a full-width line may use. */
+@Composable
+fun lineWidth(): Dp = LocalSize.current.width - 32.dp
+
 /**
- * Text in one of the app's faces. Glance's own Text can only use system fonts, so this is a
- * plain TextView from an XML layout: real text, read by TalkBack, sized in sp.
+ * Text in one of the app's faces. A Fraunces face is a tinted bitmap (see [Serif]) at most
+ * [maxWidth] wide, ellipsized, with the text as its content description; it wraps its size,
+ * so align it with its container. A Public Sans face is a real TextView: read by TalkBack,
+ * sized in sp.
+ *
+ * Glance hosts a TextView in a frame that is match_parent unless told otherwise (on Android
+ * 13+), so its height is always wrapped and its width fills; pass a width (or
+ * `wrapContentWidth()` inside a Row) to change that.
  */
 @Composable
 fun PText(
@@ -85,14 +103,21 @@ fun PText(
     modifier: GlanceModifier = GlanceModifier,
     @ColorRes color: Int? = null,
     maxLines: Int = 1,
+    maxWidth: Dp? = null,
 ) {
     val context = LocalContext.current
+    val serif = face.serif
+    if (serif != null) {
+        val bitmap = Serif.bitmap(context, text, serif, (maxWidth ?: lineWidth()).value, maxLines)
+        Image(ImageProvider(bitmap), contentDescription = text, modifier = modifier, colorFilter = tint(color ?: face.color))
+        return
+    }
     val rv = RemoteViews(context.packageName, face.layout).apply {
         setTextViewText(R.id.w_text, text)
         if (maxLines != 1) setInt(R.id.w_text, "setMaxLines", maxLines)
         if (color != null) setTextColorRes(context, color)
     }
-    AndroidRemoteViews(rv, modifier)
+    AndroidRemoteViews(rv, GlanceModifier.fillMaxWidth().wrapContentHeight().then(modifier))
 }
 
 private fun RemoteViews.setTextColorRes(context: Context, @ColorRes color: Int) {
@@ -131,7 +156,7 @@ fun StaleMarker(text: String, modifier: GlanceModifier = GlanceModifier) {
             colorFilter = tint(R.color.w_warning),
         )
         Spacer(GlanceModifier.width(4.dp))
-        PText(text, Face.SMALL, color = R.color.w_warning)
+        PText(text, Face.SMALL, GlanceModifier.wrapContentWidth(), color = R.color.w_warning)
     }
 }
 
@@ -185,6 +210,16 @@ fun Tally(state: AbsenceState) {
             }
         }
     }
+}
+
+/** How wide [Tally] draws for [state], in dp; 0 when it draws nothing. */
+fun tallyWidth(state: AbsenceState): Int {
+    val total = maxOf(state.used, state.limit ?: 0)
+    if (total == 0 || total > 20) return 0
+    val gates = (total + 4) / 5
+    val last = total - (gates - 1) * 5
+    val lastWidth = if (last == 5) 23 else last * 2 + (last - 1) * 5
+    return (gates - 1) * (23 + 10) + lastWidth
 }
 
 @Composable

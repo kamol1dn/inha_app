@@ -2,7 +2,7 @@ package uz.inha.kamol1dn.inha_app.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -46,19 +46,14 @@ import uz.inha.kamol1dn.inha_app.campus.vodFor
  * everything with the time, kind and attendance warning.
  */
 class UpNextWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Responsive(setOf(SMALL, WIDE, TALL))
+    // Exact: the layout and every Fraunces line's width budget come from the real size.
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             LocalState.current // read so that every update() recomposes and the cache is read again
             UpNextContent(Campus.read(context), LocalDateTime.now())
         }
-    }
-
-    companion object {
-        val SMALL = DpSize(110.dp, 110.dp)
-        val WIDE = DpSize(250.dp, 110.dp)
-        val TALL = DpSize(180.dp, 180.dp)
     }
 }
 
@@ -73,7 +68,8 @@ fun UpNextContent(c: Campus, now: LocalDateTime) {
     PaperFrame(TapKeys.tab(0)) {
         if (size.height < 170.dp && size.width >= 240.dp) {
             Row(GlanceModifier.fillMaxSize()) {
-                ClassBlock(c, u, now, detail = false, modifier = GlanceModifier.defaultWeight().fillMaxHeight())
+                val half = (lineWidth() - 25.dp) / 2
+                ClassBlock(c, u, now, detail = false, textWidth = half, modifier = GlanceModifier.defaultWeight().fillMaxHeight())
                 Spacer(GlanceModifier.width(12.dp))
                 Box(GlanceModifier.width(1.dp).fillMaxHeight().background(ColorProvider(R.color.w_rule))) {}
                 Spacer(GlanceModifier.width(12.dp))
@@ -81,7 +77,7 @@ fun UpNextContent(c: Campus, now: LocalDateTime) {
             }
         } else {
             val tall = size.height >= 170.dp
-            ClassBlock(c, u, now, detail = tall, modifier = GlanceModifier.fillMaxWidth())
+            ClassBlock(c, u, now, detail = tall, textWidth = lineWidth(), modifier = GlanceModifier.fillMaxWidth())
             Spacer(GlanceModifier.defaultWeight())
             Rule()
             Spacer(GlanceModifier.height(6.dp))
@@ -91,7 +87,7 @@ fun UpNextContent(c: Campus, now: LocalDateTime) {
 }
 
 @Composable
-private fun ClassBlock(c: Campus, u: UpNext, now: LocalDateTime, detail: Boolean, modifier: GlanceModifier) {
+private fun ClassBlock(c: Campus, u: UpNext, now: LocalDateTime, detail: Boolean, textWidth: Dp, modifier: GlanceModifier) {
     val slot = u.slot
     val m = if (slot != null) modifier.clickable(open(TapKeys.schedule(slot.day))) else modifier
     Column(m) {
@@ -102,11 +98,11 @@ private fun ClassBlock(c: Campus, u: UpNext, now: LocalDateTime, detail: Boolean
                 val l = slot.lesson
                 PText(Words.classLabel(slot, now), Face.LABEL)
                 if (l.room.isEmpty()) {
-                    PText("Room not set", Face.COURSE, color = R.color.w_muted)
+                    PText("Room not set", Face.COURSE, color = R.color.w_muted, maxWidth = textWidth)
                 } else {
-                    PText(l.room, Face.ROOM)
+                    PText(l.room, Face.ROOM, maxWidth = textWidth)
                 }
-                PText(l.subject, Face.COURSE_ITALIC)
+                PText(l.subject, Face.COURSE_ITALIC, maxWidth = textWidth)
                 if (detail) {
                     Spacer(GlanceModifier.height(2.dp))
                     PText(listOf(Fmt.range(slot.start, slot.end), l.kind, l.teacher).filter { it.isNotEmpty() }.joinToString(" · "), Face.BODY)
@@ -130,7 +126,8 @@ private fun DueBlock(c: Campus, u: UpNext, now: LocalDateTime, compact: Boolean,
                 val status = deadlineStatus(due, now)
                 val line = Words.dueWhen(due, vodFor(due, c.attendance?.value.orEmpty()), now)
                 PText(Fmt.rowTitle(due.title), Face.ITEM, maxLines = if (compact) 1 else 2)
-                if (status != null) StatusLine(status, line) else PText(line, Face.BODY)
+                val lines = if (compact) 1 else 2
+                if (status != null) StatusLine(status, line, maxLines = lines) else PText(line, Face.BODY, maxLines = lines)
                 if (!compact) PText(courseName(due.courseName), Face.BODY)
             }
         }

@@ -45,9 +45,15 @@ data class NoteRow(val kind: NoteKind, val at: LocalDateTime?) : TodayRow
 /**
  * The rest of today, as Today's rail has it (lib/data/rail.dart): overdue items, the class in
  * progress, the classes still to come and what is due today, in time order, then a closing note.
- * [next] is the first class after today, for when today has no more.
+ * [tomorrow] is what falls due after midnight but within 24 h of now, so work due at 00:00
+ * shows the evening before. [next] is the first class after today, for when today has no more.
  */
-data class TodayPlan(val overdue: List<DueRow>, val rows: List<TodayRow>, val next: ClassSlot?)
+data class TodayPlan(
+    val overdue: List<DueRow>,
+    val rows: List<TodayRow>,
+    val next: ClassSlot?,
+    val tomorrow: List<DueRow> = emptyList(),
+)
 
 fun todayPlan(
     lessons: List<Lesson>?,
@@ -84,7 +90,9 @@ fun todayPlan(
         if (upcoming.isEmpty()) next = nextLesson(lessons, tomorrow)
     }
     timed.sortWith(compareBy({ it.first }, { it.second }))
-    return TodayPlan(overdue, timed.map { it.third }, next)
+    val dayAhead = now.plusHours(24)
+    val tomorrowDue = due.filter { !it.end.isBefore(tomorrow) && !it.end.isAfter(dayAhead) }.map(::row)
+    return TodayPlan(overdue, timed.map { it.third }, next, tomorrowDue)
 }
 
 /** A course on the attendance widget: its absences and its next class. */
