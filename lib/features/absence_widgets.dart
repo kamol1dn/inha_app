@@ -66,7 +66,8 @@ class _TallyPainter extends CustomPainter {
       ..color = i < used ? usedColor : faintColor
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < total; i++) {
+    // The faint strokes first, so a gate's faint diagonal never cuts an inked upright.
+    for (final i in [for (var i = used; i < total; i++) i, for (var i = 0; i < used && i < total; i++) i]) {
       final x0 = _left + (i ~/ 5) * _pitch;
       if (i % 5 == 4) {
         canvas.drawLine(Offset(x0 - 2, h * 0.72), Offset(x0 + 3 * _step + 2, h * 0.28), pen(i));
