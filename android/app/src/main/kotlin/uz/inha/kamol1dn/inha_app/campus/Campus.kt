@@ -111,12 +111,16 @@ internal class CacheJson(private val zone: ZoneId) {
         doneAt = j.timeOrNull("doneAt"),
     )
 
-    fun course(j: JSONObject) = Course(
-        id = j.getInt("id"),
-        name = j.getString("name"),
-        code = j.str("code"),
-        professor = j.str("professor"),
-    )
+    /** Older caches can hold a name with eClass's code suffix still on; it is cut here. */
+    fun course(j: JSONObject): Course {
+        val raw = j.getString("name")
+        return Course(
+            id = j.getInt("id"),
+            name = courseName(raw),
+            code = j.str("code").ifEmpty { courseCode(raw) ?: "" },
+            professor = j.str("professor"),
+        )
+    }
 
     fun courseAttendance(j: JSONObject) = CourseAttendance(
         course = course(j.getJSONObject("course")),

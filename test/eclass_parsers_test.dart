@@ -10,6 +10,23 @@ String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
 DateTime unix(int seconds) => DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
 
 void main() {
+  group('Course.fromTitle', () {
+    test('drops the term-code-section bracket', () {
+      final c = Course.fromTitle(1, 'Multimedia Computing[202602-SOC4020-001]');
+      expect((c.name, c.code), ('Multimedia Computing', 'SOC4020'));
+    });
+
+    test('drops a badge after the bracket, so the name is never a code', () {
+      final c = Course.fromTitle(2622, 'Artificial Intelligence[202602-SOC4040-001]NEW');
+      expect((c.name, c.code), ('Artificial Intelligence', 'SOC4040'));
+      expect(Course.fromTitle(1, 'Artificial Intelligence [202602-SOC4040-001] NEW').name, 'Artificial Intelligence');
+    });
+
+    test('keeps a title without the bracket', () {
+      expect(Course.fromTitle(1, 'Mental Education').name, 'Mental Education');
+    });
+  });
+
   group('parseCourses', () {
     final courses = parseCourses(fixture('eclass_dashboard.html'));
 

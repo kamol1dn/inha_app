@@ -55,6 +55,14 @@ class CampusTest {
     }
 
     @Test
+    fun cachedCourseNamesLoseACodeSuffix() {
+        val att = """{"at":"2026-10-23T12:00:00.000","value":[{"course":{"id":2622,"name":"Artificial Intelligence[202602-SOC4040-001]NEW","code":"","professor":""},"classes":[],"vods":[]}]}"""
+        val course = campus("cache.attendance" to att).attendance!!.value.single().course
+        assertEquals("Artificial Intelligence", course.name)
+        assertEquals("SOC4040", course.code)
+    }
+
+    @Test
     fun limitsSkipMalformedEntries() {
         assertEquals(mapOf(2622 to 8, 2626 to 8), campus().limits)
     }

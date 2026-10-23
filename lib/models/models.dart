@@ -32,9 +32,10 @@ class Course {
     this.professor = '',
   });
 
-  /// Splits eClass's "Name[202602-SOC4020-001]" title.
+  /// Splits eClass's "Name[202602-SOC4020-001]" title. Anything after the
+  /// bracket is dropped too: the dashboard appends a "NEW" badge to some.
   factory Course.fromTitle(int id, String title, {String professor = ''}) {
-    final m = RegExp(r'^(.*?)\s*\[\d+-([A-Z]+\d+)-\d+\]\s*$').firstMatch(title.trim());
+    final m = RegExp(r'^(.*?)\s*\[\d+-([A-Z]+\d+)-\d+\][\s\S]*$').firstMatch(title.trim());
     return Course(
       id: id,
       name: (m?.group(1) ?? title).trim(),

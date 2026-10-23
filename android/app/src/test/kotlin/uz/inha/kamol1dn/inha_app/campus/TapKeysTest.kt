@@ -28,6 +28,9 @@ class TapKeysTest {
     fun courseNameDropsTheEclassSuffix() {
         assertEquals("Artificial Intelligence", courseName("Artificial Intelligence[202602-AIE3010-001]"))
         assertEquals("Lab Course", courseName("Lab  Course"))
+        // The dashboard appends a "NEW" badge to some titles.
+        assertEquals("Artificial Intelligence", courseName("Artificial Intelligence[202602-SOC4040-001]NEW"))
+        assertEquals("SOC4040", courseCode("Artificial Intelligence[202602-SOC4040-001]NEW"))
         assertEquals("Embedded Software & Design", courseName(" Embedded  Software & Design "))
     }
 

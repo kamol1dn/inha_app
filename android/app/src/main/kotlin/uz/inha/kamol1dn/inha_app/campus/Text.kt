@@ -20,17 +20,20 @@ fun clean(s: String) = dartTrim(s.replace(spaces, " "))
 /** Case and spacing ignored, for matching names. */
 fun norm(s: String) = clean(s).lowercase()
 
-private val courseTitle = Regex("^(.*?)\\s*\\[\\d+-([A-Z]+\\d+)-\\d+]\\s*$")
+private val courseTitle = Regex("^(.*?)\\s*\\[\\d+-([A-Z]+\\d+)-\\d+][\\s\\S]*$")
 
 /**
- * A course name without eClass's "[202602-SOC4020-001]" suffix, should one slip through
- * (`Course.fromTitle` and `_courseName` in the app): names, never codes.
+ * A course name without eClass's "[202602-SOC4020-001]" suffix (and a "NEW" badge after it),
+ * should one slip through (`Course.fromTitle` and `_courseName` in the app): names, never codes.
  */
 fun courseName(s: String): String {
     val title = clean(s)
     val m = courseTitle.find(title)
     return clean(m?.groupValues?.get(1) ?: title)
 }
+
+/** The code in such a suffix ("SOC4040"), or null. */
+fun courseCode(s: String): String? = courseTitle.find(clean(s))?.groupValues?.get(2)
 
 private val wd = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 private val mon = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
