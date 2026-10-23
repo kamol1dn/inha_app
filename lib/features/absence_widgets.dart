@@ -8,58 +8,95 @@ import '../models/models.dart';
 import '../ui/theme/app_text.dart';
 import 'common.dart';
 
-/// One 12x6 cell per allowed absence, used ones filled (DESIGN.md 8).
-/// Neutral while within the limit, the status colour once in trouble; over
-/// the limit every cell is danger. Not drawn for limits too long to read.
-class AbsenceBar extends StatelessWidget {
+/// Absences as tally marks (DESIGN.md 8, Courses): one stroke per absence
+/// in gates of five, the used ones in ink (the status colour in trouble) and
+/// the ones still allowed faint. Without a limit only the used strokes are
+/// drawn. Always shown next to its words; more than [maxMarks] strokes are
+/// left to the words alone.
+class Tally extends StatelessWidget {
   final AbsenceState state;
-  const AbsenceBar(this.state, {super.key});
+  final double height;
+  const Tally(this.state, {super.key, this.height = 16});
 
-  static const maxCells = 20;
+  static const maxMarks = 20;
+
+  int get _total => state.limit == null ? state.used : (state.used > state.limit! ? state.used : state.limit!);
 
   @override
   Widget build(BuildContext context) {
-    final limit = state.limit;
-    if (limit == null || limit < 1 || limit > maxCells) return const SizedBox.shrink();
+    final total = _total;
+    if (total < 1 || total > maxMarks) return const SizedBox.shrink();
     final t = Theme.of(context);
     final status = state.status;
-    final used = status == null ? t.colorScheme.onSurfaceVariant : statusColors(context).of(status).fg;
-    final over = state.used > limit;
+    final used = status == null ? t.colorScheme.onSurface : statusColors(context).of(status).fg;
+    final scale = height / 16;
     return Semantics(
-      label: '${state.used} of $limit allowed absences used',
+      label: state.limit == null
+          ? '${state.used} ${state.used == 1 ? 'absence' : 'absences'}'
+          : '${state.used} of ${state.limit} allowed absences used',
       excludeSemantics: true,
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        for (var i = 0; i < limit; i++) ...[
-          if (i > 0) const SizedBox(width: 2),
-          Container(
-            width: 12,
-            height: 6,
-            decoration: BoxDecoration(
-              color: over || i < state.used ? used : t.colorScheme.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ],
-      ]),
+      child: CustomPaint(
+        size: Size(_TallyPainter.widthFor(total) * scale, height),
+        painter: _TallyPainter(total, state.used, used, t.colorScheme.outlineVariant, scale),
+      ),
     );
   }
 }
 
-/// The bar next to its words: "▮▮▮▯ 3 of 4 absences used".
-class AbsenceLine extends StatelessWidget {
+class _TallyPainter extends CustomPainter {
+  final int total, used;
+  final Color usedColor, faintColor;
+  final double scale;
+  _TallyPainter(this.total, this.used, this.usedColor, this.faintColor, this.scale);
+
+  // At 16dp tall: strokes 7 apart, a gate's diagonal 2 past its ends, gates 33 apart.
+  static const _step = 7.0, _pitch = 33.0, _left = 3.0;
+
+  static double widthFor(int n) {
+    final gates = (n - 1) ~/ 5 + 1, last = n - 5 * (gates - 1);
+    final x0 = _left + (gates - 1) * _pitch;
+    return (last == 5 ? x0 + 3 * _step + 2 : x0 + (last - 1) * _step) + 3;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.scale(scale);
+    final h = size.height / scale;
+    Paint pen(int i) => Paint()
+      ..color = i < used ? usedColor : faintColor
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < total; i++) {
+      final x0 = _left + (i ~/ 5) * _pitch;
+      if (i % 5 == 4) {
+        canvas.drawLine(Offset(x0 - 2, h * 0.72), Offset(x0 + 3 * _step + 2, h * 0.28), pen(i));
+      } else {
+        final x = x0 + (i % 5) * _step;
+        canvas.drawLine(Offset(x, 1), Offset(x, h - 1), pen(i));
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TallyPainter old) =>
+      old.total != total || old.used != used || old.usedColor != usedColor || old.faintColor != faintColor;
+}
+
+/// The tally over its count, for the right edge of a row: "6 of 8".
+class TallyCount extends StatelessWidget {
   final AbsenceState state;
-  final TextStyle? style;
-  const AbsenceLine(this.state, {super.key, this.style});
+  const TallyCount(this.state, {super.key});
 
   @override
   Widget build(BuildContext context) {
-    final text = Text(state.line, style: style);
-    final limit = state.limit;
-    if (limit == null || limit < 1 || limit > AbsenceBar.maxCells) return text;
-    return Row(children: [
-      AbsenceBar(state),
-      const SizedBox(width: 8),
-      Flexible(child: text),
+    final t = Theme.of(context);
+    final status = state.status;
+    final color = status == null ? t.colorScheme.onSurfaceVariant : statusColors(context).of(status).fg;
+    final count = state.limit == null ? '${state.used}' : '${state.used} of ${state.limit}';
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+      Tally(state),
+      const SizedBox(height: 4),
+      Text(count, style: t.textTheme.numeral.copyWith(color: color)),
     ]);
   }
 }
@@ -80,32 +117,42 @@ class AbsenceLimitsScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Absence limits')),
       body: ListView(children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 12),
           child: Text(
-            'How many absences each course allows. eClass doesn\'t publish this, so take it from the '
+            "How many absences each course allows. eClass doesn't publish this, so take it from the "
             'syllabus. With a limit set, Today and Courses show how many are left.',
             style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
           ),
         ),
         if (courses.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('No eClass course takes attendance yet. Sign in to eClass in Settings to see them.'),
-          ),
-        for (final (i, c) in courses.indexed) ...[
-          if (i > 0) const Divider(indent: 16),
-          ListTile(
-            title: Text(c.course.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              limits[c.course.id] == null
-                  ? 'Not set · ${AbsenceState.of(c, limits).used} so far'
-                  : AbsenceState.of(c, limits).line,
-              style: t.textTheme.bodyMedium?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant),
-            ),
-            trailing: Text(limits[c.course.id]?.toString() ?? '', style: t.textTheme.titleMedium?.tnum),
+          EmptyNote('No eClass course takes attendance yet. Sign in to eClass to see them.',
+              action: 'Sign in', onAction: () => openSettings(context)),
+        for (final c in courses) ...[
+          const Rule(),
+          InkWell(
             onTap: () => editAbsenceLimit(context, c.course),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 12),
+              child: Row(children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(c.course.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      limits[c.course.id] == null
+                          ? 'Not set · ${AbsenceState.of(c, limits).used} so far'
+                          : AbsenceState.of(c, limits).line,
+                      style: t.textTheme.bodyMedium?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant),
+                    ),
+                  ]),
+                ),
+                const SizedBox(width: 16),
+                Text(limits[c.course.id]?.toString() ?? '', style: t.textTheme.titleMedium?.tnum),
+              ]),
+            ),
           ),
         ],
+        const SizedBox(height: 24),
       ]),
     );
   }

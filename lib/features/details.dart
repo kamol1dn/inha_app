@@ -62,7 +62,7 @@ class _DeadlineSheet extends StatelessWidget {
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Icon(deadlineIcon(d.kind), size: 18, color: t.colorScheme.onSurfaceVariant),
@@ -70,24 +70,29 @@ class _DeadlineSheet extends StatelessWidget {
             Text(_kindNames[d.kind]!, style: muted),
           ]),
           const SizedBox(height: 8),
-          Text(d.title, style: t.textTheme.titleMedium),
+          Text(d.title, style: t.textTheme.headlineSmall),
           if ((course?.name ?? d.courseName).isNotEmpty)
-            Text(course?.name ?? d.courseName, style: muted),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(course?.name ?? d.courseName, style: t.textTheme.titleLarge),
+            ),
           const SizedBox(height: 16),
-          Text(when, style: t.textTheme.bodyMedium?.tnum),
+          const Divider(),
+          const SizedBox(height: 16),
+          Text(when, style: t.textTheme.bodyLarge?.tnum),
           if (soon && status != null)
             StatusLine(status, left, padding: const EdgeInsets.only(top: 4))
           else if (soon)
             Text(left, style: muted?.tnum),
           if (d.kind == DeadlineKind.assignment || d.kind == DeadlineKind.quiz) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             if (d.done)
               StatusLine(Status.ok, doneText(d), padding: EdgeInsets.zero)
             else
               Text(d.kind == DeadlineKind.quiz ? 'Not attempted yet' : 'Not submitted yet', style: muted),
           ],
           if (vod != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
                 vod.done
                     ? 'Watched'
@@ -98,10 +103,11 @@ class _DeadlineSheet extends StatelessWidget {
             LinearProgressIndicator(
               value: (vod.percent / 100).clamp(0, 1),
               minHeight: 4,
+              color: t.colorScheme.onSurface,
               backgroundColor: t.colorScheme.outlineVariant,
             ),
           ] else if (d.kind == DeadlineKind.vod) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text('No watch progress in eClass for this video yet.', style: muted),
           ],
           const SizedBox(height: 24),
@@ -116,12 +122,15 @@ class _DeadlineSheet extends StatelessWidget {
           if (course != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  openCourse(context, course);
-                },
-                child: const Text('Course attendance and grade'),
+              child: SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    openCourse(context, course);
+                  },
+                  child: const Text('Course attendance and grade'),
+                ),
               ),
             ),
         ]),
@@ -145,11 +154,11 @@ void openLesson(BuildContext context, Lesson lesson) {
       final muted = t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant);
       return SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 24),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(lesson.subject, style: t.textTheme.titleMedium),
+            Text(lesson.subject, style: t.textTheme.headlineSmall),
             const SizedBox(height: 8),
-            Text('${weekdayShort(lesson.weekday)} ${lesson.start}–${lesson.end}', style: t.textTheme.bodyMedium?.tnum),
+            Text('${weekdayShort(lesson.weekday)} ${lesson.start}–${lesson.end}', style: t.textTheme.bodyLarge?.tnum),
             Text([lesson.room, lesson.kind, lesson.teacher].where((s) => s.isNotEmpty).join(' · '),
                 style: muted?.tnum),
             const SizedBox(height: 16),

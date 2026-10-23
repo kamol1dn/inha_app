@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../data/absence.dart';
 import '../data/app_data.dart';
+import '../data/rail.dart';
 import '../data/urgency.dart';
 import '../models/models.dart';
 import '../ui/format/format.dart';
@@ -12,11 +13,12 @@ import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
 import 'absence_widgets.dart';
 import 'common.dart';
-import 'deadline_tile.dart';
 import 'details.dart';
 import 'mail_screen.dart';
+import 'rail_rows.dart';
 
-/// Answers "where do I need to be next, what's due, am I in trouble" (DESIGN.md 7).
+/// Answers "where do I need to be next, what's due, am I in trouble" as one
+/// rail from now into the next days (DESIGN.md 7).
 class TodayScreen extends StatefulWidget {
   final void Function(int tab) onOpenTab;
   final void Function(int weekday) onOpenSchedule;
@@ -31,7 +33,7 @@ class _TodayScreenState extends State<TodayScreen> {
   @override
   void initState() {
     super.initState();
-    // The countdown ticks on the minute.
+    // The countdown and the Now row tick on the minute.
     _tick = Timer.periodic(const Duration(seconds: 30), (_) => setState(() {}));
   }
 
@@ -44,281 +46,237 @@ class _TodayScreenState extends State<TodayScreen> {
   @override
   Widget build(BuildContext context) {
     final data = context.watch<AppData>();
-    final t = Theme.of(context);
     final now = DateTime.now();
-    final nowMin = now.hour * 60 + now.minute;
     final lessons = data.lessons.data?.value ?? const <Lesson>[];
-    final today = lessons.where((l) => l.weekday == now.weekday).toList();
-    final current = today.where((l) => minutesOf(l.start) <= nowMin && minutesOf(l.end) > nowMin).firstOrNull;
-    final upcoming = today.where((l) => minutesOf(l.start) > nowMin).toList();
-    final cardLesson = current ?? upcoming.firstOrNull;
-    final later = upcoming.where((l) => !identical(l, cardLesson)).toList();
-    final nextDay = cardLesson == null ? _nextClassDay(lessons, now) : null;
-
     final att = data.attendance.data?.value ?? const <CourseAttendance>[];
     final deadlines = data.deadlines.data?.value ?? const <Deadline>[];
-    final attention = needsAttention(deadlines, att, now);
     final limits = data.prefs.absenceLimits;
-    // Attendance trouble comes first in Needs attention (DESIGN.md 7).
-    final trouble = troubleOrder(att, limits, lessons).where((c) => AbsenceState.of(c, limits).trouble).toList();
-    final cardCourse = cardLesson == null ? null : courseFor(cardLesson.subject, att);
-    final cardAbsence = cardCourse == null ? null : AbsenceState.of(cardCourse, limits);
-    final unread = (data.inbox.data?.value ?? const <MailHeader>[]).where((m) => m.unread).toList();
-    final unreadTotal = data.mailUnread.data?.value ?? unread.length;
+    final firstLoad = data.lessons.data == null && data.lessons.error == null;
+    final rail = todayRail(
+      lessons: lessons,
+      deadlines: deadlines,
+      attendance: att,
+      limits: limits,
+      now: now,
+      timetableKnown: data.lessons.data != null,
+    );
 
     return RefreshIndicator(
       onRefresh: data.refreshAll,
       child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _NextClassCard(
-            lesson: cardLesson,
-            isNow: current != null,
-            now: now,
-            nextDay: nextDay,
-            loaded: data.lessons.data != null,
-            absence: cardAbsence?.trouble == true ? cardAbsence : null,
-            onTap: () => widget.onOpenSchedule(cardLesson?.weekday ?? nextDay?.$2.weekday ?? now.weekday),
-          ),
-        ),
+        const OfflineRow(),
         SourceError(data.lessons, 'EduPage', onRetry: data.refreshTimetable),
-        if (later.isNotEmpty) ...[
-          SectionHeader('Later today', source: data.lessons, staleAfter: const Duration(hours: 24)),
-          for (final l in later)
-            ListTile(
-              dense: true,
-              minTileHeight: 48,
-              leading: SizedBox(
-                width: 48,
-                child: Text(l.start, style: t.textTheme.bodyMedium?.tnum),
-              ),
-              title: Text(l.subject, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
-              trailing: Text(l.room, style: t.textTheme.bodyMedium?.tnum),
-              onTap: () => openLesson(context, l),
-            ),
-        ],
-        SectionHeader('Needs attention', source: data.deadlines),
         SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
-        for (final c in trouble) _AbsenceRow(c, AbsenceState.of(c, limits)),
-        for (final d in attention.take(5)) DeadlineTile(d, attendance: att, now: now, showDay: true),
-        if (attention.length > 5)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: TextButton(
-                onPressed: () => widget.onOpenTab(2),
-                child: Text('All ${deadlines.where((d) => d.end.isAfter(now)).length} deadlines'),
-              ),
-            ),
-          ),
-        // Never show an all-clear that a failed refresh can't back up.
-        if (attention.isEmpty && data.deadlines.data != null && data.deadlines.error == null)
-          _nothingDue(deadlines, now),
-        _attendanceLine(context, data),
-        if (unread.isNotEmpty) ...[
-          const SectionHeader('Unread mail'),
-          for (final m in unread.take(2))
-            ListTile(
-              minTileHeight: 72,
-              title: Text(m.subject, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
-              subtitle: Text(m.from, maxLines: 1, overflow: TextOverflow.ellipsis),
-              trailing: Text(pastWhen(m.received), style: t.textTheme.bodySmall?.tnum),
-              onTap: () => openMail(context, m),
-            ),
-          if (unreadTotal > 2)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: TextButton(
-                  onPressed: () =>
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MailScreen())),
-                  child: Text('${unreadTotal - 2} more'),
-                ),
-              ),
-            ),
-        ],
+        _staleLine(data),
+        const SizedBox(height: 4),
+        if (firstLoad) ...[NowRow(now, lineBelow: false), const SkeletonRows(count: 3)] else ..._rail(rail, att, now),
+        if (!firstLoad) _dueSummary(deadlines, att, data, now),
+        _attendance(context, data, lessons, now),
+        ..._mail(context, data),
         _footer(context, data),
       ]),
     );
   }
 
-  Widget _nothingDue(List<Deadline> all, DateTime now) {
-    if (all.isEmpty) return const StatusLine(Status.ok, 'No deadlines in eClass.');
-    final next = ([...all.where((d) => isDue(d) && !d.done && d.end.isAfter(now))]
-          ..sort((a, b) => a.end.compareTo(b.end)))
-        .firstOrNull;
-    final tail = next == null ? '' : ' Next: ${next.title}, ${next.courseName}, ${dayDate(next.end)} ${clock(next.end)}.';
-    return StatusLine(Status.ok, 'Nothing due in the next 3 days.$tail');
+  /// The rail has no header to carry a stale marker, so it gets a line.
+  Widget _staleLine(AppData data) {
+    final markers = [
+      if (data.lessons.error == null && isStale(data.lessons, const Duration(hours: 24)))
+        StaleMarker(data.lessons.data!.fetchedAt, what: 'Timetable'),
+      if (data.deadlines.error == null && isStale(data.deadlines, const Duration(hours: 3)))
+        StaleMarker(data.deadlines.data!.fetchedAt, what: 'eClass'),
+    ];
+    if (markers.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 0),
+      child: Wrap(spacing: 16, runSpacing: 4, children: markers),
+    );
   }
 
-  /// The answer to "am I in attendance trouble" when nothing is: courses with
-  /// a limit are all within it (ok). Courses without one show their raw
-  /// count; a limit is never guessed (DESIGN.md 7).
-  Widget _attendanceLine(BuildContext context, AppData data) {
+  List<Widget> _rail(List<RailEntry> rail, List<CourseAttendance> att, DateTime now) => [
+        for (final (i, e) in rail.indexed)
+          switch (e) {
+            RailOverdue() => RailHeader('Overdue', status: Status.danger, lineAbove: i > 0, lineBelow: i < rail.length - 1),
+            RailNow(:final at) => NowRow(at, lineAbove: i > 0, lineBelow: i < rail.length - 1),
+            RailDay(:final day) => RailHeader(dayHeader(day, now: now), lineBelow: i < rail.length - 1),
+            // The hero opens Schedule on its day; other classes open their course.
+            RailClass(role: ClassRole.current || ClassRole.next) => HeroClass(e, now,
+                onTap: () => widget.onOpenSchedule(e.day.weekday), lineAbove: i > 0, lineBelow: i < rail.length - 1),
+            RailClass(:final lesson, :final trouble) =>
+              ClassRow(lesson, trouble: trouble, lineAbove: i > 0, lineBelow: i < rail.length - 1),
+            RailDue(:final deadline) =>
+              DueRow(deadline, attendance: att, now: now, lineAbove: i > 0, lineBelow: i < rail.length - 1),
+            RailNote(:final kind, :final at) => RailNoteRow(
+                switch (kind) {
+                  RailNoteKind.freeAfter => 'Free for the rest of the day',
+                  RailNoteKind.noMoreClasses => 'No more classes today',
+                  RailNoteKind.noClasses => 'No classes today',
+                },
+                at: at == null ? null : clock(at),
+                lineAbove: i > 0,
+                lineBelow: i < rail.length - 1),
+          },
+      ];
+
+  /// With nothing due in the next 3 days the rail shows no deadline, so one
+  /// line says so (DESIGN.md 7). Never an all-clear a failed refresh can't back up.
+  Widget _dueSummary(List<Deadline> all, List<CourseAttendance> att, AppData data, DateTime now) {
+    if (data.deadlines.data == null || data.deadlines.error != null) return const SizedBox.shrink();
+    if (needsAttention(all, att, now).isNotEmpty) return const SizedBox.shrink();
+    const pad = EdgeInsets.fromLTRB(gutter, 12, gutter, 0);
+    if (all.where(isDue).isEmpty) return const StatusLine(Status.ok, 'No deadlines in eClass.', padding: pad);
+    final next = ([...all.where((d) => isDue(d) && !isDone(d, att) && d.end.isAfter(now))]
+          ..sort((a, b) => a.end.compareTo(b.end)))
+        .firstOrNull;
+    final tail = next == null ? '' : ' Next: ${next.title}, ${next.courseName}, ${dayDateTime(next.end)}.';
+    return StatusLine(Status.ok, 'Nothing due in the next 3 days.$tail', padding: pad);
+  }
+
+  /// The answer to "am I in attendance trouble", always on screen: each
+  /// course in trouble with its tally, then one line for the rest. A limit is
+  /// never guessed (DESIGN.md 7).
+  Widget _attendance(BuildContext context, AppData data, List<Lesson> lessons, DateTime now) {
     final att = data.attendance.data?.value;
-    // One error row per failed service: the deadlines section already shows eClass's.
-    if (data.attendance.error != null && data.deadlines.error != null) return const SizedBox.shrink();
-    if (att == null) return SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass);
-    if (data.attendance.error != null) return SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass);
+    final header = SectionHeader('Attendance', source: data.attendance);
+    // One error row per failed service: the top of the screen already shows eClass's.
+    if (att == null) {
+      return data.attendance.error != null || data.deadlines.error != null
+          ? const SizedBox.shrink()
+          : Column(children: [header, const SkeletonRows(count: 1, timeColumn: false)]);
+    }
     final limits = data.prefs.absenceLimits;
     final tracked = att.where((c) => c.classes.isNotEmpty).toList();
-    if (tracked.any((c) => AbsenceState.of(c, limits).trouble)) return const SizedBox.shrink(); // rows above
+    final trouble = troubleOrder(tracked, limits, lessons).where((c) => AbsenceState.of(c, limits).trouble).toList();
     final limited = tracked.where((c) => limits[c.course.id] != null).length;
     final unlimited = [
       for (final c in tracked)
         if (limits[c.course.id] == null && c.count(AttendanceMark.absent) > 0) c,
     ]..sort((a, b) => b.count(AttendanceMark.absent).compareTo(a.count(AttendanceMark.absent)));
-    final parts = [
-      if (limited > 0)
-        limited == tracked.length
-            ? 'All $limited courses within the absence limit.'
-            : '$limited ${limited == 1 ? 'course' : 'courses'} within the absence limit.',
-      if (unlimited.isNotEmpty)
-        '${limited > 0 ? 'No limit set: ' : ''}'
-            '${unlimited.map((c) => '${c.course.name}: ${c.count(AttendanceMark.absent)} '
-                '${c.count(AttendanceMark.absent) == 1 ? 'absence' : 'absences'}').join(' · ')}',
-      if (limited == 0 && unlimited.isEmpty) 'No absences recorded in ${tracked.length} courses.',
-    ];
-    return InkWell(
-      onTap: () => widget.onOpenTab(3),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: StatusLine(unlimited.isEmpty ? Status.ok : Status.info, parts.join(' ')),
+    final fine = limited - trouble.length;
+    final courses = fine == 1 ? 'course is' : 'courses are';
+    final String? okLine;
+    if (fine == 0) {
+      okLine = null;
+    } else if (trouble.isNotEmpty) {
+      okLine = 'The other $fine $courses within their limit.';
+    } else if (fine == tracked.length) {
+      okLine = fine == 1 ? 'The 1 course is within its limit.' : 'All $fine courses are within their limit.';
+    } else {
+      okLine = '$fine $courses within their limit.';
+    }
+    final infoLine = unlimited.isEmpty
+        ? null
+        : 'No limit set: ${unlimited.map((c) => '${c.course.name} ${c.count(AttendanceMark.absent)}').join(' · ')}';
+    final t = Theme.of(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      header,
+      for (final c in trouble) _TroubleRow(c, AbsenceState.of(c, limits), lessons: lessons, now: now),
+      InkWell(
+        onTap: () => widget.onOpenTab(3),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (okLine != null) StatusLine(Status.ok, okLine),
+            if (infoLine != null) StatusLine(Status.info, infoLine),
+            if (okLine == null && infoLine == null && trouble.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 4),
+                child: Text(
+                    tracked.isEmpty ? 'No course takes attendance in eClass.' : 'No absences in ${tracked.length} courses.',
+                    style: t.textTheme.bodyMedium),
+              ),
+          ]),
+        ),
       ),
-    );
+    ]);
+  }
+
+  List<Widget> _mail(BuildContext context, AppData data) {
+    final t = Theme.of(context);
+    final unread = (data.inbox.data?.value ?? const <MailHeader>[]).where((m) => m.unread).toList();
+    if (unread.isEmpty) return const [];
+    final total = data.mailUnread.data?.value ?? unread.length;
+    return [
+      SectionHeader('$total unread', source: data.inbox, staleAfter: const Duration(minutes: 30)),
+      for (final m in unread.take(2))
+        InkWell(
+          onTap: () => openMail(context, m),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                Expanded(
+                  child: Text(m.subject.isEmpty ? '(no subject)' : m.subject,
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleSmall),
+                ),
+                const SizedBox(width: 12),
+                Text(pastWhen(m.received),
+                    style: t.textTheme.bodySmall?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant)),
+              ]),
+            ),
+          ),
+        ),
+      if (total > 2)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MailScreen())),
+              child: Text('${total - 2} more'),
+            ),
+          ),
+        ),
+    ];
   }
 
   Widget _footer(BuildContext context, AppData data) {
     final t = Theme.of(context);
-    final times = [data.lessons, data.deadlines, data.attendance]
-        .map((s) => s.data?.fetchedAt)
-        .whereType<DateTime>()
-        .toList()
-      ..sort();
+    final at = oldestData(data);
     final busy = data.lessons.loading || data.deadlines.loading || data.attendance.loading;
-    final text = busy ? 'Updating…' : times.isEmpty ? '' : 'Updated ${updatedAt(times.first)}';
+    final text = busy ? 'Updating…' : at == null ? '' : 'Updated ${updatedAt(at)}';
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+      padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 24),
       child: Text(text, style: t.textTheme.bodySmall?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant)),
     );
   }
-
-  static (DateTime, Lesson)? _nextClassDay(List<Lesson> lessons, DateTime now) {
-    for (var i = 1; i <= 7; i++) {
-      final day = DateTime(now.year, now.month, now.day).add(Duration(days: i));
-      final first = (lessons.where((l) => l.weekday == day.weekday).toList()
-            ..sort((a, b) => minutesOf(a.start).compareTo(minutesOf(b.start))))
-          .firstOrNull;
-      if (first != null) return (day, first);
-    }
-    return null;
-  }
 }
 
-class _NextClassCard extends StatelessWidget {
-  final Lesson? lesson;
-  final bool isNow;
-  final DateTime now;
-  final (DateTime, Lesson)? nextDay;
-  final bool loaded;
-  final AbsenceState? absence; // set only when this course is in attendance trouble
-  final VoidCallback onTap;
-  const _NextClassCard(
-      {required this.lesson,
-      required this.isNow,
-      required this.now,
-      required this.nextDay,
-      required this.loaded,
-      required this.onTap,
-      this.absence});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final muted = t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant);
-    final l = lesson;
-    final List<Widget> children;
-    if (!loaded) {
-      children = [
-        Container(height: 16, width: 120, color: t.colorScheme.surfaceContainerHighest),
-        const SizedBox(height: 12),
-        Container(height: 28, width: 200, color: t.colorScheme.surfaceContainerHighest),
-      ];
-    } else if (l == null) {
-      final nd = nextDay;
-      children = [
-        Text(now.weekday > 5 ? 'No classes today' : 'No more classes today', style: t.textTheme.titleMedium),
-        if (nd != null) ...[
-          const SizedBox(height: 4),
-          Text('${_dayWord(nd.$1)} ${nd.$2.start} · ${nd.$2.subject} · ${nd.$2.room}', style: muted?.tnum),
-        ],
-      ];
-    } else {
-      final start = _at(l.start), end = _at(l.end);
-      final label = isNow ? 'Now · until ${l.end}' : 'Next  ${l.start}–${l.end}';
-      final big = isNow ? '${duration(end.difference(now))} left' : relative(start, now: now);
-      children = [
-        Text(label, style: t.textTheme.labelLarge?.tnum.copyWith(color: t.colorScheme.primary)),
-        const SizedBox(height: 4),
-        Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-          Expanded(child: Text(l.room.isEmpty ? 'Room not set' : l.room, style: t.textTheme.headlineMedium)),
-          Text(big, style: t.textTheme.headlineMedium),
-        ]),
-        const SizedBox(height: 4),
-        Text(l.subject, style: t.textTheme.titleMedium),
-        if (l.teacher.isNotEmpty) Text(l.teacher, style: muted),
-        if (absence case final a?) StatusLine(a.status!, a.line, padding: const EdgeInsets.only(top: 8)),
-      ];
-    }
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            width: double.infinity,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
-          ),
-        ),
-      ),
-    );
-  }
-
-  DateTime _at(String hhmm) {
-    final m = minutesOf(hhmm);
-    return DateTime(now.year, now.month, now.day, m ~/ 60, m % 60);
-  }
-
-  String _dayWord(DateTime d) => dayHeader(d, now: now) == 'Tomorrow' ? 'Tomorrow' : weekdayShort(d.weekday);
-}
-
-/// A course near or over its absence limit, in Needs attention.
-class _AbsenceRow extends StatelessWidget {
+/// A course near or over its absence limit: the name, what is left and when
+/// its next class is, and the tally with its count.
+class _TroubleRow extends StatelessWidget {
   final CourseAttendance c;
   final AbsenceState absence;
-  const _AbsenceRow(this.c, this.absence);
+  final List<Lesson> lessons;
+  final DateTime now;
+  const _TroubleRow(this.c, this.absence, {required this.lessons, required this.now});
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return ListTile(
-      minTileHeight: 72,
-      leading: Icon(Icons.event_busy_outlined, color: t.colorScheme.onSurfaceVariant),
-      title: Row(children: [
-        Expanded(child: Text(c.course.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium)),
-        const SizedBox(width: 8),
-        StatusTag(absence.status!, absence.tag!),
-      ]),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: AbsenceLine(absence,
-            style: t.textTheme.bodyMedium?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant)),
-      ),
+    final left = absence.left!;
+    final next = nextLesson(lessons, now, (l) => isLessonOf(l, c.course));
+    final words = [
+      switch (left) { > 0 => '$left left', 0 => 'At the limit', _ => 'Over the limit by ${-left}' },
+      if (next != null) 'next ${classWhen(next.day, next.lesson, now)}',
+    ].join(' · ');
+    return InkWell(
       onTap: () => openCourse(context, c.course),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 8),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(c.course.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
+              const SizedBox(height: 2),
+              StatusLine(absence.status!, words, padding: EdgeInsets.zero),
+            ]),
+          ),
+          const SizedBox(width: 16),
+          TallyCount(absence),
+        ]),
+      ),
     );
   }
 }

@@ -5,9 +5,10 @@ import '../data/app_data.dart';
 import '../data/urgency.dart';
 import '../models/models.dart';
 import '../ui/format/format.dart';
+import '../core/session.dart';
 import '../ui/theme/status_colors.dart';
 import 'common.dart';
-import 'deadline_tile.dart';
+import 'rail_rows.dart';
 
 const _kindLabels = {
   DeadlineKind.assignment: 'Assignments',
@@ -64,27 +65,28 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
           onCourse: (v) => setState(() => prefs.deadlineCourse = v),
           onShowDone: (v) => setState(() => prefs.showDone = v),
         ),
+        const SizedBox(height: 8),
+        const OfflineRow(),
         SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
+        if (data.deadlines.data == null && data.deadlines.error is LoginRequired)
+          EmptyNote('Sign in to eClass to see deadlines and attendance.',
+              action: 'Sign in', onAction: () => openSettings(context))
+        else if (data.deadlines.data == null && data.deadlines.error == null)
+          const SkeletonRows(),
         if (data.deadlines.data != null && all.where(isDue).isEmpty && !filtered)
-          const Padding(padding: EdgeInsets.all(16), child: Text('No upcoming deadlines in eClass.')),
+          const EmptyNote('No upcoming deadlines in eClass.'),
         if (data.deadlines.data != null && shown.isEmpty && filtered)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
-            child: Row(children: [
-              const Expanded(child: Text('Nothing matches these filters.')),
-              TextButton(
-                onPressed: () => setState(prefs.resetDeadlineFilters),
-                child: const Text('Clear filters'),
-              ),
-            ]),
-          ),
+          EmptyNote('Nothing matches these filters.',
+              action: 'Clear filters', onAction: () => setState(prefs.resetDeadlineFilters)),
         if (overdue.isNotEmpty) ...[
-          const _DangerHeader('Overdue'),
-          for (final d in overdue) DeadlineTile(d, attendance: att, now: now),
+          const SectionHeader('Overdue', first: true, status: Status.danger),
+          for (final d in overdue) DueRow(d, attendance: att, now: now, line: false),
         ],
         for (final e in groups.entries) ...[
-          SectionHeader(e.key, first: e.key == groups.keys.first && overdue.isEmpty),
-          for (final d in e.value) DeadlineTile(d, attendance: att, now: now),
+          SectionHeader(e.key,
+              first: e.key == groups.keys.first && overdue.isEmpty,
+              source: e.key == groups.keys.first ? data.deadlines : null),
+          for (final d in e.value) DueRow(d, attendance: att, now: now, line: false),
         ],
         const SizedBox(height: 24),
       ]),
@@ -126,7 +128,7 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 0),
       child: Row(children: [
         _CourseChip(course: course, courses: courses, onChanged: onCourse),
         const SizedBox(width: 8),
@@ -193,18 +195,4 @@ class _CourseChip extends StatelessWidget {
     );
     if (picked != null) onChanged(picked.isEmpty ? null : picked);
   }
-}
-
-class _DangerHeader extends StatelessWidget {
-  final String text;
-  const _DangerHeader(this.text);
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Text(text,
-            style: Theme.of(context)
-                .textTheme
-                .titleSmall
-                ?.copyWith(color: statusColors(context).of(Status.danger).fg)),
-      );
 }
