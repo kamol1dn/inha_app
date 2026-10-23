@@ -267,6 +267,57 @@ class SkeletonRows extends StatelessWidget {
       );
 }
 
+/// A pushed screen whose heading sits in its body (course detail, a mail
+/// message): once the heading has scrolled under the app bar, [title] fades
+/// into the app bar, so the screen never loses its name (DESIGN.md 12).
+/// [body] gets the key to put on the heading.
+class HeadingScaffold extends StatefulWidget {
+  final String title;
+  final List<Widget>? actions;
+  final Widget Function(Key headingKey) body;
+  const HeadingScaffold({super.key, required this.title, required this.body, this.actions});
+
+  @override
+  State<HeadingScaffold> createState() => _HeadingScaffoldState();
+}
+
+class _HeadingScaffoldState extends State<HeadingScaffold> {
+  final _heading = GlobalKey();
+  final _bar = GlobalKey();
+  bool _shown = false;
+
+  bool _onScroll(ScrollNotification n) {
+    if (n.depth != 0) return false;
+    final heading = _heading.currentContext?.findRenderObject() as RenderBox?;
+    final bar = _bar.currentContext?.findRenderObject() as RenderBox?;
+    // A heading the list has already let go of is far above the app bar.
+    final under = heading == null ||
+        !heading.attached ||
+        bar == null ||
+        heading.localToGlobal(Offset(0, heading.size.height)).dy <= bar.localToGlobal(Offset(0, bar.size.height)).dy;
+    if (under != _shown) setState(() => _shown = under);
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.disableAnimationsOf(context);
+    return Scaffold(
+      appBar: AppBar(
+        key: _bar,
+        title: AnimatedOpacity(
+          opacity: _shown ? 1 : 0,
+          duration: still ? Duration.zero : const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+        actions: widget.actions,
+      ),
+      body: NotificationListener<ScrollNotification>(onNotification: _onScroll, child: widget.body(_heading)),
+    );
+  }
+}
+
 /// Opens [uri] in the browser (or the mail app for `mailto:`). Says so in a
 /// snack bar when nothing on the phone can open it.
 Future<void> openUrl(BuildContext context, Uri uri) async {

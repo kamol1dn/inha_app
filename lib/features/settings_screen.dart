@@ -77,7 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(children: [
-        const SectionHeader('Accounts'),
+        const SectionHeader('Accounts', first: true),
         for (final s in Service.values.where((s) => s.needsLogin))
           ListTile(
             minTileHeight: 72,
@@ -130,15 +130,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: Text(data.prefs.excludedSubjects.isEmpty ? 'None' : data.prefs.excludedSubjects.join(', ')),
           onTap: _editHidden,
         ),
-        const Padding(
-          padding: EdgeInsets.all(16),
+        const SectionHeader('Appearance'),
+        ListTile(
+          title: const Text('Theme'),
+          subtitle: Text(_themeNames[data.prefs.themeMode]!),
+          onTap: _editTheme,
+        ),
+        const SectionHeader('About'),
+        ListTile(
+          title: const Text('Open-source licences'),
+          subtitle: const Text('Including the Fraunces and Public Sans fonts'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => showLicensePage(context: context, applicationName: 'IUT'),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 24),
           child: Text(
-            'Passwords are kept in Android\'s encrypted storage on this phone and are '
-            'only sent to the service they belong to.',
+            "Passwords are kept in Android's encrypted storage on this phone and are "
+            'only sent to the service they belong to. The app talks to no one else.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
       ]),
     );
+  }
+
+  static const _themeNames = {ThemeMode.system: 'System', ThemeMode.light: 'Light', ThemeMode.dark: 'Dark'};
+
+  Future<void> _editTheme() async {
+    final data = context.read<AppData>();
+    final picked = await showDialog<ThemeMode>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Theme'),
+        contentPadding: const EdgeInsets.only(top: 16, bottom: 8),
+        content: RadioGroup<ThemeMode>(
+          groupValue: data.prefs.themeMode,
+          onChanged: (m) => Navigator.pop(ctx, m),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            for (final e in _themeNames.entries)
+              RadioListTile<ThemeMode>(
+                value: e.key,
+                title: Text(e.value),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+          ]),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))],
+      ),
+    );
+    if (picked != null) data.setThemeMode(picked);
   }
 
   static String _limitsSummary(AppData data) {
@@ -353,14 +394,14 @@ class _LoginSheetState extends State<_LoginSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text(widget.title, style: t.textTheme.titleMedium),
+            Text(widget.title, style: t.textTheme.headlineSmall),
             const SizedBox(height: 16),
             TextField(
               controller: _user,
               // All three services log in with the student ID, mail included.
-              decoration: const InputDecoration(labelText: 'Student ID', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Student ID'),
               autocorrect: false,
               enableSuggestions: false,
               textInputAction: TextInputAction.next,
@@ -374,7 +415,6 @@ class _LoginSheetState extends State<_LoginSheet> {
               onSubmitted: (_) => _busy ? null : _saveAndTest(),
               decoration: InputDecoration(
                 labelText: 'Password',
-                border: const OutlineInputBorder(),
                 helperText: widget.existing != null ? 'Leave empty to keep the saved one' : null,
                 suffixIcon: IconButton(
                   tooltip: _showPassword ? 'Hide password' : 'Show password',

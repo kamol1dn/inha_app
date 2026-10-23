@@ -207,7 +207,6 @@ class _LimitDialogState extends State<_LimitDialog> {
           inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
           style: t.textTheme.bodyLarge?.tnum,
           decoration: const InputDecoration(
-            border: OutlineInputBorder(),
             helperText: 'From the syllabus. Leave empty if it has none.',
             helperMaxLines: 2,
           ),

@@ -38,10 +38,10 @@ class CourseDetailScreen extends StatelessWidget {
     final c = att.where((a) => a.course.id == courseId).firstOrNull;
     final muted = t.textTheme.bodyMedium!.tnum.copyWith(color: t.colorScheme.onSurfaceVariant);
     if (c == null) {
-      return Scaffold(
-        appBar: AppBar(),
-        body: ListView(children: [
-          _heading(context, name, ''),
+      return HeadingScaffold(
+        title: name,
+        body: (heading) => ListView(children: [
+          _heading(context, name, '', heading),
           const EmptyNote('This course is no longer on your eClass dashboard.'),
         ]),
       );
@@ -55,12 +55,13 @@ class CourseDetailScreen extends StatelessWidget {
     final status = absence.status;
     final countColor = status == null ? null : statusColors(context).of(status).fg;
 
-    return Scaffold(
-      appBar: AppBar(),
-      body: RefreshIndicator(
+    return HeadingScaffold(
+      title: c.course.name,
+      body: (heading) => RefreshIndicator(
         onRefresh: data.refreshEclass,
         child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
-          _heading(context, c.course.name, [c.course.code, c.course.professor].where((s) => s.isNotEmpty).join(' · ')),
+          _heading(context, c.course.name, [c.course.code, c.course.professor].where((s) => s.isNotEmpty).join(' · '),
+              heading),
           if (c.classes.isEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
@@ -182,12 +183,13 @@ class CourseDetailScreen extends StatelessWidget {
   }
 
   /// The course name as the screen's heading, with its code and professor.
-  static Widget _heading(BuildContext context, String name, String facts) {
+  /// Once the name scrolls away it shows in the app bar ([HeadingScaffold]).
+  static Widget _heading(BuildContext context, String name, String facts, Key nameKey) {
     final t = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(name, style: t.textTheme.headlineSmall),
+        Text(name, key: nameKey, style: t.textTheme.headlineSmall),
         if (facts.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 2),

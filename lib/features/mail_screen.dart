@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/session.dart';
 import '../data/app_data.dart';
 import '../models/models.dart';
 import '../ui/format/format.dart';
@@ -48,15 +49,19 @@ class _MailScreenState extends State<MailScreen> {
         onRefresh: data.refreshMail,
         child: ListView(controller: _scroll, physics: const AlwaysScrollableScrollPhysics(), children: [
           SourceError(data.inbox, 'Mail', onRetry: data.refreshMail),
-          if (data.inbox.data != null && mails.isEmpty)
-            const Padding(padding: EdgeInsets.all(16), child: Text('No mail in the inbox.')),
+          if (data.inbox.data == null && data.inbox.error is LoginRequired)
+            EmptyNote('Sign in to university mail to read it here.',
+                action: 'Sign in', onAction: () => openSettings(context))
+          else if (data.inbox.data == null && data.inbox.error == null)
+            const SkeletonRows(count: 6, timeColumn: false),
+          if (data.inbox.data != null && mails.isEmpty) const EmptyNote('No mail in the inbox.'),
           for (final (i, m) in mails.indexed) ...[
-            if (i > 0) const Divider(indent: 16),
+            if (i > 0) const Rule(),
             _MailRow(m),
           ],
           if (data.loadingMoreMail)
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(gutter),
               child: Text('Loading older mail…',
                   style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
             )
@@ -83,26 +88,34 @@ class _MailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return ListTile(
-      minTileHeight: 72,
-      title: Row(children: [
-        Expanded(child: Text(m.from, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium)),
-        Text(pastWhen(m.received), style: t.textTheme.bodySmall?.tnum),
-      ]),
-      subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(m.subject.isEmpty ? '(no subject)' : m.subject,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: m.unread
-                ? t.textTheme.titleMedium
-                : t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurface)),
-        if (m.preview.isNotEmpty)
-          Text(m.preview,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
-      ]),
+    final muted = t.colorScheme.onSurfaceVariant;
+    return InkWell(
       onTap: () => openMail(context, m),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 72),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+              Expanded(
+                child: Text(m.from,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium?.copyWith(color: muted)),
+              ),
+              const SizedBox(width: 12),
+              Text(pastWhen(m.received), style: t.textTheme.bodySmall?.tnum.copyWith(color: muted)),
+            ]),
+            const SizedBox(height: 2),
+            // Weight alone says unread: no dot (DESIGN.md 8, Mail).
+            Text(m.subject.isEmpty ? '(no subject)' : m.subject,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: m.unread ? t.textTheme.titleSmall : t.textTheme.bodyLarge),
+            if (m.preview.isNotEmpty)
+              Text(m.preview,
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium?.copyWith(color: muted)),
+          ]),
+        ),
+      ),
     );
   }
 }
@@ -165,23 +178,21 @@ class _MailMessageScreenState extends State<MailMessageScreen> {
     final subject = (m?.subject ?? h.subject).isEmpty ? '(no subject)' : (m?.subject ?? h.subject);
     final from = m?.from ?? h.from;
     final address = m?.fromAddress ?? '';
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mail'),
-        actions: [
-          if (m != null)
-            IconButton(
-              tooltip: _unread ? 'Mark as read' : 'Mark as unread',
-              icon: Icon(_unread ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined),
-              onPressed: _changingRead ? null : () => _setRead(_unread),
-            ),
-        ],
-      ),
-      body: SelectionArea(
-        child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), children: [
-          Text(subject, style: t.textTheme.titleMedium),
+    return HeadingScaffold(
+      title: subject,
+      actions: [
+        if (m != null)
+          IconButton(
+            tooltip: _unread ? 'Mark as read' : 'Mark as unread',
+            icon: Icon(_unread ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined),
+            onPressed: _changingRead ? null : () => _setRead(_unread),
+          ),
+      ],
+      body: (heading) => SelectionArea(
+        child: ListView(padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 24), children: [
+          Text(subject, key: heading, style: t.textTheme.headlineSmall),
           const SizedBox(height: 12),
-          Text(from, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface)),
+          Text(from, style: t.textTheme.titleSmall),
           if (address.isNotEmpty && address != from) Text(address, style: muted),
           Text(dayDateTime(m?.received ?? h.received), style: muted?.tnum),
           if (m != null && m.attachments.isNotEmpty) ...[
