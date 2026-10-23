@@ -76,9 +76,10 @@ jobs:
       - run: flutter build apk --release --split-per-abi
 
       # The Android side's JVM tests (campus/, appfunctions/); flutter build made the wrapper.
+      # AGP 9 only creates unit-test tasks for the debug build type.
       - name: Android unit tests
         working-directory: android
-        run: ./gradlew :app:testReleaseUnitTest --console=plain
+        run: ./gradlew :app:testDebugUnitTest --console=plain
 
       - uses: actions/upload-artifact@v7
         with:
