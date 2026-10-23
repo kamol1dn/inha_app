@@ -192,9 +192,14 @@ Calls made without the student, to review:
 - **AppFunction results carry the data's age** (`timetableAsOf`, `eclassAsOf`, `insAsOf`) and
   nothing beyond the question: no mail, logins, name, student ID or course codes.
 
-Waiting on the student: the phone model and Android version (Gemini's use of the functions is a
-preview on the Pixel 10 and Galaxy S26 in the US and Korea for now), and the four signing
-secrets for CI.
+**The student's phone** is a Xiaomi on HyperOS 3.0 (global ROM), Android 16 build BP2A.250605.
+The AppFunctions register there, but Gemini won't call them yet (its preview covers the Pixel 10
+and Galaxy S26 in the US and Korea), and that build has no `cmd app_function` to test with. The
+widgets work; HyperOS needs **Autostart on** and **Battery saver: No restrictions** for IUT
+(Settings → Apps → Manage apps → IUT), or the background refresh, the widget clock and the
+reminders may be held back. The APK is `app-arm64-v8a-release.apk`.
+
+Waiting on the student: the four signing secrets for CI.
 
 ## How to work on this
 
