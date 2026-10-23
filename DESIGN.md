@@ -332,7 +332,10 @@ Updated 13:18                                                    bodySmall, mute
 
 **Rail rows by kind:**
 - **Class:** time column start and end; course in `titleMedium` (one line), `B202 · Lecture` in muted `bodyMedium`.
-- **Deadline:** time column the due time; title in `titleSmall` (up to two lines); then `Not submitted · Multimedia Computing` muted
+- **Deadline:** time column the due time; title in `titleSmall` (up to two lines), tidied for rows by `rowTitle` in `lib/ui/format/`:
+  Moodle's event suffix goes (`(Quiz closes)`, `is due`), and a leading kind tag goes too, or becomes a word before a number, so
+  `[QUIZ] 2 Week 6 - 2% (Quiz closes)` reads `Quiz 2 Week 6 - 2%`. The deadline sheet shows eClass's full title. Then
+  `Not submitted · Multimedia Computing` muted
   (`Not attempted` for a quiz, `Closes · 62% watched` for a VOD). When it is warning or danger the second line is a `StatusLine`
   (`Due in 5 h · not submitted`, `Overdue 2 h · not attempted`, for a VOD `62% watched, 21 min left`), the due time and the node take
   the status colour, and the course moves to a third line.
@@ -382,7 +385,7 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
   something is overdue. Then `Today`, `Tomorrow`, `Sat 25 Oct`. Empty days are omitted.
 - **Row:** the rail's deadline row without the line: the due time in `numeral` on the left, the title, then state and course.
 - **Done items** are hidden behind "Show done"; when shown, they carry an ok `StatusLine`: `Submitted Tue 21:14`.
-- **Tapping a row** opens the deadline sheet: the kind (icon and word), the title in `headlineSmall`, the course, a rule, the due time or
+- **Tapping a row** opens the deadline sheet: the kind (icon and word), eClass's full title in `headlineSmall`, the course, a rule, the due time or
   watch window, the status, submission or watch progress (a 4dp `onSurface` bar on `outlineVariant`), and a `FilledButton`
   "Open in eClass", with "Course attendance and grade" as a `TextButton` below.
 

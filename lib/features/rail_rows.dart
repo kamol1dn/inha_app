@@ -412,7 +412,7 @@ class DueRow extends StatelessWidget {
       lineBelow: lineBelow,
       onTap: () => showDeadlineSheet(context, d),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(d.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: titleStyle),
+        Text(rowTitle(d.title), maxLines: 2, overflow: TextOverflow.ellipsis, style: titleStyle),
         if (done)
           StatusLine(Status.ok, d.kind == DeadlineKind.vod ? 'Watched' : doneText(d), padding: EdgeInsets.zero)
         else if (status != null)

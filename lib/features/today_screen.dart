@@ -128,7 +128,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final next = ([...all.where((d) => isDue(d) && !isDone(d, att) && d.end.isAfter(now))]
           ..sort((a, b) => a.end.compareTo(b.end)))
         .firstOrNull;
-    final tail = next == null ? '' : ' Next: ${next.title}, ${next.courseName}, ${dayDateTime(next.end)}.';
+    final tail = next == null ? '' : ' Next: ${rowTitle(next.title)}, ${next.courseName}, ${dayDateTime(next.end)}.';
     return StatusLine(Status.ok, 'Nothing due in the next 3 days.$tail', padding: pad);
   }
 

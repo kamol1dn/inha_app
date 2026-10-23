@@ -67,6 +67,27 @@ String pastWhen(DateTime t, {DateTime? now}) {
 /// Thu 23 Oct 14:07 (year only when it isn't this year)
 String dayDateTime(DateTime t, {DateTime? now}) => '${dayDate(t, now: now)} ${clock(t)}';
 
+final _kindTag = RegExp(r'^\[([A-Za-z]{2,12})\]\s*');
+final _eventSuffix =
+    RegExp(r'\s*(\((\w+\s+)?(opens|closes|is due|due|starts|ends)\)|\s+is due)\s*$', caseSensitive: false);
+
+/// An eClass item's title as a row shows it (DESIGN.md 7): Moodle's event
+/// suffix ("(Quiz closes)", "is due") is dropped, and so is a leading kind
+/// tag, except that before a number it becomes a word, so
+/// "[QUIZ] 2 Week 6 - 2% (Quiz closes)" reads "Quiz 2 Week 6 - 2%". The
+/// detail sheet keeps eClass's own title.
+String rowTitle(String title) {
+  var t = title.trim().replaceFirst(_eventSuffix, '');
+  final tag = _kindTag.firstMatch(t);
+  if (tag != null) {
+    final rest = t.substring(tag.end);
+    final word = tag[1]!;
+    t = RegExp(r'^\d').hasMatch(rest) ? '${word[0].toUpperCase()}${word.substring(1).toLowerCase()} $rest' : rest;
+  }
+  t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return t.isEmpty ? title.trim() : t;
+}
+
 /// 812 B / 14 KB / 2.3 MB / 18 MB
 String fileSize(int bytes) {
   if (bytes < 1024) return '$bytes B';

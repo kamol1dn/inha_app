@@ -127,8 +127,10 @@ Calls made without the student, to review:
 - **The hero opens Schedule** on its day (Phase A behaviour); other classes open their course.
 - **Schedule uses the rail too**, with breaks and the Now row between classes.
 - **Without a limit, the tally draws only the absences** in ink, no faint allowance.
-- **eClass titles are shown as eClass writes them** ("[QUIZ] 2 Week 6 - 2% (Quiz
-  closes)"), not tidied as the mockups showed; tidying them is a possible follow-up.
+- **Rows tidy eClass titles** (the student asked): "[QUIZ] 2 Week 6 - 2% (Quiz closes)"
+  reads "Quiz 2 Week 6 - 2%". A kind tag before a number becomes a word rather than
+  vanishing, since "2 Week 6 - 2%" alone says nothing. The sheet keeps the full title;
+  notifications still use it too.
 - **No type icons on deadline rows**; the deadline sheet shows the kind.
 - **The unread badge is ink**, not red or blue: a count, not an alarm.
 - **The status-bar icon stays the block wordmark**; Fraunces serifs vanish at 24 dp.
