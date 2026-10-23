@@ -16,6 +16,10 @@ grades and university mail.
 Reminders (deadlines, VOD windows, new absences, classes) come as notifications, each switchable in Settings,
 with quiet hours from 23:00 to 07:30.
 
+Three home-screen widgets (Up next, Today, Attendance) show the same answers without opening the app, and on
+Android 16 the app offers read-only AppFunctions so an assistant such as Gemini can answer "where is my next
+class?" (`docs/WIDGETS.md`, `docs/APPFUNCTIONS.md`).
+
 ## It only talks to IUT
 
 The app has no server of its own and sends nothing anywhere else: no analytics, no crash reporting. It
@@ -28,6 +32,11 @@ connects directly to:
 
 The two typefaces, Fraunces and Public Sans (both under the SIL Open Font License), are bundled in the app;
 nothing is downloaded at run time.
+
+One exception is the student's choice, not the app's: when they ask an assistant such as Gemini about their
+classes, Android hands it the answer of one of the app's AppFunctions, and Gemini may process that on Google's
+servers. Those answers carry only what the question needs (no mail, logins, name or student ID); see
+`docs/APPFUNCTIONS.md`.
 
 Logins are typed only in the app's Settings and kept in Android's encrypted storage on the phone; each password
 is sent only to the service it belongs to. `ins.inha.uz` still serves a certificate that expired on 2024-11-16;
@@ -44,6 +53,10 @@ flutter analyze
 flutter test
 flutter run -d <device>
 ```
+
+The Android side has JVM unit tests of its own: after a first `flutter build apk --debug` (which creates the
+Gradle wrapper), `cd android && ./gradlew :app:testDebugUnitTest`. The app compiles against Android SDK
+platform 37 (the AppFunctions library needs it); install it with the SDK manager if Gradle asks.
 
 ### Release APK
 
@@ -70,13 +83,16 @@ release build falls back to the debug key, which is fine for testing but cannot 
 | `lib/services/` | One client per site: HTTP, login, parsers |
 | `lib/data/` | `AppData`: cached data per source, refresh, the rules that decide what is urgent |
 | `lib/features/` | Screens |
-| `lib/notifications/` | Reminder rules (pure), the notifier, the WorkManager background refresh |
+| `lib/notifications/` | Reminder rules (pure), the notifier, the WorkManager background refresh, the widget update hook |
+| `android/app/src/main/kotlin/` | The Android side: `campus/` reads the app's cache with the app's rules, `widget/` the home-screen widgets (Glance), `appfunctions/` the AppFunctions; JVM tests in `android/app/src/test/` |
 | `lib/ui/` | Theme (colours, type, status tones) and the one formatter for times and dates |
 | `assets/fonts/` | The bundled fonts and their OFL licences |
 | `tool/` | `make_fonts.py` cuts the fonts from the upstream variable files; `make_icons.py` draws the icons and splash |
 | `DESIGN.md` | The design guide every screen follows |
 | `docs/ENDPOINTS.md` | What each site exposes and how the app reads it |
 | `docs/NOTIFICATIONS.md` | Which reminders go out, when, and why |
+| `docs/WIDGETS.md` | The home-screen widgets: what they show, how they refresh, how to test |
+| `docs/APPFUNCTIONS.md` | The Gemini AppFunctions: what is exposed, availability, how to test |
 | `docs/ROADMAP.md` | What is done and what is next |
 
 Tests run against anonymized copies of real pages in `test/fixtures/`. Real pages, which carry personal data,
