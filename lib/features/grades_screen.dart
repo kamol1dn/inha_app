@@ -28,11 +28,12 @@ class GradesScreen extends StatelessWidget {
       body: RefreshIndicator(
         onRefresh: data.refreshGrades,
         child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
-          SourceError(data.grades, 'INS', onRetry: data.refreshGrades),
           if (report == null && data.grades.error is LoginRequired)
             EmptyNote('Sign in to INS to see grades.', action: 'Sign in', onAction: () => openSettings(context))
           else if (report == null && data.grades.error == null)
-            const SkeletonRows(count: 6, timeColumn: false),
+            const SkeletonRows(count: 6, timeColumn: false)
+          else
+            SourceError(data.grades, 'INS', onRetry: data.refreshGrades),
           if (report != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 0),

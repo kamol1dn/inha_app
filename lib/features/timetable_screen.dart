@@ -44,6 +44,9 @@ class TimetableScreenState extends State<TimetableScreen> with SingleTickerProvi
     final monday = today.subtract(Duration(days: now.weekday - 1));
     // On the weekend, show next week.
     final weekStart = now.weekday > 5 ? monday.add(const Duration(days: 7)) : monday;
+    // Tall enough for both lines at any text scale; a narrow tab shrinks its text to fit.
+    final scaler = MediaQuery.textScalerOf(context);
+    final tabHeight = 24 + scaler.scale(12) * 16 / 12 + scaler.scale(19) * 24 / 19;
     return Column(
       children: [
         TabBar(
@@ -51,15 +54,18 @@ class TimetableScreenState extends State<TimetableScreen> with SingleTickerProvi
           tabs: [
             for (var i = 0; i < 5; i++)
               Tab(
-                height: 64,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                height: tabHeight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(weekdayShort(i + 1), style: t.textTheme.labelMedium),
                   Text(
                     '${weekStart.add(Duration(days: i)).day}',
                     style: t.textTheme.titleMedium?.tnum.copyWith(
                         color: weekStart.add(Duration(days: i)) == today ? t.colorScheme.primary : null),
                   ),
-                ]),
+                  ]),
+                ),
               ),
           ],
         ),

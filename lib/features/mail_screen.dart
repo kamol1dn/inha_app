@@ -48,12 +48,13 @@ class _MailScreenState extends State<MailScreen> {
       body: RefreshIndicator(
         onRefresh: data.refreshMail,
         child: ListView(controller: _scroll, physics: const AlwaysScrollableScrollPhysics(), children: [
-          SourceError(data.inbox, 'Mail', onRetry: data.refreshMail),
           if (data.inbox.data == null && data.inbox.error is LoginRequired)
             EmptyNote('Sign in to university mail to read it here.',
                 action: 'Sign in', onAction: () => openSettings(context))
           else if (data.inbox.data == null && data.inbox.error == null)
-            const SkeletonRows(count: 6, timeColumn: false),
+            const SkeletonRows(count: 6, timeColumn: false)
+          else
+            SourceError(data.inbox, 'Mail', onRetry: data.refreshMail),
           if (data.inbox.data != null && mails.isEmpty) const EmptyNote('No mail in the inbox.'),
           for (final (i, m) in mails.indexed) ...[
             if (i > 0) const Rule(),

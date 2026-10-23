@@ -32,12 +32,13 @@ class CoursesScreen extends StatelessWidget {
       onRefresh: data.refreshEclass,
       child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
         const OfflineRow(),
-        SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass),
         if (data.attendance.data == null && data.attendance.error is LoginRequired)
           EmptyNote('Sign in to eClass to see attendance and VOD progress.',
               action: 'Sign in', onAction: () => openSettings(context))
         else if (data.attendance.data == null && data.attendance.error == null)
-          const SkeletonRows(timeColumn: false),
+          const SkeletonRows(timeColumn: false)
+        else
+          SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass),
         if (unset > 0)
           Padding(
             padding: const EdgeInsets.fromLTRB(gutter, 8, 8, 4),

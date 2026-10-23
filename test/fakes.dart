@@ -16,6 +16,9 @@ class FakeEclass implements EclassApi {
   Object? loginError;
   int logins = 0;
 
+  /// Thrown by every fetch when set (a dead network, an expired login).
+  Object? error;
+
   @override
   Future<void> ensureLoggedIn() async {
     logins++;
@@ -23,9 +26,9 @@ class FakeEclass implements EclassApi {
   }
 
   @override
-  Future<List<Course>> courses() async => courseList;
+  Future<List<Course>> courses() async => error == null ? courseList : throw error!;
   @override
-  Future<List<Deadline>> upcoming() async => deadlines;
+  Future<List<Deadline>> upcoming() async => error == null ? deadlines : throw error!;
   @override
   Future<CourseAttendance> attendance(Course course) async =>
       attendanceById[course.id] ?? CourseAttendance(course: course);
@@ -47,9 +50,10 @@ class FakeEclass implements EclassApi {
 
 class FakeTimetable implements TimetableApi {
   List<Lesson> lessonList = const [];
+  Object? error;
   @override
   Future<List<Lesson>> lessons(String classGroup, {Set<String> excludeSubjects = const {}}) async =>
-      lessonList;
+      error == null ? lessonList : throw error!;
   @override
   Future<List<String>> classGroups() async => const [];
 }

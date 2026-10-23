@@ -25,8 +25,8 @@ class NotificationTaps extends ValueNotifier<String?> {
 class InhaApp extends StatelessWidget {
   const InhaApp({super.key});
 
-  static final _light = _theme(lightScheme, StatusColors.light);
-  static final _dark = _theme(darkScheme, StatusColors.dark);
+  static final light = _theme(lightScheme, StatusColors.light);
+  static final dark = _theme(darkScheme, StatusColors.dark);
 
   // DESIGN.md sections 3-6: explicit schemes, paper and rules, elevation 0,
   // radius by role, the bundled faces on every component.
@@ -118,16 +118,17 @@ class InhaApp extends StatelessWidget {
         textColor: scheme.onInverseSurface,
         textStyle: text.labelSmall,
       ),
+      // The refresh bar under the app bar has no track; VOD bars set their own.
       progressIndicatorTheme: ProgressIndicatorThemeData(
-          linearMinHeight: 2, color: scheme.primary, linearTrackColor: scheme.outlineVariant),
+          linearMinHeight: 2, color: scheme.primary, linearTrackColor: const Color(0x00000000)),
     );
   }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'IUT',
-        theme: _light,
-        darkTheme: _dark,
+        theme: light,
+        darkTheme: dark,
         themeMode: context.select<AppData, ThemeMode>((d) => d.prefs.themeMode),
         home: const HomeShell(),
       );
@@ -256,7 +257,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           bottom: _anyLoading(data)
               ? const PreferredSize(
                   preferredSize: Size.fromHeight(2),
-                  child: LinearProgressIndicator(backgroundColor: Color(0x00000000)))
+                  child: LinearProgressIndicator())
               : null,
         ),
         body: IndexedStack(

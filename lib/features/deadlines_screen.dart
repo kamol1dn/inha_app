@@ -67,12 +67,13 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
         ),
         const SizedBox(height: 8),
         const OfflineRow(),
-        SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
         if (data.deadlines.data == null && data.deadlines.error is LoginRequired)
           EmptyNote('Sign in to eClass to see deadlines and attendance.',
               action: 'Sign in', onAction: () => openSettings(context))
         else if (data.deadlines.data == null && data.deadlines.error == null)
-          const SkeletonRows(),
+          const SkeletonRows()
+        else
+          SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
         if (data.deadlines.data != null && all.where(isDue).isEmpty && !filtered)
           const EmptyNote('No upcoming deadlines in eClass.'),
         if (data.deadlines.data != null && shown.isEmpty && filtered)
