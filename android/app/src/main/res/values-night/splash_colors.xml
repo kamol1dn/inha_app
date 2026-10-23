@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DESIGN.md 3 and 12: the splash in the night palette. -->
+    <color name="splash_background">#1A1814</color>
+    <color name="splash_ink">#EDE7DA</color>
+    <color name="splash_accent">#9DBDE6</color>
+</resources>

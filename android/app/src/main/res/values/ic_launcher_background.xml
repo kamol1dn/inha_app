@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- DESIGN.md 3: the accent, from the deep blue of the IUT emblem. -->
-    <color name="ic_launcher_background">#1D4E89</color>
+    <!-- DESIGN.md 3: the paper. -->
+    <color name="ic_launcher_background">#F5F2EA</color>
 </resources>

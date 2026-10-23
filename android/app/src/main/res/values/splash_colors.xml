@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DESIGN.md 3 and 12: the splash in the day palette. -->
+    <color name="splash_background">#F5F2EA</color>
+    <color name="splash_ink">#1C1B19</color>
+    <color name="splash_accent">#1D4E89</color>
+</resources>
