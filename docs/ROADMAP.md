@@ -97,9 +97,8 @@ Calls made without the student, to review (each is also in its commit message):
    (`ic_stat_notify`, see docs/NOTIFICATIONS.md §5). Verify the release build fetches
    (INTERNET permission is in the main manifest) and that R8 keeps what the plugins need.
 
-Nice to have, if time allows: the exam schedule (the student's Telegram bot
-`D:\coding\inha_timetable` already parses the Fall 2026 exam PDFs), eClass announcements,
-and a home-screen widget for the next class.
+Nice to have, if time allows: the exam schedule (done after Phase C, below), eClass
+announcements, and a home-screen widget for the next class (done in Phase C).
 
 ## Phase B: UI overhaul (done 2026-10-23)
 
@@ -200,6 +199,28 @@ widgets work; HyperOS needs **Autostart on** and **Battery saver: No restriction
 reminders may be held back. The APK is `app-arm64-v8a-release.apk`.
 
 Waiting on the student: the four signing secrets for CI.
+
+## Exams (2026-10-24)
+
+Built on branch `claude/exam-schedule-f44707`, details in `docs/EXAMS.md`. The Fall 2026 midterm
+(Mon 26 to Fri 30 Oct) is bundled, read from the university's PDF by `tool/exam_timetable.py`
+and matched to the timetable's subjects and the eClass courses. Exams show on Today's rail
+(the hero when next), in a Today section while one lies beyond the rail, on Schedule's day
+rails, in the exam week screen and on course detail.
+
+Calls made without the student, to review:
+
+- **Bundled, not fetched.** The README's "only talks to IUT" stands; a new sheet (the finals)
+  or a correction is an app update. An opt-in fetch from this repository is the middle path,
+  not built.
+- **The room list is never bundled** (every student's name and ID, public repo). The student
+  sets their own room per exam ("Set my room"), picking from the rooms that exam uses.
+- **Classes still show in exam week.** EduPage keeps listing them; whether they're held isn't
+  known to the app.
+- **UK programme sittings go only to UK groups** (AI, CS, DS, BM, IT); an ICE or CSE student
+  never sees `(UK) Operating System`.
+
+Next: an Exams reminder channel, and the widgets and AppFunctions reading the sheets.
 
 ## How to work on this
 

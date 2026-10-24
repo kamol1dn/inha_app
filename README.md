@@ -12,6 +12,7 @@ grades and university mail.
 | Courses | Absences against the limit you set, VOD progress, the INS grade | eClass, INS |
 | Grades | GPA, credits and every course by term | INS |
 | Mail | The inbox; messages open, and opening one marks it read | University Exchange mail |
+| Exams | Your midterm or final exams: when, and the rooms each uses until you set yours (on Today, Schedule and course detail too) | The university's exam timetable PDF, bundled (`docs/EXAMS.md`) |
 
 Reminders (deadlines, VOD windows, new absences, classes) come as notifications, each switchable in Settings,
 with quiet hours from 23:00 to 07:30.
@@ -31,7 +32,9 @@ connects directly to:
 - `mail.inha.uz` (Exchange Web Services with Basic auth over HTTPS).
 
 The two typefaces, Fraunces and Public Sans (both under the SIL Open Font License), are bundled in the app;
-nothing is downloaded at run time.
+nothing is downloaded at run time. So are the exam timetables: no IUT service publishes them, so each PDF the
+university posts is read into `assets/exams/` and ships with the next version of the app. The per-student room
+list is not bundled (it names every student); you set your own room in the app.
 
 One exception is the student's choice, not the app's: when they ask an assistant such as Gemini about their
 classes, Android hands it the answer of one of the app's AppFunctions, and Gemini may process that on Google's
@@ -108,12 +111,14 @@ in `-debug-key`) and cannot update the signed app on the phone; a tag build fail
 | `android/app/src/main/kotlin/` | The Android side: `campus/` reads the app's cache with the app's rules, `widget/` the home-screen widgets (Glance), `appfunctions/` the AppFunctions; JVM tests in `android/app/src/test/` |
 | `lib/ui/` | Theme (colours, type, status tones) and the one formatter for times and dates |
 | `assets/fonts/` | The bundled fonts and their OFL licences |
-| `tool/` | `make_fonts.py` cuts the fonts from the upstream variable files; `make_icons.py` draws the icons and splash |
+| `tool/` | `make_fonts.py` cuts the fonts from the upstream variable files; `make_icons.py` draws the icons and splash; `exam_timetable.py` reads an exam timetable PDF into `assets/exams/` |
+| `assets/exams/` | The exam timetables, one JSON file per exam week |
 | `DESIGN.md` | The design guide every screen follows |
 | `docs/ENDPOINTS.md` | What each site exposes and how the app reads it |
 | `docs/NOTIFICATIONS.md` | Which reminders go out, when, and why |
 | `docs/WIDGETS.md` | The home-screen widgets: what they show, how they refresh, how to test |
 | `docs/APPFUNCTIONS.md` | The Gemini AppFunctions: what is exposed, availability, how to test |
+| `docs/EXAMS.md` | The exam timetables: where they come from, adding the next one, matching them to your courses |
 | `docs/ROADMAP.md` | What is done and what is next |
 
 Tests run against anonymized copies of real pages in `test/fixtures/`. Real pages, which carry personal data,

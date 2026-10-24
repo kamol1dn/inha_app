@@ -219,8 +219,8 @@ on the M3 defaults (which assume Roboto). `displayLarge`, `displaySmall` and `he
 | Node | Drawn as | For |
 |---|---|---|
 | Now | 10dp dot in `primary`; the row reads "Now" in `primary` with a 1dp `primary` line to the right edge | The current time |
-| Class | 12dp ring, 2dp stroke in `onSurface` (`onSurfaceVariant` once past) | A class |
-| Class in progress | 12dp dot in `primary` | The class happening now |
+| Class | 12dp ring, 2dp stroke in `onSurface` (`onSurfaceVariant` once past) | A class or an exam |
+| Class in progress | 12dp dot in `primary` | The class or exam happening now |
 | Due | 8dp dot in `onSurface`, or the status `fg` when warning or danger | A deadline or VOD window |
 | none | the line only | Day headers, "Free for the rest of the day", breaks |
 
@@ -311,6 +311,10 @@ Updated 13:18                                                    bodySmall, mute
      in `titleLarge`, then `Lecture · J. Hong`. With no room in EduPage it reads "Room not set". The countdown ticks on the minute.
      Tapping it opens Schedule on its day; any other class opens its course.
    - **Later classes today** are ordinary class rows: the course in `titleMedium`, then `B202 · Lecture`.
+   - **Exams** (`docs/EXAMS.md`) sit on the rail like classes, for the next 72 h: the course, then
+     `Midterm · B209 or B210` (the rooms it uses until the student's own is known). An exam in progress, or the next
+     thing today, is the hero: its room, or `Room not assigned yet` in the room's place, then the course and
+     `Midterm · 1 h · B304(A–C), B305 or B201`. Exams and their sheet never guess a room.
    - **Deadlines and VOD windows due today** sit at their due time among the classes.
    - **After the last class** of the day: `Free for the rest of the day`, at the time it ends.
    - **No class today:** `No classes today` (or `No more classes today`) right after the Now row.
@@ -321,14 +325,17 @@ Updated 13:18                                                    bodySmall, mute
    - **Nothing due in the next 3 days:** after the rail, one ok `StatusLine`:
      `Nothing due in the next 3 days. Next: Lab 6, Multimedia Computing, Mon 3 Nov 23:59.`, or `No deadlines in eClass`. Never a
      celebration, never empty space.
-3. **Attendance:** every course in trouble as a row with its tally and count, then one line for the rest:
+3. **Exams,** during an exam period and only while an exam lies beyond the rail's 72 h: a `Midterm exams` section
+   with the student's exams still to come as Deadlines-style rows (start time and day), `Rooms not assigned yet.` as
+   an info line while that holds, and "Show exam week".
+4. **Attendance:** every course in trouble as a row with its tally and count, then one line for the rest:
    `The other 3 courses are within their limit.`, `All 4 courses are within their limit.`, or, while limits are missing, an info line
    with the raw counts (`No limit set: Artificial Intelligence 6 · Multimedia Computing 2`). The section taps through to Courses. The
    student opens the app partly to ask this, so the answer is always on screen.
-4. **Unread mail:** shown only when there is unread mail, headed by the count (`8 unread`). Two rows (subject, then date), then
+5. **Unread mail:** shown only when there is unread mail, headed by the count (`8 unread`). Two rows (subject, then date), then
    `6 more`. Room changes often arrive by mail. When Exchange fails, this section gets only the stale marker; the error row is on the
    Mail screen.
-5. **Footer:** `Updated 08:41`, or `Updating…` during a refresh.
+6. **Footer:** `Updated 08:41`, or `Updating…` during a refresh.
 
 **Rail rows by kind:**
 - **Class:** time column start and end; course in `titleMedium` (one line), `B202 · Lecture` in muted `bodyMedium`.
@@ -378,6 +385,22 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
 - **Changes:** EduPage publishes neither room changes nor cancellations yet. When it does, a room change gets a warning `StatusLine`
   ("Room changed to A-201") and a cancelled class is struck through with a danger `StatusLine` "Cancelled".
 - **Tapping a class** opens its course.
+- **Exams** sit among the classes on their day, in time order. During an exam period the app bar has "Exams".
+
+**Exams** (the exam week, `docs/EXAMS.md`).
+- **The answer first:** the student's exams by day, as Deadlines-style rows (start and end, the course, then
+  `Midterm · B209 or B210`), past ones muted. Above them one muted line, `Fall 2026 midterm, Mon 26 – Fri 30 Oct, from the
+  university's exam timetable.`, and while it holds the info line `Rooms not assigned yet: each exam shows the rooms it uses.`
+- **Not on the timetable:** the student's courses with no sitting, in one sentence.
+- **"Show every exam"** lists the whole sheet the same way, for checking the matching by hand. The source PDF's name closes
+  the screen.
+- **A course with several sittings** nothing tells apart (two teachers, say) shows each, with the sheet's note
+  (`Midterm · Dr.Sarvar · B304(A–C) or B305`) and an info `StatusLine`: `The timetable lists 2 sittings; check which is yours.`
+- **The exam sheet:** `Midterm · Fall 2026` muted, the course in `headlineSmall`, a rule, the day and time with the
+  length, then the room (`Room B305` with `You set this room.`) or an info `StatusLine` `Room not assigned yet` and the
+  rooms the exam uses with their seats, the cell as printed with its slot in `bodySmall`, and the text buttons "Set my
+  room" (a dialog of the exam's rooms; the student picks, nothing is guessed) and "Course attendance and grade".
+- **Course detail** gets a `Midterm` section after Due: the sitting as a row, or `No midterm on the timetable for this course.`
 
 **Deadlines.**
 - **Filters** first: a course chip and kind chips, then "Show done".
