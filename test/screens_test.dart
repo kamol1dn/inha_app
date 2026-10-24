@@ -97,7 +97,6 @@ ExamPeriod midterm(List<(String, DateTime, List<String>)> sittings, {DateTime? e
       kind: 'midterm',
       term: 'Fall 2026',
       source: 'Timetable for 2026 Fall Midterm Exam.pdf',
-      roomsAssigned: false,
       seats: const {'B304(A)': 50, 'B304(B)': 50, 'B304(C)': 50, 'B305': 35, 'B209': 35, 'B210': 35},
       exams: [
         for (final (cell, start, rooms) in sittings)
@@ -189,7 +188,7 @@ void main() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    testWidgets('an exam today is the hero until the room is known, and its sheet sets the room', (tester) async {
+    testWidgets('an exam today is the hero, its room not set until the student sets it from its sheet', (tester) async {
       final (data, eclass, _, _, _) = await makeAppData();
       eclass.courseList = [esd];
       await Future.wait([data.refreshTimetable(), data.refreshEclass()]);
@@ -200,11 +199,12 @@ void main() {
       ];
       await show(tester, data, TodayScreen(onOpenTab: (_) {}, onOpenSchedule: (_) {}));
       expect(find.textContaining('Now · until 23:59'), findsOneWidget);
-      expect(find.text('Room not assigned yet'), findsOneWidget);
+      expect(find.text('Room not set'), findsOneWidget);
       expect(find.textContaining('B304(A–C) or B305'), findsOneWidget);
 
-      await tester.tap(find.text('Room not assigned yet'));
+      await tester.tap(find.text('Room not set'));
       await tester.pumpAndSettle();
+      expect(find.textContaining("For your privacy, the app doesn't include anyone's exam room"), findsOneWidget);
       expect(find.textContaining('This exam uses 4 rooms: B304(A) (50 seats)'), findsOneWidget);
       expect(find.text('On the timetable as “Embedded Software & Design”, slot W-1.'), findsOneWidget);
       await tester.tap(find.text('Set my room'));
@@ -218,7 +218,7 @@ void main() {
       Navigator.of(tester.element(find.text('Room B305'))).pop();
       await tester.pumpAndSettle();
       expect(find.text('B305'), findsOneWidget);
-      expect(find.text('Room not assigned yet'), findsNothing);
+      expect(find.text('Room not set'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     });
 
@@ -243,11 +243,26 @@ void main() {
       await show(tester, data, TodayScreen(onOpenTab: (_) {}, onOpenSchedule: (_) {}));
       await tester.scrollUntilVisible(find.text('Show exam week'), 300);
       expect(find.text('Midterm exams'), findsOneWidget);
-      expect(find.text('Rooms not assigned yet.'), findsOneWidget);
+      expect(find.textContaining("Rooms aren't included, for your privacy"), findsOneWidget);
       await show(tester, data, const CourseDetailScreen(courseId: 2622, name: 'Artificial Intelligence'),
           scaffold: false);
       await tester.scrollUntilVisible(find.text('Midterm · B209 or B210'), 300);
       expect(find.text('Midterm'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets("in an exam week the timetable's classes are gone from Today", (tester) async {
+      final data = await seeded();
+      // The week runs from yesterday's exam to one in two days: today is in it.
+      data.examPeriods = [
+        midterm([
+          ('Artificial Intelligence', today.subtract(const Duration(hours: 14)), ['B209']),
+          ('Embedded Software & Design', now.add(const Duration(days: 2)), ['B305']),
+        ]),
+      ];
+      await show(tester, data, TodayScreen(onOpenTab: (_) {}, onOpenSchedule: (_) {}));
+      expect(find.text('B101 Conference'), findsNothing); // the all-day class
+      expect(find.text('No classes today'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     });
 

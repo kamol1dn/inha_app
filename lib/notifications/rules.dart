@@ -181,6 +181,7 @@ List<PlannedNotification> planNotifications({
   Set<String> sentKeys = const {},
   QuietHours? quietHours,
   Map<int, int> absenceLimits = const {},
+  Set<DateTime> classFree = const {},
 }) {
   final out = <String, PlannedNotification>{};
   void add(PlannedNotification n) => out.putIfAbsent(n.key, () => n);
@@ -198,7 +199,10 @@ List<PlannedNotification> planNotifications({
       _quiet([n], DateTime(9999), now, quietHours).forEach(add);
     }
   }
-  for (final lesson in lessons) {
+  // No classes in an exam week, whatever the timetable says.
+  final today = now.toLocal();
+  final classesToday = !classFree.contains(DateTime(today.year, today.month, today.day));
+  for (final lesson in classesToday ? lessons : const <Lesson>[]) {
     final n = _classReminder(now, lesson);
     if (n == null) continue;
     _quiet([n], n.when.add(classReminderLead), now, quietHours).forEach(add);

@@ -47,7 +47,8 @@ class _ExamsScreenState extends State<ExamsScreen> {
           child: Text('${p.term} $what, ${dayRange(p.first, p.last, now: now)}, from the university\'s exam timetable.',
               style: muted),
         ),
-        if (!p.roomsAssigned) const StatusLine(Status.info, 'Rooms not assigned yet: each exam shows the rooms it uses.'),
+        if (known && match.exams.any((m) => examRoom(m) == null))
+          const StatusLine(Status.info, roomsLeftOut),
         if (!known)
           const EmptyNote('Your courses come from the timetable and eClass, and neither has loaded yet.')
         else if (match.exams.isEmpty)

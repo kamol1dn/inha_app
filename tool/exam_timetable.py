@@ -101,8 +101,6 @@ def main():
         'term': TERM,
         'title': title,
         'source': PDF.replace('\\', '/').split('/')[-1],
-        # Set to true once the university has said which room each student sits in.
-        'roomsAssigned': False,
         'seats': {name: int(places[i]) if places[i].isdigit() else None for i, name in rooms},
         'exams': exams,
     }

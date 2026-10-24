@@ -111,6 +111,10 @@ class Prefs {
     _p.setString('exams.rooms.v1', jsonEncode(all));
   }
 
+  /// The exam weeks' days as last written by [AppData.loadExams].
+  Set<DateTime> get classFreeDays => decodeDays(_p.getString(classFreeDaysKey));
+  Future<void> setClassFreeDays(Set<DateTime> days) => _p.setString(classFreeDaysKey, encodeDays(days));
+
   AccountCheck? accountCheck(Service s) {
     final raw = _p.getString('account.${s.name}');
     if (raw == null) return null;
@@ -393,8 +397,13 @@ class AppData extends ChangeNotifier {
       }
     }
     examPeriods = read;
+    // For the background refresh and the widgets, which don't read the sheets.
+    await prefs.setClassFreeDays(classFreeDays(read));
     notifyListeners();
   }
+
+  /// Days with no classes, whatever the timetable says: the exam weeks.
+  Set<DateTime> get classFree => examPeriods.isEmpty ? prefs.classFreeDays : classFreeDays(examPeriods);
 
   /// The student's exams in the period on show at [now], matched from the
   /// timetable and eClass; null outside every exam period.

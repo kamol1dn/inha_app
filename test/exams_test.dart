@@ -40,11 +40,10 @@ void main() {
       }
     });
 
-    test('Fall 2026 midterm: Mon 26 to Fri 30 Oct, 76 sittings in 27 slots, rooms not assigned yet', () {
+    test('Fall 2026 midterm: Mon 26 to Fri 30 Oct, 76 sittings in 27 slots', () {
       final p = midterm();
       expect(p.name, 'Midterm');
       expect(p.term, 'Fall 2026');
-      expect(p.roomsAssigned, isFalse);
       expect(p.exams, hasLength(76));
       expect({for (final e in p.exams) e.slot}, hasLength(27));
       expect(p.first, DateTime(2026, 10, 26, 9, 30));
@@ -82,6 +81,15 @@ void main() {
       expect(p.shownAt(DateTime(2026, 10, 30, 16, 29)), isTrue);
       expect(p.shownAt(DateTime(2026, 10, 30, 16, 30)), isFalse);
       expect(ExamPeriod.current([p], DateTime(2026, 11, 2)), isNull);
+    });
+
+    test('the exam week is class-free, and the days survive the trip through prefs', () {
+      final days = classFreeDays([midterm()]);
+      expect(days, {for (var d = 26; d <= 30; d++) DateTime(2026, 10, d)});
+      expect(encodeDays(days), '["2026-10-26","2026-10-27","2026-10-28","2026-10-29","2026-10-30"]');
+      expect(decodeDays(encodeDays(days)), days);
+      expect(decodeDays(null), isEmpty);
+      expect(decodeDays('not json'), isEmpty);
     });
 
     test('an unknown format is refused rather than misread', () {

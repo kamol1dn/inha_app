@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../models/models.dart';
 import 'urgency.dart';
 
@@ -13,16 +15,14 @@ const examSheets = ['assets/exams/2026-fall-midterm.json'];
 /// course detail. It shows until its last exam ends.
 const examLead = Duration(days: 21);
 
-/// One exam week: a midterm or a final.
+/// One exam week: a midterm or a final. A sitting has the rooms it uses,
+/// never a student's own: the university's room list names every student,
+/// so the app leaves it out and each student sets their room.
 class ExamPeriod {
   final String id; // "2026-fall-midterm"
   final String kind; // "midterm", "final"
   final String term; // "Fall 2026"
   final String source; // the PDF it was read from
-
-  /// Whether the university has said which room each student sits in. Until
-  /// then a sitting only has the rooms it uses.
-  final bool roomsAssigned;
   final Map<String, int?> seats; // room -> seats, null when the sheet gives none
   final List<Exam> exams; // in time order
 
@@ -31,7 +31,6 @@ class ExamPeriod {
     required this.kind,
     required this.term,
     required this.source,
-    required this.roomsAssigned,
     required this.seats,
     required this.exams,
   });
@@ -52,7 +51,6 @@ class ExamPeriod {
       kind: j['kind'] as String,
       term: j['term'] as String,
       source: j['source'] as String,
-      roomsAssigned: j['roomsAssigned'] as bool,
       seats: {for (final e in (j['seats'] as Map<String, dynamic>).entries) e.key: e.value as int?},
       exams: _inTimeOrder([for (final e in j['exams'] as List) Exam.fromJson(e as Map<String, dynamic>)], (e) => e),
     );
@@ -70,6 +68,33 @@ class ExamPeriod {
   /// The period on show at [now], the earliest first; null outside every window.
   static ExamPeriod? current(List<ExamPeriod> all, DateTime now) =>
       ([...all.where((p) => p.shownAt(now))]..sort((a, b) => a.first.compareTo(b.first))).firstOrNull;
+}
+
+/// The days of every exam week, first exam's day to last's: there are no
+/// classes then, whatever the timetable says.
+Set<DateTime> classFreeDays(List<ExamPeriod> periods) => {
+      for (final p in periods)
+        if (p.exams.isNotEmpty)
+          for (var d = _day(p.first); !d.isAfter(_day(p.last)); d = DateTime(d.year, d.month, d.day + 1)) d,
+    };
+
+DateTime _day(DateTime t) => DateTime(t.year, t.month, t.day);
+
+/// Where the app keeps [classFreeDays] for the background refresh and the
+/// Android side (widgets, AppFunctions), which don't read the bundled sheets:
+/// a JSON list of "2026-10-26" dates.
+const classFreeDaysKey = 'exams.classFreeDays.v1';
+
+String encodeDays(Set<DateTime> days) =>
+    jsonEncode([for (final d in days.toList()..sort()) d.toIso8601String().substring(0, 10)]);
+
+/// Empty when [raw] is missing or doesn't parse.
+Set<DateTime> decodeDays(String? raw) {
+  try {
+    return {for (final s in jsonDecode(raw ?? '[]') as List) _day(DateTime.parse(s as String))};
+  } catch (_) {
+    return const {};
+  }
 }
 
 /// One sitting on the sheet: a course in a slot, in one or more rooms.

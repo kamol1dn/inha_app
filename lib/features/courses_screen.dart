@@ -66,7 +66,8 @@ class CoursesScreen extends StatelessWidget {
           ),
         for (final c in courses) ...[
           const Rule(),
-          _CourseRow(c, AbsenceState.of(c, limits), next: nextLesson(lessons, now, (l) => isLessonOf(l, c.course)), now: now),
+          _CourseRow(c, AbsenceState.of(c, limits),
+              next: nextLesson(lessons, now, (l) => isLessonOf(l, c.course), off: data.classFree), now: now),
         ],
         const SizedBox(height: 24),
       ]),

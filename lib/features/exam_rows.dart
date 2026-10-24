@@ -12,8 +12,10 @@ import 'details.dart';
 import 'rail_rows.dart';
 
 // An exam on the rails, Schedule and course detail, and its sheet
-// (docs/EXAMS.md). Until the university says which room each student sits
-// in, a sitting has only the rooms it uses: "B209 or B210".
+// (docs/EXAMS.md). The app never says which room a student sits in: the
+// university's room list names every student, so it is left out for their
+// privacy. A sitting has the rooms it uses ("B209 or B210") until the
+// student sets theirs.
 
 /// The room the student sits in, once known: the one they set, or the only
 /// room the exam uses.
@@ -27,11 +29,18 @@ String examLine(MyExam m, ExamPeriod p) => [
       examRoom(m) ?? roomChoice(m.exam.rooms),
     ].join(' · ');
 
+/// Why no exam comes with the student's room, wherever a room isn't set.
+const privacyNote = "For your privacy, the app doesn't include anyone's exam room: the university's room list "
+    'names every student. Set yours once you know it.';
+
+/// The same, as one line over a list of exams.
+const roomsLeftOut = "Rooms aren't included, for your privacy: tap an exam to set yours.";
+
 /// "The timetable lists 2 sittings; check which is yours."
 String sittingsLine(MyExam m) => 'The timetable lists ${m.sittings} sittings; check which is yours.';
 
 /// The hero for an exam: in progress, or the next thing today (DESIGN.md 7).
-/// The room is the big line; until it is known, that it isn't.
+/// The room is the big line; until the student sets it, that it isn't set.
 class ExamHero extends StatelessWidget {
   final RailExam entry;
   final ExamPeriod period;
@@ -68,8 +77,7 @@ class ExamHero extends StatelessWidget {
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: Text(room ?? (period.roomsAssigned ? 'Room not set' : 'Room not assigned yet'),
-              maxLines: 1, style: t.textTheme.displayMedium),
+          child: Text(room ?? 'Room not set', maxLines: 1, style: t.textTheme.displayMedium),
         ),
         const SizedBox(height: 4),
         Text(m.course.name, style: t.textTheme.titleLarge),
@@ -181,14 +189,9 @@ class _ExamSheet extends StatelessWidget {
             Text('Room $room', style: t.textTheme.titleMedium?.tnum),
             Text(set != null ? 'You set this room.' : 'The only room this exam uses.', style: muted),
           ] else ...[
-            StatusLine(Status.info, period.roomsAssigned ? 'Room not set' : 'Room not assigned yet',
-                padding: EdgeInsets.zero),
+            const StatusLine(Status.info, 'Room not set', padding: EdgeInsets.zero),
             const SizedBox(height: 4),
-            Text(
-                period.roomsAssigned
-                    ? 'The university has said which room each student sits in. Set yours once you know it.'
-                    : 'The university says later which room each student sits in.',
-                style: muted),
+            Text(privacyNote, style: muted),
           ],
           if (e.rooms.length > 1) ...[
             const SizedBox(height: 8),

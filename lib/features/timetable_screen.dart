@@ -82,11 +82,12 @@ class TimetableScreenState extends State<TimetableScreen> with SingleTickerProvi
                 RefreshIndicator(
                   onRefresh: data.refreshTimetable,
                   child: _DayRail(
-                    lessonsOn(lessons, weekStart.add(Duration(days: i))),
+                    lessonsOn(lessons, weekStart.add(Duration(days: i)), off: data.classFree),
                     day: weekStart.add(Duration(days: i)),
                     now: now,
                     loaded: data.lessons.data != null,
                     exams: exams,
+                    classFree: data.classFree.contains(weekStart.add(Duration(days: i))),
                   ),
                 ),
             ],
@@ -103,7 +104,9 @@ class _DayRail extends StatelessWidget {
   final DateTime now;
   final bool loaded;
   final ExamMatch? exams;
-  const _DayRail(this.lessons, {required this.day, required this.now, required this.loaded, this.exams});
+  final bool classFree; // an exam-week day
+  const _DayRail(this.lessons,
+      {required this.day, required this.now, required this.loaded, this.exams, this.classFree = false});
 
   @override
   Widget build(BuildContext context) {
@@ -115,9 +118,14 @@ class _DayRail extends StatelessWidget {
       return ListView(physics: const AlwaysScrollableScrollPhysics(), children: const [SkeletonRows()]);
     }
     if (lessons.isEmpty && examsToday.isEmpty) {
+      final what = exams?.period.name.toLowerCase() ?? 'exam';
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: [EmptyNote('No classes on ${dayDate(day, now: now)}.')],
+        children: [
+          EmptyNote(classFree
+              ? 'No classes in $what week, and no exam of yours on ${dayDate(day, now: now)}.'
+              : 'No classes on ${dayDate(day, now: now)}.'),
+        ],
       );
     }
     final isToday = DateTime(now.year, now.month, now.day) == day;

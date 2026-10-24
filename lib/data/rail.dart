@@ -89,15 +89,21 @@ DateTime _midnight(DateTime t) => DateTime(t.year, t.month, t.day);
 DateTime lessonStart(Lesson l, DateTime day) => _midnight(day).add(Duration(minutes: _minutes(l.start)));
 DateTime lessonEnd(Lesson l, DateTime day) => _midnight(day).add(Duration(minutes: _minutes(l.end)));
 
-List<Lesson> lessonsOn(List<Lesson> lessons, DateTime day) =>
-    lessons.where((l) => l.weekday == day.weekday).toList()..sort((a, b) => _minutes(a.start).compareTo(_minutes(b.start)));
+/// The classes on [day], in time order; none on the days in [off] (an exam
+/// week: `AppData.classFree`).
+List<Lesson> lessonsOn(List<Lesson> lessons, DateTime day, {Set<DateTime> off = const {}}) => off.contains(_midnight(day))
+    ? []
+    : (lessons.where((l) => l.weekday == day.weekday).toList()
+      ..sort((a, b) => _minutes(a.start).compareTo(_minutes(b.start))));
 
 /// The next class [test] accepts: one in progress or still to come today,
-/// then the next 7 days. Null when there is none in that week.
-({Lesson lesson, DateTime day})? nextLesson(List<Lesson> lessons, DateTime now, bool Function(Lesson) test) {
+/// then the next 7 days, skipping the days in [off]. Null when there is none
+/// in that week.
+({Lesson lesson, DateTime day})? nextLesson(List<Lesson> lessons, DateTime now, bool Function(Lesson) test,
+    {Set<DateTime> off = const {}}) {
   for (var i = 0; i <= 7; i++) {
     final day = _midnight(now).add(Duration(days: i));
-    for (final l in lessonsOn(lessons, day)) {
+    for (final l in lessonsOn(lessons, day, off: off)) {
       if (test(l) && lessonEnd(l, day).isAfter(now)) return (lesson: l, day: day);
     }
   }
@@ -111,7 +117,8 @@ bool isLessonOf(Lesson l, Course course) => courseFor(l.subject, [CourseAttendan
 /// Builds Today's rail. [timetableKnown] is false while there is no
 /// timetable at all (first run, EduPage failing), so "No classes today" is
 /// never claimed without data. [exams] are the student's, from the period on
-/// show; they sit on the rail like classes.
+/// show; they sit on the rail like classes. On the days in [classFree] (the
+/// exam weeks) there are no classes.
 List<RailEntry> todayRail({
   required List<Lesson> lessons,
   required List<Deadline> deadlines,
@@ -120,6 +127,7 @@ List<RailEntry> todayRail({
   required DateTime now,
   bool timetableKnown = true,
   List<MyExam> exams = const [],
+  Set<DateTime> classFree = const {},
 }) {
   final today = _midnight(now);
   final tomorrow = today.add(const Duration(days: 1));
@@ -130,7 +138,7 @@ List<RailEntry> todayRail({
   if (overdue.isNotEmpty) out.addAll([const RailOverdue(), for (final d in overdue) RailDue(d)]);
 
   // Today: the hero, the classes and exams after it, and what is due today, in time order.
-  final todays = lessonsOn(lessons, today);
+  final todays = lessonsOn(lessons, today, off: classFree);
   final examsToday = exams.where((e) => !e.exam.start.isBefore(today) && e.exam.start.isBefore(tomorrow)).toList();
   final classNow = todays.where((l) => !lessonStart(l, today).isAfter(now) && lessonEnd(l, today).isAfter(now)).firstOrNull;
   // An exam in progress is the hero even if the timetable has a class then.
@@ -197,13 +205,13 @@ List<RailEntry> todayRail({
     put(lessonStart(l, day), 2, RailClass(l, day, ClassRole.row));
   }
 
-  final first = nextLesson(lessons, tomorrow, (_) => true);
+  final first = nextLesson(lessons, tomorrow, (_) => true, off: classFree);
   if (first != null) putClass(first.lesson, first.day);
   final classesToday = {classNow, ...upcoming}.whereType<Lesson>().toSet();
   for (final c in attendance) {
     if (!AbsenceState.of(c, limits).trouble) continue;
     if (classesToday.any((l) => isLessonOf(l, c.course))) continue;
-    final next = nextLesson(lessons, tomorrow, (l) => isLessonOf(l, c.course));
+    final next = nextLesson(lessons, tomorrow, (l) => isLessonOf(l, c.course), off: classFree);
     if (next != null) putClass(next.lesson, next.day);
   }
   for (final day in later.keys.toList()..sort()) {

@@ -64,6 +64,7 @@ class _TodayScreenState extends State<TodayScreen> {
       now: now,
       timetableKnown: data.lessons.data != null,
       exams: exams?.exams ?? const [],
+      classFree: data.classFree,
     );
 
     return RefreshIndicator(
@@ -162,8 +163,7 @@ class _TodayScreenState extends State<TodayScreen> {
               style: t.textTheme.bodyMedium),
         ),
       for (final m in left) ExamRow(m, p, now: now, line: false, showDay: true),
-      if (!p.roomsAssigned && left.any((m) => examRoom(m) == null))
-        const StatusLine(Status.info, 'Rooms not assigned yet.'),
+      if (left.any((m) => examRoom(m) == null)) const StatusLine(Status.info, roomsLeftOut),
       Align(
         alignment: Alignment.centerLeft,
         child: Padding(
@@ -215,7 +215,8 @@ class _TodayScreenState extends State<TodayScreen> {
     final t = Theme.of(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       header,
-      for (final c in trouble) _TroubleRow(c, AbsenceState.of(c, limits), lessons: lessons, now: now),
+      for (final c in trouble)
+        _TroubleRow(c, AbsenceState.of(c, limits), lessons: lessons, classFree: data.classFree, now: now),
       InkWell(
         onTap: () => widget.onOpenTab(3),
         child: Padding(
@@ -294,14 +295,15 @@ class _TroubleRow extends StatelessWidget {
   final CourseAttendance c;
   final AbsenceState absence;
   final List<Lesson> lessons;
+  final Set<DateTime> classFree;
   final DateTime now;
-  const _TroubleRow(this.c, this.absence, {required this.lessons, required this.now});
+  const _TroubleRow(this.c, this.absence, {required this.lessons, required this.classFree, required this.now});
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final left = absence.left!;
-    final next = nextLesson(lessons, now, (l) => isLessonOf(l, c.course));
+    final next = nextLesson(lessons, now, (l) => isLessonOf(l, c.course), off: classFree);
     final words = [
       switch (left) { > 0 => '$left left', 0 => 'At the limit', _ => 'Over the limit by ${-left}' },
       if (next != null) 'next ${classWhen(next.day, next.lesson, now)}',

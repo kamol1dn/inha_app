@@ -44,6 +44,7 @@ List<PlannedNotification> plan({
   List<CourseAttendance> attendance = const [],
   List<Lesson> lessons = const [],
   Set<String> sent = const {},
+  Set<DateTime> classFree = const {},
 }) =>
     planNotifications(
       now: at ?? now,
@@ -51,6 +52,7 @@ List<PlannedNotification> plan({
       attendance: attendance,
       lessons: lessons,
       sentKeys: sent,
+      classFree: classFree,
     );
 
 void expectPlainCopy(Iterable<PlannedNotification> ns) {
@@ -410,6 +412,11 @@ void main() {
         lessons: [lesson(DateTime.friday, '10:30')],
       ).single.key;
       expect(thu, isNot(fri));
+    });
+
+    test('none in an exam week', () {
+      expect(plan(lessons: [lesson(DateTime.thursday, '10:30')], classFree: {DateTime(2026, 10, 22)}), isEmpty);
+      expect(plan(lessons: [lesson(DateTime.thursday, '10:30')], classFree: {DateTime(2026, 10, 21)}), hasLength(1));
     });
 
     test('no room, a room already called "Room", and a bad time', () {

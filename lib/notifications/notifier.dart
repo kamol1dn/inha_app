@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // zonedSchedule takes a TZDateTime; scheduling uses tz.UTC with absolute instants.
 import 'package:timezone/timezone.dart' as tz;
 
+import '../data/exams.dart' show classFreeDaysKey, decodeDays;
 import '../models/models.dart';
 import 'rules.dart';
 
@@ -278,6 +279,7 @@ class Notifier {
       sentKeys: await sentKeys(at),
       quietHours: settings.quietHours ? defaultQuietHours : null,
       absenceLimits: readAbsenceLimits(prefs),
+      classFree: decodeDays(prefs.getString(classFreeDaysKey)),
     );
 
     final seen = {...?prefs.getStringList(seenCoursesKey)?.map(int.tryParse).whereType<int>()};

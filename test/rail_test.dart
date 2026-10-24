@@ -41,7 +41,8 @@ List<String> rail(DateTime now,
         Map<int, int> limits = const {},
         List<Lesson> timetable = lessons,
         bool timetableKnown = true,
-        List<MyExam> exams = const []}) =>
+        List<MyExam> exams = const [],
+        Set<DateTime> classFree = const {}}) =>
     todayRail(
       lessons: timetable,
       deadlines: deadlines,
@@ -50,6 +51,7 @@ List<String> rail(DateTime now,
       now: now,
       timetableKnown: timetableKnown,
       exams: exams,
+      classFree: classFree,
     ).map(show).toList();
 
 /// A sitting of [course] on the Fall 2026 midterm.
@@ -179,6 +181,32 @@ void main() {
     test('a class before the exam stays the hero; the exam follows at its time', () {
       final r = rail(DateTime(2026, 10, 27, 8), exams: midterm);
       expect(r.take(4), ['Now 8:0', 'next Multimedia Computing', 'row exam Artificial Intelligence', 'freeAfter']);
+    });
+
+    final examWeek = {for (var d = 26; d <= 30; d++) DateTime(2026, 10, d)};
+
+    test('no classes in an exam week: exams only, then the first class after it', () {
+      expect(rail(DateTime(2026, 10, 26, 9), exams: midterm, classFree: examWeek), [
+        'Now 9:0',
+        'next exam Deep Learning for Computer Vision',
+        'freeAfter',
+        'Day 10/27',
+        'row exam Artificial Intelligence',
+        'Day 10/28',
+        'row exam Embedded Software & Design',
+        'Day 11/2',
+        'row Artificial Intelligence',
+      ]);
+      expect(rail(DateTime(2026, 10, 29, 9), exams: midterm, classFree: examWeek).take(2), ['Now 9:0', 'noClasses']);
+    });
+
+    test('lessonsOn and nextLesson skip the class-free days', () {
+      expect(lessonsOn(lessons, DateTime(2026, 10, 26), off: examWeek), isEmpty);
+      expect(lessonsOn(lessons, DateTime(2026, 11, 2), off: examWeek), hasLength(2));
+      final next = nextLesson(lessons, DateTime(2026, 10, 24, 8), (l) => isLessonOf(l, mmc), off: examWeek);
+      expect(next, isNull); // Tue 3 Nov is beyond the week it looks through
+      expect(nextLesson(lessons, DateTime(2026, 10, 27, 8), (l) => isLessonOf(l, mmc), off: examWeek)?.day,
+          DateTime(2026, 11, 3));
     });
 
     test('a day with only an exam is free after it, then has no more', () {
