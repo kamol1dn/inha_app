@@ -312,9 +312,12 @@ Updated 13:18                                                    bodySmall, mute
      Tapping it opens Schedule on its day; any other class opens its course.
    - **Later classes today** are ordinary class rows: the course in `titleMedium`, then `B202 · Lecture`.
    - **Exams** (`docs/EXAMS.md`) sit on the rail like classes, for the next 72 h: the course, then
-     `Midterm · B209 or B210` (the rooms it uses until the student's own is known). An exam in progress, or the next
-     thing today, is the hero: its room, or `Room not assigned yet` in the room's place, then the course and
-     `Midterm · 1 h · B304(A–C), B305 or B201`. Exams and their sheet never guess a room.
+     `Midterm · B209 or B210` (the rooms it uses until the student sets their own). An exam in progress, or the next
+     thing today, is the hero: the room the student set, or `Room not set` in the room's place, then the course and
+     `Midterm · 1 h · B304(A–C), B305 or B201`. The app never assigns a room: the university's room list names every
+     student, so it is left out for their privacy, and the screens say so.
+   - **An exam week has no classes:** from a period's first exam to its last, the timetable's classes are left off every
+     rail, row and reminder.
    - **Deadlines and VOD windows due today** sit at their due time among the classes.
    - **After the last class** of the day: `Free for the rest of the day`, at the time it ends.
    - **No class today:** `No classes today` (or `No more classes today`) right after the Now row.
@@ -326,8 +329,8 @@ Updated 13:18                                                    bodySmall, mute
      `Nothing due in the next 3 days. Next: Lab 6, Multimedia Computing, Mon 3 Nov 23:59.`, or `No deadlines in eClass`. Never a
      celebration, never empty space.
 3. **Exams,** during an exam period and only while an exam lies beyond the rail's 72 h: a `Midterm exams` section
-   with the student's exams still to come as Deadlines-style rows (start time and day), `Rooms not assigned yet.` as
-   an info line while that holds, and "Show exam week".
+   with the student's exams still to come as Deadlines-style rows (start time and day), the info line
+   `Rooms aren't included, for your privacy: tap an exam to set yours.` while a room isn't set, and "Show exam week".
 4. **Attendance:** every course in trouble as a row with its tally and count, then one line for the rest:
    `The other 3 courses are within their limit.`, `All 4 courses are within their limit.`, or, while limits are missing, an info line
    with the raw counts (`No limit set: Artificial Intelligence 6 · Multimedia Computing 2`). The section taps through to Courses. The
@@ -385,21 +388,25 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
 - **Changes:** EduPage publishes neither room changes nor cancellations yet. When it does, a room change gets a warning `StatusLine`
   ("Room changed to A-201") and a cancelled class is struck through with a danger `StatusLine` "Cancelled".
 - **Tapping a class** opens its course.
-- **Exams** sit among the classes on their day, in time order. During an exam period the app bar has "Exams".
+- **Exams** take the classes' place in an exam week: each day shows that day's exams, or
+  `No classes in midterm week, and no exam of yours on Thu 29 Oct.` During an exam period the app bar has "Exams".
 
 **Exams** (the exam week, `docs/EXAMS.md`).
 - **The answer first:** the student's exams by day, as Deadlines-style rows (start and end, the course, then
   `Midterm · B209 or B210`), past ones muted. Above them one muted line, `Fall 2026 midterm, Mon 26 – Fri 30 Oct, from the
-  university's exam timetable.`, and while it holds the info line `Rooms not assigned yet: each exam shows the rooms it uses.`
+  university's exam timetable.`, and while a room isn't set the info line
+  `Rooms aren't included, for your privacy: tap an exam to set yours.`
 - **Not on the timetable:** the student's courses with no sitting, in one sentence.
 - **"Show every exam"** lists the whole sheet the same way, for checking the matching by hand. The source PDF's name closes
   the screen.
 - **A course with several sittings** nothing tells apart (two teachers, say) shows each, with the sheet's note
   (`Midterm · Dr.Sarvar · B304(A–C) or B305`) and an info `StatusLine`: `The timetable lists 2 sittings; check which is yours.`
 - **The exam sheet:** `Midterm · Fall 2026` muted, the course in `headlineSmall`, a rule, the day and time with the
-  length, then the room (`Room B305` with `You set this room.`) or an info `StatusLine` `Room not assigned yet` and the
-  rooms the exam uses with their seats, the cell as printed with its slot in `bodySmall`, and the text buttons "Set my
-  room" (a dialog of the exam's rooms; the student picks, nothing is guessed) and "Course attendance and grade".
+  length, then the room (`Room B305` with `You set this room.`) or an info `StatusLine` `Room not set` with why
+  (`For your privacy, the app doesn't include anyone's exam room: the university's room list names every student. Set
+  yours once you know it.`) and the rooms the exam uses with their seats, the cell as printed with its slot in
+  `bodySmall`, and the text buttons "Set my room" (a dialog of the exam's rooms; the student picks, nothing is
+  guessed) and "Course attendance and grade".
 - **Course detail** gets a `Midterm` section after Due: the sitting as a row, or `No midterm on the timetable for this course.`
 
 **Deadlines.**

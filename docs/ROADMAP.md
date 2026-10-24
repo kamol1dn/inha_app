@@ -208,19 +208,23 @@ and matched to the timetable's subjects and the eClass courses. Exams show on To
 (the hero when next), in a Today section while one lies beyond the rail, on Schedule's day
 rails, in the exam week screen and on course detail.
 
+The student decided:
+
+- **The app never assigns rooms,** for the students' privacy: only subjects and their schedule
+  are bundled, never the room list (every student's name and ID). Each student sets their own
+  room once per exam ("Set my room"), and the screens say why the app leaves rooms out.
+- **No classes in exam week:** from a period's first exam to its last, the timetable's classes
+  are left out everywhere, the widgets and AppFunctions included (`exams.classFreeDays.v1`).
+
 Calls made without the student, to review:
 
 - **Bundled, not fetched.** The README's "only talks to IUT" stands; a new sheet (the finals)
   or a correction is an app update. An opt-in fetch from this repository is the middle path,
   not built.
-- **The room list is never bundled** (every student's name and ID, public repo). The student
-  sets their own room per exam ("Set my room"), picking from the rooms that exam uses.
-- **Classes still show in exam week.** EduPage keeps listing them; whether they're held isn't
-  known to the app.
 - **UK programme sittings go only to UK groups** (AI, CS, DS, BM, IT); an ICE or CSE student
   never sees `(UK) Operating System`.
 
-Next: an Exams reminder channel, and the widgets and AppFunctions reading the sheets.
+Next: an Exams reminder channel, and the widgets and AppFunctions showing the exams.
 
 ## How to work on this
 

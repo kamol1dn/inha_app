@@ -25,8 +25,9 @@ Flutter app / WorkManager refresh ──cache.write──▶ FlutterSharedPrefer
 
 - **No Dart engine.** `campus/Campus.kt` reads `FlutterSharedPreferences.xml` directly: the
   `flutter.cache.<lessons|deadlines|attendance|grades>` entries (`{"at", "value"}`, the JSON of
-  `lib/models/models.dart`), `flutter.absenceLimits.v1` and `flutter.account.<service>`. Times in
-  the cache are local without a zone; UTC ones (ending in `Z`) are converted.
+  `lib/models/models.dart`), `flutter.absenceLimits.v1`, `flutter.account.<service>` and
+  `flutter.exams.classFreeDays.v1` (the exam weeks' days, which have no classes; `docs/EXAMS.md`).
+  Times in the cache are local without a zone; UTC ones (ending in `Z`) are converted.
 - **The same rules as the app.** `campus/Rules.kt` and `Answers.kt` port `lib/data/urgency.dart`,
   `absence.dart` and the today part of `rail.dart`: class periods are never deadlines, done items
   (submitted, attempted, fully watched) are hidden, overdue work stays 24 h, VOD and deadline
