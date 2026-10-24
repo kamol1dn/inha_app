@@ -88,6 +88,43 @@ String rowTitle(String title) {
   return t.isEmpty ? title.trim() : t;
 }
 
+/// Mon 26 – Fri 30 Oct / Mon 30 Nov – Fri 4 Dec: a run of days.
+String dayRange(DateTime a, DateTime b, {DateTime? now}) {
+  if (a.year == b.year && a.month == b.month) {
+    return '${_wd[a.weekday - 1]} ${a.day} – ${dayDate(b, now: now)}';
+  }
+  return '${dayDate(a, now: now)} – ${dayDate(b, now: now)}';
+}
+
+final _section = RegExp(r'^(.+)\(([A-Z])\)$');
+
+/// "B209", "B209 or B210", "B304(A–C), B305 or B201": the rooms an exam
+/// uses, a hall's sections run together when three or more follow in order.
+String roomChoice(List<String> rooms) {
+  final parts = <String>[];
+  for (var i = 0; i < rooms.length;) {
+    final m = _section.firstMatch(rooms[i]);
+    var j = i + 1;
+    if (m == null) {
+      parts.add(rooms[i]);
+    } else {
+      final letters = [m[2]!];
+      for (; j < rooms.length; j++) {
+        final n = _section.firstMatch(rooms[j]);
+        if (n == null || n[1] != m[1]) break;
+        letters.add(n[2]!);
+      }
+      final run = letters.length >= 3 &&
+          [for (var k = 1; k < letters.length; k++) letters[k].codeUnitAt(0) - letters[k - 1].codeUnitAt(0)]
+              .every((d) => d == 1);
+      parts.addAll(run ? ['${m[1]}(${letters.first}–${letters.last})'] : [for (final l in letters) '${m[1]}($l)']);
+    }
+    i = j;
+  }
+  if (parts.length < 2) return parts.join();
+  return '${parts.sublist(0, parts.length - 1).join(', ')} or ${parts.last}';
+}
+
 /// 812 B / 14 KB / 2.3 MB / 18 MB
 String fileSize(int bytes) {
   if (bytes < 1024) return '$bytes B';

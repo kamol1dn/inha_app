@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/absence.dart';
 import '../data/app_data.dart';
+import '../data/exams.dart';
 import '../data/urgency.dart';
 import '../models/models.dart';
 import '../services/eclass/eclass_links.dart';
@@ -11,6 +12,7 @@ import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
 import 'absence_widgets.dart';
 import 'common.dart';
+import 'exam_rows.dart';
 import 'rail_rows.dart';
 
 /// One course: absences, what is due, the INS grade, VOD progress and every
@@ -119,6 +121,7 @@ class CourseDetailScreen extends StatelessWidget {
             SectionHeader('Due', source: data.deadlines),
             for (final d in due) DueRow(d, attendance: att, now: now, line: false, showDay: true),
           ],
+          ..._exam(context, data.exams(now), c.course, now),
           SectionHeader('Grade', source: data.grades, staleAfter: const Duration(hours: 24)),
           Padding(
             padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 8),
@@ -180,6 +183,27 @@ class CourseDetailScreen extends StatelessWidget {
         ]),
       ),
     );
+  }
+
+  /// The course's sitting in the exam period on show, or that the timetable
+  /// lists none. Nothing outside an exam period.
+  static List<Widget> _exam(BuildContext context, ExamMatch? match, Course course, DateTime now) {
+    if (match == null) return const [];
+    final p = match.period;
+    final mine = match.exams.where((m) => m.course.eclass?.id == course.id).toList();
+    final unlisted = match.unlisted.any((s) => s.eclass?.id == course.id);
+    if (mine.isEmpty && !unlisted) return const [];
+    final t = Theme.of(context);
+    return [
+      SectionHeader(p.name),
+      for (final m in mine) ExamRow(m, p, now: now, line: false, showDay: true, past: !m.exam.end.isAfter(now)),
+      if (mine.isEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, 4),
+          child: Text('No ${p.name.toLowerCase()} on the timetable for this course.',
+              style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+        ),
+    ];
   }
 
   /// The course name as the screen's heading, with its code and professor.

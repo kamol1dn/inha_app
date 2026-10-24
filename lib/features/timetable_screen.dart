@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/app_data.dart';
+import '../data/exams.dart';
 import '../data/rail.dart';
 import '../models/models.dart';
 import '../ui/format/format.dart';
 import '../ui/theme/app_text.dart';
 import 'common.dart';
+import 'exam_rows.dart';
 import 'rail_rows.dart';
 
 /// One day at a time, as a rail (DESIGN.md 8, Schedule).
@@ -40,6 +42,7 @@ class TimetableScreenState extends State<TimetableScreen> with SingleTickerProvi
     final t = Theme.of(context);
     final lessons = data.lessons.data?.value ?? const <Lesson>[];
     final now = DateTime.now();
+    final exams = data.exams(now);
     final today = DateTime(now.year, now.month, now.day);
     final monday = today.subtract(Duration(days: now.weekday - 1));
     // On the weekend, show next week.
@@ -83,6 +86,7 @@ class TimetableScreenState extends State<TimetableScreen> with SingleTickerProvi
                     day: weekStart.add(Duration(days: i)),
                     now: now,
                     loaded: data.lessons.data != null,
+                    exams: exams,
                   ),
                 ),
             ],
@@ -98,28 +102,44 @@ class _DayRail extends StatelessWidget {
   final DateTime day;
   final DateTime now;
   final bool loaded;
-  const _DayRail(this.lessons, {required this.day, required this.now, required this.loaded});
+  final ExamMatch? exams;
+  const _DayRail(this.lessons, {required this.day, required this.now, required this.loaded, this.exams});
 
   @override
   Widget build(BuildContext context) {
-    if (!loaded) {
+    final examsToday = [
+      for (final m in exams?.exams ?? const <MyExam>[])
+        if (DateTime(m.exam.start.year, m.exam.start.month, m.exam.start.day) == day) m,
+    ];
+    if (!loaded && examsToday.isEmpty) {
       return ListView(physics: const AlwaysScrollableScrollPhysics(), children: const [SkeletonRows()]);
     }
-    if (lessons.isEmpty) {
+    if (lessons.isEmpty && examsToday.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [EmptyNote('No classes on ${dayDate(day, now: now)}.')],
       );
     }
     final isToday = DateTime(now.year, now.month, now.day) == day;
+    // Classes and exams in time order (an exam first when they start together).
+    final sittings = <(DateTime, DateTime, Widget Function(bool past, bool current, bool above, bool below))>[
+      for (final m in examsToday)
+        (m.exam.start, m.exam.end, (p, c, a, b) => ExamRow(m, exams!.period, now: now, past: p, current: c, lineAbove: a, lineBelow: b)),
+      for (final l in lessons)
+        (lessonStart(l, day), lessonEnd(l, day), (p, c, a, b) => ClassRow(l,
+            past: p, current: c, now: now, showTeacher: true, lineAbove: a, lineBelow: b)),
+    ];
+    final order = [...sittings.indexed]..sort((x, y) {
+        final byTime = x.$2.$1.compareTo(y.$2.$1);
+        return byTime != 0 ? byTime : x.$1.compareTo(y.$1);
+      });
     // Rows first, then the rail flags (first, last) once their order is known.
     final rows = <Widget Function(bool above, bool below)>[];
     var nowPlaced = !isToday;
-    for (var i = 0; i < lessons.length; i++) {
-      final l = lessons[i];
-      final start = lessonStart(l, day), end = lessonEnd(l, day);
-      if (i > 0) {
-        final gap = start.difference(lessonEnd(lessons[i - 1], day));
+    DateTime? lastEnd;
+    for (final (_, (start, end, row)) in order) {
+      if (lastEnd != null) {
+        final gap = start.difference(lastEnd);
         if (gap.inMinutes >= 30) rows.add((a, b) => RailNoteRow('Break ${duration(gap)}', lineAbove: a, lineBelow: b));
       }
       if (!nowPlaced && start.isAfter(now)) {
@@ -127,10 +147,10 @@ class _DayRail extends StatelessWidget {
         nowPlaced = true;
       }
       final current = isToday && !start.isAfter(now) && end.isAfter(now);
-      if (current) nowPlaced = true; // the class itself says "Now"
+      if (current) nowPlaced = true; // the class or exam itself says "Now"
       final past = isToday && !end.isAfter(now);
-      rows.add((a, b) => ClassRow(l,
-          past: past, current: current, now: now, showTeacher: true, lineAbove: a, lineBelow: b));
+      rows.add((a, b) => row(past, current, a, b));
+      lastEnd = lastEnd == null || end.isAfter(lastEnd) ? end : lastEnd;
     }
     if (!nowPlaced) rows.add((a, b) => NowRow(now, lineAbove: a, lineBelow: b));
     return ListView(physics: const AlwaysScrollableScrollPhysics(), children: [

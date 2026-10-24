@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:inha_app/data/exams.dart';
 import 'package:inha_app/data/rail.dart';
 import 'package:inha_app/models/models.dart';
 
@@ -29,6 +30,7 @@ String show(RailEntry e) => switch (e) {
       RailDay(:final day) => 'Day ${day.month}/${day.day}',
       RailClass(:final lesson, :final role, :final trouble) =>
         '${role.name} ${lesson.subject}${trouble == null ? '' : ' !${trouble.used}/${trouble.limit}'}',
+      RailExam(:final exam, :final role) => '${role.name} exam ${exam.course.name}',
       RailDue(:final deadline) => 'Due ${deadline.title}',
       RailNote(:final kind) => kind.name,
     };
@@ -38,7 +40,8 @@ List<String> rail(DateTime now,
         List<CourseAttendance> attendance = const [],
         Map<int, int> limits = const {},
         List<Lesson> timetable = lessons,
-        bool timetableKnown = true}) =>
+        bool timetableKnown = true,
+        List<MyExam> exams = const []}) =>
     todayRail(
       lessons: timetable,
       deadlines: deadlines,
@@ -46,7 +49,19 @@ List<String> rail(DateTime now,
       limits: limits,
       now: now,
       timetableKnown: timetableKnown,
+      exams: exams,
     ).map(show).toList();
+
+/// A sitting of [course] on the Fall 2026 midterm.
+MyExam exam(String course, DateTime start, {int minutes = 60}) => MyExam(
+    StudentCourse(course),
+    Exam(
+        slot: 'M-2',
+        start: start,
+        end: start.add(Duration(minutes: minutes)),
+        cell: course,
+        rooms: const ['B209', 'B210'],
+        read: ExamCell(course: course)));
 
 void main() {
   final sunday = DateTime(2026, 10, 25);
@@ -124,5 +139,52 @@ void main() {
     expect(n?.lesson.room, 'B206');
     expect(n?.day, DateTime(2026, 10, 27));
     expect(nextLesson(lessons, DateTime(2026, 10, 23, 14, 30), (l) => isLessonOf(l, esd))?.day, DateTime(2026, 10, 23));
+  });
+
+  group('exams', () {
+    final midterm = [
+      exam('Deep Learning for Computer Vision', DateTime(2026, 10, 26, 11, 30)),
+      exam('Artificial Intelligence', DateTime(2026, 10, 27, 14)),
+      exam('Embedded Software & Design', DateTime(2026, 10, 28, 9, 30)),
+    ];
+
+    test('the next days hold the exams within 72 h, before a class at the same day', () {
+      expect(rail(DateTime(2026, 10, 24, 8), exams: midterm), [
+        'Now 8:0',
+        'noClasses',
+        'Day 10/26',
+        'row exam Deep Learning for Computer Vision',
+        'row Artificial Intelligence',
+      ]);
+    });
+
+    test('an exam before the first class today is the hero', () {
+      expect(rail(DateTime(2026, 10, 26, 9), exams: midterm).take(5), [
+        'Now 9:0',
+        'next exam Deep Learning for Computer Vision',
+        'row Artificial Intelligence',
+        'row Deep Learning for Computer Vision',
+        'freeAfter',
+      ]);
+    });
+
+    test('during an exam it leads, with no separate Now row', () {
+      expect(rail(DateTime(2026, 10, 26, 12), exams: midterm).take(3), [
+        'current exam Deep Learning for Computer Vision',
+        'row Artificial Intelligence',
+        'row Deep Learning for Computer Vision',
+      ]);
+    });
+
+    test('a class before the exam stays the hero; the exam follows at its time', () {
+      final r = rail(DateTime(2026, 10, 27, 8), exams: midterm);
+      expect(r.take(4), ['Now 8:0', 'next Multimedia Computing', 'row exam Artificial Intelligence', 'freeAfter']);
+    });
+
+    test('a day with only an exam is free after it, then has no more', () {
+      expect(rail(DateTime(2026, 10, 28, 8), exams: midterm).take(3),
+          ['Now 8:0', 'next exam Embedded Software & Design', 'freeAfter']);
+      expect(rail(DateTime(2026, 10, 28, 11), exams: midterm).take(2), ['Now 11:0', 'noMoreClasses']);
+    });
   });
 }

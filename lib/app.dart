@@ -7,6 +7,7 @@ import 'notifications/routes.dart';
 import 'features/details.dart';
 import 'features/courses_screen.dart';
 import 'features/deadlines_screen.dart';
+import 'features/exams_screen.dart';
 import 'features/grades_screen.dart';
 import 'features/mail_screen.dart';
 import 'features/settings_screen.dart';
@@ -251,6 +252,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 onPressed: () => _push(const SettingsScreen()),
               ),
             ],
+            if (_tab == 1 && data.exams(DateTime.now()) != null)
+              TextButton(onPressed: () => _push(const ExamsScreen()), child: const Text('Exams')),
             if (_tab == 3)
               TextButton(onPressed: () => _push(const GradesScreen()), child: const Text('Grades')),
           ],

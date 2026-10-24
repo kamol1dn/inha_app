@@ -4,10 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:inha_app/app.dart';
 import 'package:inha_app/core/session.dart';
 import 'package:inha_app/data/app_data.dart';
+import 'package:inha_app/data/exams.dart';
 import 'package:inha_app/features/absence_widgets.dart';
 import 'package:inha_app/features/course_detail_screen.dart';
 import 'package:inha_app/features/courses_screen.dart';
 import 'package:inha_app/features/deadlines_screen.dart';
+import 'package:inha_app/features/exams_screen.dart';
 import 'package:inha_app/features/grades_screen.dart';
 import 'package:inha_app/features/mail_screen.dart';
 import 'package:inha_app/features/timetable_screen.dart';
@@ -77,8 +79,37 @@ Future<AppData> seeded() async {
   mail.all = [for (var i = 0; i < 4; i++) mailHeader(i, unread: i < 3)];
   mail.unread = 3;
   await Future.wait([data.refreshTimetable(), data.refreshEclass(), data.refreshMail()]);
+  // A midterm under way: one exam on the rail tomorrow, one beyond it.
+  data.examPeriods = [
+    midterm([
+      ('Embedded Software & Design', now.add(const Duration(days: 1)), ['B304(A)', 'B304(B)', 'B304(C)', 'B305']),
+      ('Artificial Intelligence', now.add(const Duration(days: 4)), ['B209', 'B210']),
+      ('Operations Research', now.add(const Duration(days: 4)), ['B305']),
+    ]),
+  ];
   return data;
 }
+
+/// A midterm with the given sittings (course, start, rooms), each an hour
+/// unless [end] is given.
+ExamPeriod midterm(List<(String, DateTime, List<String>)> sittings, {DateTime? end}) => ExamPeriod(
+      id: 'test-midterm',
+      kind: 'midterm',
+      term: 'Fall 2026',
+      source: 'Timetable for 2026 Fall Midterm Exam.pdf',
+      roomsAssigned: false,
+      seats: const {'B304(A)': 50, 'B304(B)': 50, 'B304(C)': 50, 'B305': 35, 'B209': 35, 'B210': 35},
+      exams: [
+        for (final (cell, start, rooms) in sittings)
+          Exam(
+              slot: 'W-1',
+              start: start,
+              end: end ?? start.add(const Duration(hours: 1)),
+              cell: cell,
+              rooms: rooms,
+              read: ExamCell.parse(cell)),
+      ],
+    );
 
 DioException offline() => DioException(
     requestOptions: RequestOptions(path: 'https://iut.edupage.org/'), type: DioExceptionType.connectionError);
@@ -138,6 +169,7 @@ void main() {
         ('Mail', const MailScreen(), false),
         ('Grades', const GradesScreen(), false),
         ('Absence limits', const AbsenceLimitsScreen(), false),
+        ('Exams', const ExamsScreen(), false),
       ];
       for (final (label, screen, wrap) in screens) {
         await show(tester, data, screen, scale: 2, theme: theme, scaffold: wrap);
@@ -152,4 +184,82 @@ void main() {
       await tester.pumpWidget(const SizedBox()); // stops the minute timer
     });
   }
+
+  group('exams', () {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    testWidgets('an exam today is the hero until the room is known, and its sheet sets the room', (tester) async {
+      final (data, eclass, _, _, _) = await makeAppData();
+      eclass.courseList = [esd];
+      await Future.wait([data.refreshTimetable(), data.refreshEclass()]);
+      // All day, so it is in progress whenever the test runs.
+      data.examPeriods = [
+        midterm([('Embedded Software & Design', today, ['B304(A)', 'B304(B)', 'B304(C)', 'B305'])],
+            end: today.add(const Duration(hours: 23, minutes: 59))),
+      ];
+      await show(tester, data, TodayScreen(onOpenTab: (_) {}, onOpenSchedule: (_) {}));
+      expect(find.textContaining('Now · until 23:59'), findsOneWidget);
+      expect(find.text('Room not assigned yet'), findsOneWidget);
+      expect(find.textContaining('B304(A–C) or B305'), findsOneWidget);
+
+      await tester.tap(find.text('Room not assigned yet'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('This exam uses 4 rooms: B304(A) (50 seats)'), findsOneWidget);
+      expect(find.text('On the timetable as “Embedded Software & Design”, slot W-1.'), findsOneWidget);
+      await tester.tap(find.text('Set my room'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('B305'));
+      await tester.pumpAndSettle();
+      expect(find.text('Room B305'), findsOneWidget);
+      expect(find.text('You set this room.'), findsOneWidget);
+      expect(data.prefs.examRooms.values, ['B305']);
+      // The hero now gives the room.
+      Navigator.of(tester.element(find.text('Room B305'))).pop();
+      await tester.pumpAndSettle();
+      expect(find.text('B305'), findsOneWidget);
+      expect(find.text('Room not assigned yet'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('the exam week: your exams by day, the courses without one, every sitting on request',
+        (tester) async {
+      final data = await seeded();
+      await show(tester, data, const ExamsScreen(), scaffold: false);
+      expect(find.text('Midterm exams'), findsOneWidget);
+      expect(find.text('Embedded Software & Design'), findsOneWidget);
+      expect(find.text('Artificial Intelligence'), findsOneWidget);
+      expect(find.text('Midterm · B209 or B210'), findsOneWidget);
+      expect(find.text('Operations Research'), findsNothing);
+      await tester.tap(find.text('Show every exam'));
+      await tester.pump();
+      await tester.scrollUntilVisible(find.text('Operations Research'), 300);
+      expect(find.text('Operations Research'), findsOneWidget);
+    });
+
+    testWidgets('Today lists the exam week while an exam lies beyond the rail; course detail has its sitting',
+        (tester) async {
+      final data = await seeded();
+      await show(tester, data, TodayScreen(onOpenTab: (_) {}, onOpenSchedule: (_) {}));
+      await tester.scrollUntilVisible(find.text('Show exam week'), 300);
+      expect(find.text('Midterm exams'), findsOneWidget);
+      expect(find.text('Rooms not assigned yet.'), findsOneWidget);
+      await show(tester, data, const CourseDetailScreen(courseId: 2622, name: 'Artificial Intelligence'),
+          scaffold: false);
+      await tester.scrollUntilVisible(find.text('Midterm · B209 or B210'), 300);
+      expect(find.text('Midterm'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('a course the timetable has no exam for says so on its detail', (tester) async {
+      final data = await seeded();
+      data.examPeriods = [
+        midterm([('Operations Research', now.add(const Duration(days: 2)), ['B305'])]),
+      ];
+      await show(tester, data, const CourseDetailScreen(courseId: 2622, name: 'Artificial Intelligence'),
+          scaffold: false);
+      await tester.scrollUntilVisible(find.text('No midterm on the timetable for this course.'), 300);
+      expect(find.text('No midterm on the timetable for this course.'), findsOneWidget);
+    });
+  });
 }

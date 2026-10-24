@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../data/absence.dart';
 import '../data/app_data.dart';
+import '../data/exams.dart';
 import '../data/rail.dart';
 import '../data/urgency.dart';
 import '../models/models.dart';
@@ -14,6 +15,8 @@ import '../ui/theme/status_colors.dart';
 import 'absence_widgets.dart';
 import 'common.dart';
 import 'details.dart';
+import 'exam_rows.dart';
+import 'exams_screen.dart';
 import 'mail_screen.dart';
 import 'rail_rows.dart';
 
@@ -52,6 +55,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final deadlines = data.deadlines.data?.value ?? const <Deadline>[];
     final limits = data.prefs.absenceLimits;
     final firstLoad = data.lessons.data == null && data.lessons.error == null;
+    final exams = data.exams(now);
     final rail = todayRail(
       lessons: lessons,
       deadlines: deadlines,
@@ -59,6 +63,7 @@ class _TodayScreenState extends State<TodayScreen> {
       limits: limits,
       now: now,
       timetableKnown: data.lessons.data != null,
+      exams: exams?.exams ?? const [],
     );
 
     return RefreshIndicator(
@@ -69,8 +74,9 @@ class _TodayScreenState extends State<TodayScreen> {
         SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
         _staleLine(data),
         const SizedBox(height: 4),
-        if (firstLoad) ...[NowRow(now, lineBelow: false), const SkeletonRows(count: 3)] else ..._rail(rail, att, now),
+        if (firstLoad) ...[NowRow(now, lineBelow: false), const SkeletonRows(count: 3)] else ..._rail(rail, att, exams, now),
         if (!firstLoad) _dueSummary(deadlines, att, data, now),
+        ..._exams(context, data, exams, now),
         _attendance(context, data, lessons, now),
         ..._mail(context, data),
         _footer(context, data),
@@ -93,7 +99,7 @@ class _TodayScreenState extends State<TodayScreen> {
     );
   }
 
-  List<Widget> _rail(List<RailEntry> rail, List<CourseAttendance> att, DateTime now) => [
+  List<Widget> _rail(List<RailEntry> rail, List<CourseAttendance> att, ExamMatch? exams, DateTime now) => [
         for (final (i, e) in rail.indexed)
           switch (e) {
             RailOverdue() => RailHeader('Overdue', status: Status.danger, lineAbove: i > 0, lineBelow: i < rail.length - 1),
@@ -104,6 +110,11 @@ class _TodayScreenState extends State<TodayScreen> {
                 onTap: () => widget.onOpenSchedule(e.day.weekday), lineAbove: i > 0, lineBelow: i < rail.length - 1),
             RailClass(:final lesson, :final trouble) =>
               ClassRow(lesson, trouble: trouble, lineAbove: i > 0, lineBelow: i < rail.length - 1),
+            // An exam, hero or row, opens its sheet.
+            RailExam(role: ClassRole.current || ClassRole.next) =>
+              ExamHero(e, exams!.period, now, lineAbove: i > 0, lineBelow: i < rail.length - 1),
+            RailExam(:final exam) =>
+              ExamRow(exam, exams!.period, now: now, lineAbove: i > 0, lineBelow: i < rail.length - 1),
             RailDue(:final deadline) =>
               DueRow(deadline, attendance: att, now: now, lineAbove: i > 0, lineBelow: i < rail.length - 1),
             RailNote(:final kind, :final at) => RailNoteRow(
@@ -130,6 +141,40 @@ class _TodayScreenState extends State<TodayScreen> {
         .firstOrNull;
     final tail = next == null ? '' : ' Next: ${rowTitle(next.title)}, ${next.courseName}, ${dayDateTime(next.end)}.';
     return StatusLine(Status.ok, 'Nothing due in the next 3 days.$tail', padding: pad);
+  }
+
+  /// The exam week at a glance: the student's exams still to come, while some
+  /// lie beyond the rail's reach (the rail already shows the rest). Not
+  /// shown before the timetable or eClass has loaded: nothing to match yet.
+  List<Widget> _exams(BuildContext context, AppData data, ExamMatch? match, DateTime now) {
+    if (match == null || (data.lessons.data == null && data.attendance.data == null)) return const [];
+    final p = match.period;
+    final left = match.exams.where((m) => m.exam.end.isAfter(now)).toList();
+    final reach = now.add(examTodayWindow);
+    if (match.exams.isNotEmpty && !left.any((m) => m.exam.start.isAfter(reach))) return const [];
+    final t = Theme.of(context);
+    return [
+      SectionHeader('${p.name} exams'),
+      if (left.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 4),
+          child: Text('None of your courses is on the ${p.name.toLowerCase()} timetable.',
+              style: t.textTheme.bodyMedium),
+        ),
+      for (final m in left) ExamRow(m, p, now: now, line: false, showDay: true),
+      if (!p.roomsAssigned && left.any((m) => examRoom(m) == null))
+        const StatusLine(Status.info, 'Rooms not assigned yet.'),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: TextButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExamsScreen())),
+            child: const Text('Show exam week'),
+          ),
+        ),
+      ),
+    ];
   }
 
   /// The answer to "am I in attendance trouble", always on screen: each

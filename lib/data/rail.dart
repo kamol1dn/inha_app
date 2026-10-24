@@ -1,5 +1,6 @@
 import '../models/models.dart';
 import 'absence.dart';
+import 'exams.dart';
 import 'urgency.dart';
 
 // Today's day rail (DESIGN.md 7): one timeline from now through today's
@@ -51,6 +52,17 @@ class RailClass extends RailEntry {
   DateTime get end => lessonEnd(lesson, day);
 }
 
+/// One of the student's exams at its time. [role] as for a class: an exam in
+/// progress, or the next thing today, is the hero.
+class RailExam extends RailEntry {
+  final MyExam exam;
+  final ClassRole role;
+  const RailExam(this.exam, this.role);
+}
+
+/// How far ahead exams go on the rail, as deadlines do.
+const examTodayWindow = Duration(hours: 72);
+
 /// A deadline or VOD window at its due time.
 class RailDue extends RailEntry {
   final Deadline deadline;
@@ -98,7 +110,8 @@ bool isLessonOf(Lesson l, Course course) => courseFor(l.subject, [CourseAttendan
 
 /// Builds Today's rail. [timetableKnown] is false while there is no
 /// timetable at all (first run, EduPage failing), so "No classes today" is
-/// never claimed without data.
+/// never claimed without data. [exams] are the student's, from the period on
+/// show; they sit on the rail like classes.
 List<RailEntry> todayRail({
   required List<Lesson> lessons,
   required List<Deadline> deadlines,
@@ -106,39 +119,59 @@ List<RailEntry> todayRail({
   required Map<int, int> limits,
   required DateTime now,
   bool timetableKnown = true,
+  List<MyExam> exams = const [],
 }) {
   final today = _midnight(now);
+  final tomorrow = today.add(const Duration(days: 1));
   final due = needsAttention(deadlines, attendance, now);
   final out = <RailEntry>[];
 
   final overdue = due.where((d) => d.end.isBefore(now)).toList();
   if (overdue.isNotEmpty) out.addAll([const RailOverdue(), for (final d in overdue) RailDue(d)]);
 
-  // Today: the hero class, the classes after it, and what is due today, in time order.
+  // Today: the hero, the classes and exams after it, and what is due today, in time order.
   final todays = lessonsOn(lessons, today);
-  final current = todays.where((l) => !lessonStart(l, today).isAfter(now) && lessonEnd(l, today).isAfter(now)).firstOrNull;
+  final examsToday = exams.where((e) => !e.exam.start.isBefore(today) && e.exam.start.isBefore(tomorrow)).toList();
+  final classNow = todays.where((l) => !lessonStart(l, today).isAfter(now) && lessonEnd(l, today).isAfter(now)).firstOrNull;
+  // An exam in progress is the hero even if the timetable has a class then.
+  final examNow = examsToday.where((e) => !e.exam.start.isAfter(now) && e.exam.end.isAfter(now)).firstOrNull;
+  final current = examNow == null ? classNow : null;
   final upcoming = todays.where((l) => lessonStart(l, today).isAfter(now)).toList();
-  final timed = <(DateTime, int, RailEntry)>[]; // time, tie-break order, entry
-  if (current != null) {
+  final upcomingExams = examsToday.where((e) => e.exam.start.isAfter(now)).toList();
+  final nextIsExam = examNow == null &&
+      current == null &&
+      upcomingExams.isNotEmpty &&
+      (upcoming.isEmpty || !lessonStart(upcoming.first, today).isBefore(upcomingExams.first.exam.start));
+  // Time, then a tie-break: the end-of-day note, exams, classes, what is due.
+  final timed = <(DateTime, int, RailEntry)>[];
+  if (examNow != null) {
+    out.add(RailExam(examNow, ClassRole.current));
+    if (classNow != null) timed.add((now, 2, RailClass(classNow, today, ClassRole.row)));
+  } else if (current != null) {
     out.add(RailClass(current, today, ClassRole.current));
   } else {
     out.add(RailNow(now));
   }
+  final heroTaken = examNow != null || current != null || nextIsExam;
   for (final (i, l) in upcoming.indexed) {
-    final role = current == null && i == 0 ? ClassRole.next : ClassRole.row;
-    timed.add((lessonStart(l, today), 1, RailClass(l, today, role)));
+    timed.add((lessonStart(l, today), 2, RailClass(l, today, !heroTaken && i == 0 ? ClassRole.next : ClassRole.row)));
   }
-  final tomorrow = today.add(const Duration(days: 1));
+  for (final (i, e) in upcomingExams.indexed) {
+    timed.add((e.exam.start, 1, RailExam(e, nextIsExam && i == 0 ? ClassRole.next : ClassRole.row)));
+  }
   for (final d in due.where((d) => !d.end.isBefore(now) && d.end.isBefore(tomorrow))) {
-    timed.add((d.end, 2, RailDue(d)));
+    timed.add((d.end, 3, RailDue(d)));
   }
   if (timetableKnown) {
-    if (todays.isEmpty) {
+    if (todays.isEmpty && examsToday.isEmpty) {
       out.add(const RailNote(RailNoteKind.noClasses));
-    } else if (current == null && upcoming.isEmpty) {
+    } else if (examNow == null && current == null && upcoming.isEmpty && upcomingExams.isEmpty) {
       out.add(const RailNote(RailNoteKind.noMoreClasses));
     } else {
-      final lastEnd = lessonEnd(todays.last, today);
+      final lastEnd = [
+        for (final l in todays) lessonEnd(l, today),
+        for (final e in examsToday) e.exam.end,
+      ].reduce((a, b) => a.isAfter(b) ? a : b);
       timed.add((lastEnd, 0, RailNote(RailNoteKind.freeAfter, lastEnd)));
     }
   }
@@ -153,17 +186,20 @@ List<RailEntry> todayRail({
   final later = <DateTime, List<(DateTime, int, RailEntry)>>{};
   void put(DateTime at, int order, RailEntry e) => later.putIfAbsent(_midnight(at), () => []).add((at, order, e));
   for (final d in due.where((d) => !d.end.isBefore(tomorrow))) {
-    put(d.end, 2, RailDue(d));
+    put(d.end, 3, RailDue(d));
+  }
+  for (final e in exams.where((e) => !e.exam.start.isBefore(tomorrow) && !e.exam.start.isAfter(now.add(examTodayWindow)))) {
+    put(e.exam.start, 1, RailExam(e, ClassRole.row));
   }
   final placed = <(Lesson, DateTime)>{};
   void putClass(Lesson l, DateTime day) {
     if (!placed.add((l, day))) return;
-    put(lessonStart(l, day), 1, RailClass(l, day, ClassRole.row));
+    put(lessonStart(l, day), 2, RailClass(l, day, ClassRole.row));
   }
 
   final first = nextLesson(lessons, tomorrow, (_) => true);
   if (first != null) putClass(first.lesson, first.day);
-  final classesToday = {current, ...upcoming}.whereType<Lesson>().toSet();
+  final classesToday = {classNow, ...upcoming}.whereType<Lesson>().toSet();
   for (final c in attendance) {
     if (!AbsenceState.of(c, limits).trouble) continue;
     if (classesToday.any((l) => isLessonOf(l, c.course))) continue;
