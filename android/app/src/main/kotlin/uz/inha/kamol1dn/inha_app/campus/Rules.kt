@@ -86,14 +86,24 @@ data class ClassSlot(val lesson: Lesson, val day: LocalDate) {
     fun inProgress(now: LocalDateTime) = !start.isAfter(now) && end.isAfter(now)
 }
 
-fun lessonsOn(lessons: List<Lesson>, day: LocalDate): List<ClassSlot> =
-    lessons.filter { it.weekday == day.dayOfWeek.value }.sortedBy { minutes(it.start) }.map { ClassSlot(it, day) }
+/** The classes on [day]; none on the days in [off] (an exam week, `Campus.classFree`). */
+fun lessonsOn(lessons: List<Lesson>, day: LocalDate, off: Set<LocalDate> = emptySet()): List<ClassSlot> =
+    if (day in off) emptyList()
+    else lessons.filter { it.weekday == day.dayOfWeek.value }.sortedBy { minutes(it.start) }.map { ClassSlot(it, day) }
 
-/** The next class [test] accepts: one in progress or still to come today, then the next 7 days. */
-fun nextLesson(lessons: List<Lesson>, now: LocalDateTime, test: (Lesson) -> Boolean = { true }): ClassSlot? {
+/**
+ * The next class [test] accepts: one in progress or still to come today, then the next 7 days,
+ * skipping the days in [off].
+ */
+fun nextLesson(
+    lessons: List<Lesson>,
+    now: LocalDateTime,
+    off: Set<LocalDate> = emptySet(),
+    test: (Lesson) -> Boolean = { true },
+): ClassSlot? {
     for (i in 0L..7L) {
         val day = now.toLocalDate().plusDays(i)
-        lessonsOn(lessons, day).firstOrNull { test(it.lesson) && it.end.isAfter(now) }?.let { return it }
+        lessonsOn(lessons, day, off).firstOrNull { test(it.lesson) && it.end.isAfter(now) }?.let { return it }
     }
     return null
 }

@@ -65,13 +65,13 @@ class CampusFunctions(private val c: Campus, private val now: LocalDateTime) {
 
     fun nextClass(): NextClassResult {
         val t = timetable()
-        return NextClassResult(nextLesson(t.value, now)?.let(::classInfo), t.at)
+        return NextClassResult(nextLesson(t.value, now, c.classFree)?.let(::classInfo), t.at)
     }
 
     fun schedule(day: LocalDate?): DaySchedule {
         val t = timetable()
         val date = day ?: now.toLocalDate()
-        return DaySchedule(date, lessonsOn(t.value, date).map(::classInfo), t.at)
+        return DaySchedule(date, lessonsOn(t.value, date, c.classFree).map(::classInfo), t.at)
     }
 
     fun upcomingDeadlines(withinDays: Int): DeadlinesResult {
@@ -133,7 +133,7 @@ class CampusFunctions(private val c: Campus, private val now: LocalDateTime) {
             status = status,
             videosWatched = ca.vods.count { it.done },
             videosTotal = ca.vods.size,
-            nextClass = nextLesson(lessons, now) { isLessonOf(it, ca.course) }?.start,
+            nextClass = nextLesson(lessons, now, c.classFree) { isLessonOf(it, ca.course) }?.start,
         )
     }
 

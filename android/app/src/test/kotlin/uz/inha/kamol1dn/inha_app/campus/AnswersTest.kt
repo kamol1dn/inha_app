@@ -1,5 +1,7 @@
 package uz.inha.kamol1dn.inha_app.campus
 
+import java.time.LocalDate
+import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -87,6 +89,16 @@ class AnswersTest {
         assertEquals("Overdue 9 h · not submitted", Words.dueLine(p.overdue.single(), sat))
         assertEquals(NoteRow(NoteKind.NO_CLASSES, null), p.rows.first())
         assertEquals("[QUIZ] 2 Week 6 - 2% (Quiz closes)", (p.rows[1] as DueRow).deadline.title)
+    }
+
+    @Test
+    fun anExamWeekDayHasNoClasses() {
+        val week = (26..30).map { LocalDate.of(2026, 10, it) }.toSet()
+        val p = todayPlan(lessons, deadlines, att, c.limits, at(26, 8), week)
+        assertTrue(p.rows.none { it is ClassRow })
+        assertEquals(NoteKind.NO_CLASSES, p.rows.filterIsInstance<NoteRow>().single().kind)
+        // Up next skips to the first class after the week.
+        assertEquals(LocalDateTime.of(2026, 11, 2, 9, 0), upNext(lessons, deadlines, att, c.limits, at(26, 8), week).slot!!.start)
     }
 
     @Test

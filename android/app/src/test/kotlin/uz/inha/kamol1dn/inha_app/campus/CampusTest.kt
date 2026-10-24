@@ -1,5 +1,6 @@
 package uz.inha.kamol1dn.inha_app.campus
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -16,6 +17,14 @@ class CampusTest {
         assertEquals(4, c.attendance!!.value.size)
         assertEquals(3.87, c.grades!!.value.gpa, 0.0)
         assertEquals(4, c.grades!!.value.records.size)
+    }
+
+    @Test
+    fun readsTheExamWeeksDays() {
+        val days = campus("exams.classFreeDays.v1" to """["2026-10-26","2026-10-30"]""").classFree
+        assertEquals(setOf(LocalDate.of(2026, 10, 26), LocalDate.of(2026, 10, 30)), days)
+        assertTrue(campus().classFree.isEmpty())
+        assertTrue(campus("exams.classFreeDays.v1" to "nope").classFree.isEmpty())
     }
 
     @Test

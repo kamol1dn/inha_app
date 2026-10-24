@@ -1,5 +1,7 @@
 package uz.inha.kamol1dn.inha_app.campus
 
+import java.time.LocalDate
+import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -79,6 +81,16 @@ class RulesTest {
         assertEquals(at(26, 9), monday.start)
         assertEquals("Multimedia Computing", monday.lesson.subject)
         assertNull(nextLesson(emptyList(), fri))
+    }
+
+    @Test
+    fun noClassesOnTheExamWeeksDays() {
+        val week = (26..30).map { LocalDate.of(2026, 10, it) }.toSet()
+        assertTrue(lessonsOn(lessons, LocalDate.of(2026, 10, 26), week).isEmpty())
+        assertEquals(2, lessonsOn(lessons, LocalDate.of(2026, 10, 26)).size)
+        // Friday evening the week it looks through is the exam week; from its last day, Mon 2 Nov.
+        assertNull(nextLesson(lessons, at(23, 18), week))
+        assertEquals(LocalDateTime.of(2026, 11, 2, 9, 0), nextLesson(lessons, at(30, 12), week)!!.start)
     }
 
     @Test

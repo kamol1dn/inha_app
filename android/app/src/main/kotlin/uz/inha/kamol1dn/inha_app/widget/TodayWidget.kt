@@ -80,7 +80,7 @@ private sealed interface Line {
 @Composable
 fun TodayContent(c: Campus, now: LocalDateTime) {
     val att = c.attendance?.value.orEmpty()
-    val plan = todayPlan(c.lessons?.value, c.deadlines?.value.orEmpty(), att, c.limits, now)
+    val plan = todayPlan(c.lessons?.value, c.deadlines?.value.orEmpty(), att, c.limits, now, c.classFree)
 
     val lines = buildList<Line> {
         staleNote("Timetable", c.lessons, now, timetableStaleAfter)?.let { add(Line.Note(it, status = Status.WARNING)) }

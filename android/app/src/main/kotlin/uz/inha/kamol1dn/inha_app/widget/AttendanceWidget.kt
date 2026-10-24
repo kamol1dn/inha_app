@@ -75,7 +75,7 @@ fun AttendanceContent(c: Campus, now: LocalDateTime) {
         }
         if (c.eclassAccount?.ok == false) add(Entry.Note("eClass sign-in needed.", Status.DANGER))
         if (att.isEmpty()) add(Entry.Note("No courses in eClass."))
-        val p = attendancePlan(att, c.deadlines?.value.orEmpty(), c.lessons?.value.orEmpty(), c.limits, now)
+        val p = attendancePlan(att, c.deadlines?.value.orEmpty(), c.lessons?.value.orEmpty(), c.limits, now, c.classFree)
         p.trouble.forEachIndexed { i, l -> add(Entry.Course(l, ruled = i > 0)) }
         if (p.vods.isNotEmpty()) {
             add(Entry.Header("VOD windows closing"))

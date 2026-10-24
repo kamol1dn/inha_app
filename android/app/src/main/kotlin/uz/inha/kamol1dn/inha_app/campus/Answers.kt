@@ -1,11 +1,13 @@
 package uz.inha.kamol1dn.inha_app.campus
 
 import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.math.ceil
 import kotlin.math.floor
 
-// What the widgets and AppFunctions answer, built from the rules above. Pure.
+// What the widgets and AppFunctions answer, built from the rules above. Pure. [off] is always
+// `Campus.classFree`: the exam weeks, which have no classes.
 
 /** The class in progress or the next one, and the next open item. */
 data class UpNext(
@@ -16,8 +18,15 @@ data class UpNext(
     val due: Deadline?,
 )
 
-fun upNext(lessons: List<Lesson>, deadlines: List<Deadline>, att: List<CourseAttendance>, limits: Map<Int, Int>, now: LocalDateTime): UpNext {
-    val slot = nextLesson(lessons, now)
+fun upNext(
+    lessons: List<Lesson>,
+    deadlines: List<Deadline>,
+    att: List<CourseAttendance>,
+    limits: Map<Int, Int>,
+    now: LocalDateTime,
+    off: Set<LocalDate> = emptySet(),
+): UpNext {
+    val slot = nextLesson(lessons, now, off)
     return UpNext(
         slot = slot,
         current = slot?.inProgress(now) == true,
@@ -61,13 +70,14 @@ fun todayPlan(
     att: List<CourseAttendance>,
     limits: Map<Int, Int>,
     now: LocalDateTime,
+    off: Set<LocalDate> = emptySet(),
 ): TodayPlan {
     val today = now.toLocalDate()
     val due = needsAttention(deadlines, att, now)
     fun row(d: Deadline) = DueRow(d, deadlineStatus(d, now), vodFor(d, att))
     val overdue = due.filter { it.end.isBefore(now) }.map(::row)
 
-    val todays = lessonsOn(lessons.orEmpty(), today)
+    val todays = lessonsOn(lessons.orEmpty(), today, off)
     val warned = mutableSetOf<String>()
     fun classRow(s: ClassSlot): ClassRow {
         val trouble = troubleFor(s.lesson, att, limits)?.takeIf { warned.add(norm(s.lesson.subject)) }
@@ -87,7 +97,7 @@ fun todayPlan(
             upcoming.isEmpty() -> timed += Triple(now, 0, NoteRow(NoteKind.NO_MORE_CLASSES, null))
             else -> timed += Triple(todays.last().end, 0, NoteRow(NoteKind.FREE_AFTER, todays.last().end))
         }
-        if (upcoming.isEmpty()) next = nextLesson(lessons, tomorrow)
+        if (upcoming.isEmpty()) next = nextLesson(lessons, tomorrow, off)
     }
     timed.sortWith(compareBy({ it.first }, { it.second }))
     val dayAhead = now.plusHours(24)
@@ -110,9 +120,10 @@ fun attendancePlan(
     lessons: List<Lesson>,
     limits: Map<Int, Int>,
     now: LocalDateTime,
+    off: Set<LocalDate> = emptySet(),
 ): AttendancePlan {
     val lines = troubleOrder(att, limits, lessons).map { c ->
-        CourseLine(c, AbsenceState.of(c, limits), nextLesson(lessons, now) { isLessonOf(it, c.course) })
+        CourseLine(c, AbsenceState.of(c, limits), nextLesson(lessons, now, off) { isLessonOf(it, c.course) })
     }
     val vods = needsAttention(deadlines, att, now)
         .filter { it.kind == DeadlineKind.VOD }
@@ -125,10 +136,16 @@ fun attendancePlan(
  * an item turns urgent, overdue or drops off, the day changes, or a countdown moves on (every
  * 5 minutes within an hour of a class and during it, 15 within 3 hours, else 30).
  */
-fun nextTick(lessons: List<Lesson>, deadlines: List<Deadline>, att: List<CourseAttendance>, now: LocalDateTime): LocalDateTime {
+fun nextTick(
+    lessons: List<Lesson>,
+    deadlines: List<Deadline>,
+    att: List<CourseAttendance>,
+    now: LocalDateTime,
+    off: Set<LocalDate> = emptySet(),
+): LocalDateTime {
     val at = mutableListOf(now.toLocalDate().plusDays(1).atStartOfDay())
-    for (s in lessonsOn(lessons, now.toLocalDate())) at += listOf(s.start, s.end)
-    val next = nextLesson(lessons, now)
+    for (s in lessonsOn(lessons, now.toLocalDate(), off)) at += listOf(s.start, s.end)
+    val next = nextLesson(lessons, now, off)
     if (next != null) at += listOf(next.start, next.end)
     for (d in deadlines.filter { isPending(it, att, now) }) {
         val e = d.end

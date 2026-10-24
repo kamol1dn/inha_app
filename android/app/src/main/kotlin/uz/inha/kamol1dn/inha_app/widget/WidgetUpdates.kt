@@ -65,7 +65,10 @@ object WidgetTicker {
         }
         val c = Campus.read(context)
         val zone = ZoneId.systemDefault()
-        val at = nextTick(c.lessons?.value.orEmpty(), c.deadlines?.value.orEmpty(), c.attendance?.value.orEmpty(), LocalDateTime.now())
+        val at = nextTick(
+            c.lessons?.value.orEmpty(), c.deadlines?.value.orEmpty(), c.attendance?.value.orEmpty(), LocalDateTime.now(),
+            c.classFree,
+        )
         alarms.set(AlarmManager.RTC, at.atZone(zone).toInstant().toEpochMilli(), pending(context))
     }
 

@@ -64,7 +64,9 @@ class UpNextWidgetReceiver : PaperWidgetReceiver() {
 @Composable
 fun UpNextContent(c: Campus, now: LocalDateTime) {
     val size = LocalSize.current
-    val u = upNext(c.lessons?.value.orEmpty(), c.deadlines?.value.orEmpty(), c.attendance?.value.orEmpty(), c.limits, now)
+    val u = upNext(
+        c.lessons?.value.orEmpty(), c.deadlines?.value.orEmpty(), c.attendance?.value.orEmpty(), c.limits, now, c.classFree,
+    )
     PaperFrame(TapKeys.tab(0)) {
         if (size.height < 170.dp && size.width >= 240.dp) {
             Row(GlanceModifier.fillMaxSize()) {

@@ -1,6 +1,7 @@
 package uz.inha.kamol1dn.inha_app.campus
 
 import android.content.Context
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -13,7 +14,8 @@ import org.json.JSONObject
  *
  * The app keeps each source as `cache.<key>` = `{"at": ..., "value": ...}` (lib/core/cache.dart),
  * the absence limits as `absenceLimits.v1` and the last login result per service as
- * `account.<service>` (lib/data/app_data.dart, `Prefs`). The shared_preferences plugin stores
+ * `account.<service>` and the exam weeks' days as `exams.classFreeDays.v1` (lib/data/app_data.dart,
+ * `Prefs`; lib/data/exams.dart). The shared_preferences plugin stores
  * them in `FlutterSharedPreferences.xml` with a `flutter.` prefix. A value that doesn't parse
  * counts as missing, as it does in the app.
  */
@@ -26,6 +28,8 @@ class Campus(
     val limits: Map<Int, Int>,
     val eclassAccount: AccountCheck?,
     val insAccount: AccountCheck?,
+    /** The exam weeks' days: no classes then, whatever the timetable says. */
+    val classFree: Set<LocalDate> = emptySet(),
 ) {
     companion object {
         const val PREFS_FILE = "FlutterSharedPreferences"
@@ -53,6 +57,7 @@ class Campus(
                 limits = parse.limits(get("absenceLimits.v1")),
                 eclassAccount = parse.account(get("account.eclass")),
                 insAccount = parse.account(get("account.ins")),
+                classFree = parse.days(get("exams.classFreeDays.v1")),
             )
         }
     }
@@ -172,6 +177,17 @@ internal class CacheJson(private val zone: ZoneId) {
             }
         } catch (_: Exception) {
             emptyMap()
+        }
+    }
+
+    /** `["2026-10-26", ...]`. Anything malformed counts as no days. */
+    fun days(raw: String?): Set<LocalDate> {
+        if (raw == null) return emptySet()
+        return try {
+            val a = JSONArray(raw)
+            List(a.length()) { LocalDate.parse(a.getString(it)) }.toSet()
+        } catch (_: Exception) {
+            emptySet()
         }
     }
 
