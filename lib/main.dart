@@ -15,6 +15,7 @@ Future<void> main() async {
   LicenseRegistry.addLicense(_fontLicences);
   final services = await AppServices.open();
   final data = services.data;
+  await data.loadExams(rootBundle);
 
   final notifier = Notifier();
   // A tap while the app runs arrives here; one that started the app is the

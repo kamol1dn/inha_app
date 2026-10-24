@@ -1,0 +1,994 @@
+{
+ "format": 1,
+ "id": "2026-fall-midterm",
+ "kind": "midterm",
+ "term": "Fall 2026",
+ "title": "Mid Term Mon.,26.10-30.10",
+ "source": "Timetable for 2026 Fall Midterm Exam.pdf",
+ "roomsAssigned": false,
+ "seats": {
+  "A202": 35,
+  "A203": 35,
+  "A513": 32,
+  "A605": 27,
+  "A606": 27,
+  "A607": 27,
+  "A608": 27,
+  "B102": null,
+  "B103": null,
+  "B304(A)": 50,
+  "B304(B)": 50,
+  "B304(C)": 50,
+  "B305": 35,
+  "B306": 35,
+  "B201": 35,
+  "B202": 35,
+  "B209": 35,
+  "B210": 35
+ },
+ "exams": [
+  {
+   "slot": "M-1",
+   "date": "2026-10-26",
+   "start": "09:30",
+   "end": "11:00",
+   "cell": "Introduction to Economics- (SBL)",
+   "rooms": [
+    "A202",
+    "A203",
+    "A513",
+    "A605"
+   ]
+  },
+  {
+   "slot": "M-1",
+   "date": "2026-10-26",
+   "start": "09:30",
+   "end": "11:00",
+   "cell": "Entrepreneurship",
+   "rooms": [
+    "A606",
+    "A607"
+   ]
+  },
+  {
+   "slot": "M-1",
+   "date": "2026-10-26",
+   "start": "09:30",
+   "end": "11:00",
+   "cell": "Physics 1 (90min)",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "M-2",
+   "date": "2026-10-26",
+   "start": "11:30",
+   "end": "12:30",
+   "cell": "Operations Research",
+   "rooms": [
+    "A202",
+    "A203",
+    "A513"
+   ]
+  },
+  {
+   "slot": "M-2",
+   "date": "2026-10-26",
+   "start": "11:30",
+   "end": "12:30",
+   "cell": "Application Programming in Java",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202"
+   ]
+  },
+  {
+   "slot": "M-2",
+   "date": "2026-10-26",
+   "start": "11:30",
+   "end": "12:30",
+   "cell": "Deep learning for computer vision",
+   "rooms": [
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "M-3",
+   "date": "2026-10-26",
+   "start": "13:00",
+   "end": "14:00",
+   "cell": "System Analysis",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305"
+   ]
+  },
+  {
+   "slot": "M-3",
+   "date": "2026-10-26",
+   "start": "13:00",
+   "end": "14:00",
+   "cell": "Financial Management",
+   "rooms": [
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "M-4",
+   "date": "2026-10-26",
+   "start": "14:30",
+   "end": "16:00",
+   "cell": "(UK) Numeracy and data (90 min)",
+   "rooms": [
+    "A202"
+   ]
+  },
+  {
+   "slot": "M-4",
+   "date": "2026-10-26",
+   "start": "14:30",
+   "end": "16:00",
+   "cell": "(UK) PCAD (IT 26-1/26-3)",
+   "rooms": [
+    "A203",
+    "A513"
+   ]
+  },
+  {
+   "slot": "M-4",
+   "date": "2026-10-26",
+   "start": "14:30",
+   "end": "16:00",
+   "cell": "(UK) PCAD (IT 26-2/26-4)",
+   "rooms": [
+    "A605",
+    "A606"
+   ]
+  },
+  {
+   "slot": "M-4",
+   "date": "2026-10-26",
+   "start": "14:30",
+   "end": "16:00",
+   "cell": "UK English (BM 25-01)",
+   "rooms": [
+    "A607"
+   ]
+  },
+  {
+   "slot": "M-4",
+   "date": "2026-10-26",
+   "start": "14:30",
+   "end": "16:00",
+   "cell": "Software Engineering",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305"
+   ]
+  },
+  {
+   "slot": "M-4",
+   "date": "2026-10-26",
+   "start": "14:30",
+   "end": "16:00",
+   "cell": "Marketing Management",
+   "rooms": [
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "M-5",
+   "date": "2026-10-26",
+   "start": "16:30",
+   "end": "17:30",
+   "cell": "(UK) Intro to Data Science (AI 25-01)",
+   "rooms": [
+    "B102"
+   ]
+  },
+  {
+   "slot": "M-5",
+   "date": "2026-10-26",
+   "start": "16:30",
+   "end": "17:30",
+   "cell": "(UK) Intro to Data Science (DS 25-01)",
+   "rooms": [
+    "B103"
+   ]
+  },
+  {
+   "slot": "M-5",
+   "date": "2026-10-26",
+   "start": "16:30",
+   "end": "17:30",
+   "cell": "Introduction to Economics (SOCIE)",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306"
+   ]
+  },
+  {
+   "slot": "T-1",
+   "date": "2026-10-27",
+   "start": "09:30",
+   "end": "10:30",
+   "cell": "Basic Korean 1 (SBL)",
+   "rooms": [
+    "A202",
+    "A203",
+    "A513"
+   ]
+  },
+  {
+   "slot": "T-1",
+   "date": "2026-10-27",
+   "start": "09:30",
+   "end": "10:30",
+   "cell": "Basic Korean 1 (SOCIE)",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201"
+   ]
+  },
+  {
+   "slot": "T-2",
+   "date": "2026-10-27",
+   "start": "11:00",
+   "end": "12:00",
+   "cell": "Trade Business",
+   "rooms": [
+    "A202",
+    "A203",
+    "A605",
+    "A606"
+   ]
+  },
+  {
+   "slot": "T-2",
+   "date": "2026-10-27",
+   "start": "11:00",
+   "end": "12:00",
+   "cell": "Signals and Systems",
+   "rooms": [
+    "A513",
+    "A607",
+    "A608"
+   ]
+  },
+  {
+   "slot": "T-2",
+   "date": "2026-10-27",
+   "start": "11:00",
+   "end": "12:00",
+   "cell": "Academic English Reading",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "T-3",
+   "date": "2026-10-27",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Business English Readings & Writings 1",
+   "rooms": [
+    "A202",
+    "A203",
+    "A605",
+    "A606"
+   ]
+  },
+  {
+   "slot": "T-3",
+   "date": "2026-10-27",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Linear Algebra",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202"
+   ]
+  },
+  {
+   "slot": "T-4",
+   "date": "2026-10-27",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "(UK) Organizational Behaviour (BM 25-01)",
+   "rooms": [
+    "B102"
+   ]
+  },
+  {
+   "slot": "T-4",
+   "date": "2026-10-27",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "Artificial Intelligence",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201"
+   ]
+  },
+  {
+   "slot": "T-5",
+   "date": "2026-10-27",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "Introduction to Global Economy",
+   "rooms": [
+    "A202",
+    "A203",
+    "A605",
+    "A606"
+   ]
+  },
+  {
+   "slot": "T-5",
+   "date": "2026-10-27",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Introduction to marketing",
+   "rooms": [
+    "A513"
+   ]
+  },
+  {
+   "slot": "T-5",
+   "date": "2026-10-27",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Programming with Python (AI 25-01/DS 25-01)",
+   "rooms": [
+    "B102",
+    "B103"
+   ]
+  },
+  {
+   "slot": "T-5",
+   "date": "2026-10-27",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "Computer Algorithm",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202",
+    "B209"
+   ]
+  },
+  {
+   "slot": "W-1",
+   "date": "2026-10-28",
+   "start": "09:30",
+   "end": "10:30",
+   "cell": "Embedded Software & Design",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306"
+   ]
+  },
+  {
+   "slot": "W-1",
+   "date": "2026-10-28",
+   "start": "09:30",
+   "end": "10:30",
+   "cell": "Digital Marketing",
+   "rooms": [
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "W-2",
+   "date": "2026-10-28",
+   "start": "11:00",
+   "end": "12:00",
+   "cell": "Statistics 1",
+   "rooms": [
+    "A202",
+    "A203",
+    "A605",
+    "A606"
+   ]
+  },
+  {
+   "slot": "W-2",
+   "date": "2026-10-28",
+   "start": "11:00",
+   "end": "12:00",
+   "cell": "Engineering Mathematics",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202"
+   ]
+  },
+  {
+   "slot": "W-3",
+   "date": "2026-10-28",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Air Transportation",
+   "rooms": [
+    "A202",
+    "A203"
+   ]
+  },
+  {
+   "slot": "W-3",
+   "date": "2026-10-28",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "(UK) Business Communication (BM-26-01)",
+   "rooms": [
+    "B102"
+   ]
+  },
+  {
+   "slot": "W-3",
+   "date": "2026-10-28",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Multimedia Computing",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201"
+   ]
+  },
+  {
+   "slot": "W-3",
+   "date": "2026-10-28",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Principle of Accounting",
+   "rooms": [
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "W-4",
+   "date": "2026-10-28",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "(UK)CS Policy and Governance (CS 25-01)",
+   "rooms": [
+    "A202"
+   ]
+  },
+  {
+   "slot": "W-4",
+   "date": "2026-10-28",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "(UK) Database Systems (DS 25-1)",
+   "rooms": [
+    "A203"
+   ]
+  },
+  {
+   "slot": "W-4",
+   "date": "2026-10-28",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "Operating System",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202",
+    "B209"
+   ]
+  },
+  {
+   "slot": "W-5",
+   "date": "2026-10-28",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Principles of Marketing (BM 25-01)",
+   "rooms": [
+    "A203"
+   ]
+  },
+  {
+   "slot": "W-5",
+   "date": "2026-10-28",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) English IT 26",
+   "rooms": [
+    "B102",
+    "B103"
+   ]
+  },
+  {
+   "slot": "W-5",
+   "date": "2026-10-28",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "Calculus 1",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "W-6",
+   "date": "2026-10-28",
+   "start": "17:00",
+   "end": "18:00",
+   "cell": "(UK) English IT 26",
+   "rooms": [
+    "B102",
+    "B103"
+   ]
+  },
+  {
+   "slot": "Th-1",
+   "date": "2026-10-29",
+   "start": "09:30",
+   "end": "10:30",
+   "cell": "History 2",
+   "rooms": [
+    "A202",
+    "A203",
+    "A605",
+    "A606",
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202",
+    "B209"
+   ]
+  },
+  {
+   "slot": "Th-2",
+   "date": "2026-10-29",
+   "start": "11:00",
+   "end": "12:00",
+   "cell": "Database Management",
+   "rooms": [
+    "A605",
+    "A606"
+   ]
+  },
+  {
+   "slot": "Th-2",
+   "date": "2026-10-29",
+   "start": "11:00",
+   "end": "12:00",
+   "cell": "Introduction to IT",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "Th-3",
+   "date": "2026-10-29",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Business Mathematics",
+   "rooms": [
+    "A202",
+    "A203",
+    "A605",
+    "A606"
+   ]
+  },
+  {
+   "slot": "Th-3",
+   "date": "2026-10-29",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "(UK) Network Security (CS 25-01)",
+   "rooms": [
+    "B102"
+   ]
+  },
+  {
+   "slot": "Th-3",
+   "date": "2026-10-29",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Database (Dr.Sarvar)",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305"
+   ]
+  },
+  {
+   "slot": "Th-3",
+   "date": "2026-10-29",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Database (Dr.Agostini)",
+   "rooms": [
+    "B201",
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "Th-4",
+   "date": "2026-10-29",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "Supply Chain Management",
+   "rooms": [
+    "A202",
+    "A203",
+    "A513"
+   ]
+  },
+  {
+   "slot": "Th-4",
+   "date": "2026-10-29",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "Circuit and Lab (CSE)",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306"
+   ]
+  },
+  {
+   "slot": "Th-4",
+   "date": "2026-10-29",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "Circuit and Lab (ICE)",
+   "rooms": [
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "Th-5",
+   "date": "2026-10-29",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Introduction to Strategic Management (BM 25-01)",
+   "rooms": [
+    "A605"
+   ]
+  },
+  {
+   "slot": "Th-5",
+   "date": "2026-10-29",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Tech English 2 (AI -DS 25-1)",
+   "rooms": [
+    "B102"
+   ]
+  },
+  {
+   "slot": "Th-5",
+   "date": "2026-10-29",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Tech English 2 (CS 25-1)",
+   "rooms": [
+    "B103"
+   ]
+  },
+  {
+   "slot": "Th-5",
+   "date": "2026-10-29",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "Big Data Analytics",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306"
+   ]
+  },
+  {
+   "slot": "Th-6",
+   "date": "2026-10-29",
+   "start": "17:00",
+   "end": "18:00",
+   "cell": "(UK) Operating System",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305"
+   ]
+  },
+  {
+   "slot": "F-1",
+   "date": "2026-10-30",
+   "start": "09:30",
+   "end": "10:30",
+   "cell": "Principle of Management",
+   "rooms": [
+    "A202",
+    "A203",
+    "A606",
+    "A607"
+   ]
+  },
+  {
+   "slot": "F-1",
+   "date": "2026-10-30",
+   "start": "09:30",
+   "end": "10:30",
+   "cell": "Distinguished Lecture in Social Science and Art",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201"
+   ]
+  },
+  {
+   "slot": "F-2",
+   "date": "2026-10-30",
+   "start": "11:00",
+   "end": "12:00",
+   "cell": "Railway Transportation",
+   "rooms": [
+    "A202",
+    "A203"
+   ]
+  },
+  {
+   "slot": "F-2",
+   "date": "2026-10-30",
+   "start": "11:00",
+   "end": "12:00",
+   "cell": "Data Structure",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202",
+    "B209"
+   ]
+  },
+  {
+   "slot": "F-3",
+   "date": "2026-10-30",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Business English 3",
+   "rooms": [
+    "A202",
+    "A203",
+    "A513"
+   ]
+  },
+  {
+   "slot": "F-3",
+   "date": "2026-10-30",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "(UK) Intro to Cyber Security (CS 25-01)",
+   "rooms": [
+    "B102"
+   ]
+  },
+  {
+   "slot": "F-3",
+   "date": "2026-10-30",
+   "start": "12:30",
+   "end": "13:30",
+   "cell": "Engineering Communications",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202"
+   ]
+  },
+  {
+   "slot": "F-4",
+   "date": "2026-10-30",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "Financial Institutions Management",
+   "rooms": [
+    "A202",
+    "A203",
+    "A513"
+   ]
+  },
+  {
+   "slot": "F-4",
+   "date": "2026-10-30",
+   "start": "14:00",
+   "end": "15:00",
+   "cell": "Object-Oriented Programming 1",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)",
+    "B305",
+    "B306",
+    "B201",
+    "B202",
+    "B209",
+    "B210"
+   ]
+  },
+  {
+   "slot": "F-5",
+   "date": "2026-10-30",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Math 2 (AI 25-1)",
+   "rooms": [
+    "A202"
+   ]
+  },
+  {
+   "slot": "F-5",
+   "date": "2026-10-30",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Math 2 (DS 25-1)",
+   "rooms": [
+    "A203"
+   ]
+  },
+  {
+   "slot": "F-5",
+   "date": "2026-10-30",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Business English (BM 26-01)",
+   "rooms": [
+    "A513"
+   ]
+  },
+  {
+   "slot": "F-5",
+   "date": "2026-10-30",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Financial Management (25-01)",
+   "rooms": [
+    "A605"
+   ]
+  },
+  {
+   "slot": "F-5",
+   "date": "2026-10-30",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Math for IT (26-01/03, 26-02/04)",
+   "rooms": [
+    "B304(A)",
+    "B304(B)",
+    "B304(C)"
+   ]
+  },
+  {
+   "slot": "F-5",
+   "date": "2026-10-30",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "(UK) Math for IT (26-05, 26-06)",
+   "rooms": [
+    "B305",
+    "B306"
+   ]
+  },
+  {
+   "slot": "F-5",
+   "date": "2026-10-30",
+   "start": "15:30",
+   "end": "16:30",
+   "cell": "Electronic circuit",
+   "rooms": [
+    "B209",
+    "B210"
+   ]
+  }
+ ]
+}

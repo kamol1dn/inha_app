@@ -79,6 +79,8 @@ flutter:
   assets:
     - assets/fonts/OFL-Fraunces.txt
     - assets/fonts/OFL-PublicSans.txt
+    # The exam timetables, curated by tool/exam_timetable.py (docs/EXAMS.md).
+    - assets/exams/
 
   fonts:
     - family: Fraunces

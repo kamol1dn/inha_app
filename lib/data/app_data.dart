@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
+import 'package:flutter/services.dart' show AssetBundle;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/cache.dart';
@@ -15,6 +16,7 @@ import '../services/eclass/eclass_api.dart';
 import '../services/edupage/timetable_api.dart';
 import '../services/ins/ins_api.dart';
 import '../services/mail/mail_api.dart';
+import 'exams.dart';
 
 /// The last time a service answered with the saved login: [ok] when it let
 /// the app in, false when it rejected the username or password.
@@ -89,6 +91,24 @@ class Prefs {
     final all = absenceLimits;
     limit == null ? all.remove(courseId) : all[courseId] = limit;
     _p.setString(Notifier.absenceLimitsKey, jsonEncode({for (final e in all.entries) '${e.key}': e.value}));
+  }
+
+  /// The exam rooms the student set once they knew them, by [Exam.keyIn].
+  Map<String, String> get examRooms {
+    try {
+      return {
+        for (final e in (jsonDecode(_p.getString('exams.rooms.v1') ?? '{}') as Map<String, dynamic>).entries)
+          e.key: e.value as String,
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  void setExamRoom(String key, String? room) {
+    final all = examRooms;
+    room == null ? all.remove(key) : all[key] = room;
+    _p.setString('exams.rooms.v1', jsonEncode(all));
   }
 
   AccountCheck? accountCheck(Service s) {
@@ -355,6 +375,42 @@ class AppData extends ChangeNotifier {
   void setAbsenceLimit(int courseId, int? limit) {
     prefs.setAbsenceLimit(courseId, limit);
     unawaited(onWidgetDataChanged?.call());
+    notifyListeners();
+  }
+
+  /// The bundled exam timetables (lib/data/exams.dart), read once at start.
+  List<ExamPeriod> examPeriods = const [];
+
+  /// Reads [examSheets]. A sheet that doesn't parse is left out; the tests
+  /// read every bundled sheet, so one never ships broken.
+  Future<void> loadExams(AssetBundle bundle) async {
+    final read = <ExamPeriod>[];
+    for (final path in examSheets) {
+      try {
+        read.add(ExamPeriod.fromJson(jsonDecode(await bundle.loadString(path)) as Map<String, dynamic>));
+      } catch (e) {
+        if (kDebugMode) debugPrint('exam sheet $path: $e');
+      }
+    }
+    examPeriods = read;
+    notifyListeners();
+  }
+
+  /// The student's exams in the period on show at [now], matched from the
+  /// timetable and eClass; null outside every exam period.
+  ExamMatch? exams(DateTime now) {
+    final period = ExamPeriod.current(examPeriods, now);
+    if (period == null) return null;
+    return matchExams(
+      period,
+      studentCourses(lessons.data?.value ?? const [], attendance.data?.value ?? const []),
+      classGroup: prefs.classGroup,
+      rooms: prefs.examRooms,
+    );
+  }
+
+  void setExamRoom(Exam exam, ExamPeriod period, String? room) {
+    prefs.setExamRoom(exam.keyIn(period), room);
     notifyListeners();
   }
 
