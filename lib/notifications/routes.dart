@@ -29,7 +29,7 @@ class ScheduleTarget extends NotificationTarget {
 
 /// The item is gone (submitted, moved, the course dropped): its tab.
 class TabTarget extends NotificationTarget {
-  final int tab; // 1 Schedule, 2 Deadlines, 3 Courses
+  final int tab; // 1 Schedule, 2 Deadlines, 3 Courses (4 is Mail)
   const TabTarget(this.tab);
 }
 

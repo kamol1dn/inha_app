@@ -138,22 +138,36 @@ class AppData extends ChangeNotifier {
   /// reminders are planned from. The app hooks the notifier in here.
   Future<void> Function()? onReminderDataChanged;
 
-  void _readCache() {
-    lessons = Snapshot(data: cache.read('lessons', _decodeList(Lesson.fromJson)));
-    deadlines = Snapshot(data: cache.read('deadlines', _decodeList(Deadline.fromJson)));
+  /// Reads every source from the cache. On a [reload] a
+  /// source keeps its last error unless the cache holds something newer than
+  /// it did; otherwise a signed-out source with nothing cached would go back
+  /// to its loading skeleton and stay there.
+  void _readCache({bool reload = false}) {
+    Snapshot<T> read<T>(Snapshot<T> Function() before, Cached<T>? cached) {
+      final old = reload ? before() : null;
+      return Snapshot(data: cached, error: cached?.fetchedAt == old?.data?.fetchedAt ? old?.error : null);
+    }
+
+    lessons = read(() => lessons, cache.read('lessons', _decodeList(Lesson.fromJson)));
+    deadlines = read(() => deadlines, cache.read('deadlines', _decodeList(Deadline.fromJson)));
     attendance =
-        Snapshot(data: cache.read('attendance', _decodeList(CourseAttendance.fromJson)));
-    grades = Snapshot(
-        data: cache.read('grades', (j) => GradeReport.fromJson(j as Map<String, dynamic>)));
-    inbox = Snapshot(data: cache.read('inbox', _decodeList(MailHeader.fromJson)));
-    mailUnread = Snapshot(data: cache.read('mailUnread', (j) => j as int));
+        read(() => attendance, cache.read('attendance', _decodeList(CourseAttendance.fromJson)));
+    grades = read(
+        () => grades, cache.read('grades', (j) => GradeReport.fromJson(j as Map<String, dynamic>)));
+    for (final box in [for (final f in MailFolder.values) (f, _mailbox[f]!)]) {
+      box.$2.list = read(() => box.$2.list, cache.read(_mailKey(box.$1), _decodeList(MailHeader.fromJson)));
+    }
+    mailUnread = read(() => mailUnread, cache.read('mailUnread', (j) => j as int));
   }
 
   /// Picks up what the background refresh wrote while the app was away.
   Future<void> reloadFromCache() async {
-    if ([lessons, deadlines, attendance, grades, inbox, mailUnread].any((s) => s.loading)) return;
+    if ([lessons, deadlines, attendance, grades, mailUnread, for (final f in _mailbox.values) f.list]
+        .any((s) => s.loading)) {
+      return;
+    }
     await cache.reload();
-    _readCache();
+    _readCache(reload: true);
     notifyListeners();
   }
 
@@ -161,19 +175,26 @@ class AppData extends ChangeNotifier {
   late Snapshot<List<Deadline>> deadlines;
   late Snapshot<List<CourseAttendance>> attendance;
   late Snapshot<GradeReport> grades;
-  late Snapshot<List<MailHeader>> inbox;
+
+  final _mailbox = {for (final f in MailFolder.values) f: MailboxFolder()};
+
+  /// A mail folder as loaded so far.
+  MailboxFolder mailbox(MailFolder f) => _mailbox[f]!;
+
+  Snapshot<List<MailHeader>> get inbox => _mailbox[MailFolder.inbox]!.list;
 
   /// The inbox's unread count from Exchange, which also counts messages
   /// beyond the pages loaded into [inbox].
   late Snapshot<int> mailUnread;
 
-  /// Messages per inbox page.
+  /// Every folder's unread and total count, for the drawer. In memory only.
+  Map<MailFolder, MailFolderCount> mailCounts = const {};
+
+  /// Messages per folder page.
   static const mailPageSize = 30;
 
-  /// Whether the server may have messages past the last loaded page.
-  bool mailHasMore = true;
-  bool loadingMoreMail = false;
-  Object? mailMoreError;
+  /// The inbox keeps the cache key it had before there were folders.
+  static String _mailKey(MailFolder f) => f == MailFolder.inbox ? 'inbox' : 'mail.${f.name}';
 
   static List<T> Function(Object?) _decodeList<T>(T Function(Map<String, dynamic>) f) =>
       (j) => (j as List).map((e) => f(e as Map<String, dynamic>)).toList();
@@ -259,20 +280,11 @@ class AppData extends ChangeNotifier {
         service: Service.ins,
       );
 
-  Future<void> refreshMail() => Future.wait([
-        _run<List<MailHeader>>(
-          get: () => inbox,
-          set: (s) => inbox = s,
-          fetch: () async {
-            final page = await mail.inbox(limit: mailPageSize);
-            mailHasMore = page.length >= mailPageSize;
-            mailMoreError = null;
-            return page;
-          },
-          key: 'inbox',
-          encode: _encodeList,
-          service: Service.mail,
-        ),
+  /// Refreshes [folder] (the inbox unless said), the unread count and the
+  /// drawer's counts.
+  Future<void> refreshMail({MailFolder folder = MailFolder.inbox}) => Future.wait([
+        refreshMailFolder(folder),
+        refreshMailCounts(),
         _run<int>(
           get: () => mailUnread,
           set: (s) => mailUnread = s,
@@ -282,6 +294,35 @@ class AppData extends ChangeNotifier {
           service: Service.mail,
         ),
       ]);
+
+  /// Reloads the first page of [f].
+  Future<void> refreshMailFolder(MailFolder f) {
+    final box = _mailbox[f]!;
+    return _run<List<MailHeader>>(
+      get: () => box.list,
+      set: (s) => box.list = s,
+      fetch: () async {
+        final page = await mail.folder(f, limit: mailPageSize);
+        box.hasMore = page.length >= mailPageSize;
+        box.moreError = null;
+        return page;
+      },
+      key: _mailKey(f),
+      encode: _encodeList,
+      service: Service.mail,
+    );
+  }
+
+  /// The drawer's counts. A failure keeps the last ones: the folder lists
+  /// already show what went wrong.
+  Future<void> refreshMailCounts() async {
+    try {
+      mailCounts = await mail.folderCounts();
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('mail counts failed: ${_debugDescribe(e)}');
+    }
+  }
 
   /// Logs in to [s] with the saved login right away (the caller resets its
   /// cookies first, so the login really runs) and records the result. On
@@ -328,19 +369,19 @@ class AppData extends ChangeNotifier {
       case Service.ins:
         grades = const Snapshot();
       case Service.mail:
-        inbox = const Snapshot();
+        _mailbox.updateAll((_, _) => MailboxFolder());
         mailUnread = const Snapshot();
-        mailHasMore = true;
+        mailCounts = const {};
       case Service.edupage:
         lessons = const Snapshot();
     }
     notifyListeners();
   }
 
-  static const _cacheKeys = {
+  static final _cacheKeys = {
     Service.eclass: ['deadlines', 'attendance'],
     Service.ins: ['grades'],
-    Service.mail: ['inbox', 'mailUnread'],
+    Service.mail: ['mailUnread', for (final f in MailFolder.values) _mailKey(f)],
     Service.edupage: ['lessons'],
   };
 
@@ -356,49 +397,105 @@ class AppData extends ChangeNotifier {
 
   void _check(Service s, {required bool ok}) => prefs.setAccountCheck(s, AccountCheck(ok, DateTime.now()));
 
-  /// Appends the next inbox page. Kept in memory only: the cache holds the
+  /// Appends the next page of [f]. Kept in memory only: the cache holds the
   /// first page, which is what a refresh brings back.
-  Future<void> loadMoreMail() async {
-    final have = inbox.data;
-    if (have == null || !mailHasMore || loadingMoreMail || inbox.loading) return;
-    loadingMoreMail = true;
-    mailMoreError = null;
+  Future<void> loadMoreMail([MailFolder f = MailFolder.inbox]) async {
+    final box = _mailbox[f]!;
+    final have = box.list.data;
+    if (have == null || !box.hasMore || box.loadingMore || box.list.loading) return;
+    box.loadingMore = true;
+    box.moreError = null;
     notifyListeners();
     try {
-      final page = await mail.inbox(limit: mailPageSize, offset: have.value.length);
+      final page = await mail.folder(f, limit: mailPageSize, offset: have.value.length);
       final known = {for (final m in have.value) m.id};
-      mailHasMore = page.length >= mailPageSize;
-      inbox = Snapshot(
+      box.hasMore = page.length >= mailPageSize;
+      box.list = Snapshot(
           data: Cached([...have.value, ...page.where((m) => !known.contains(m.id))], have.fetchedAt),
-          error: inbox.error);
+          error: box.list.error);
     } catch (e) {
-      mailMoreError = e;
+      box.moreError = e;
     }
-    loadingMoreMail = false;
+    box.loadingMore = false;
     notifyListeners();
   }
 
-  /// Sets a message's read flag on the server, then in the inbox and the
-  /// unread count here. Call it only when the flag actually changes.
-  Future<void> setMailRead(String id, {bool read = true}) async {
+  /// Sets a message's read flag on the server, then in [folder]'s list and
+  /// its counts here. Call it only when the flag actually changes.
+  Future<void> setMailRead(String id, {bool read = true, MailFolder folder = MailFolder.inbox}) async {
     await mail.markRead(id, read: read);
-    final list = inbox.data;
-    if (list != null) {
-      final updated = [for (final m in list.value) m.id == id ? m.withUnread(!read) : m];
-      inbox = Snapshot(
-          data: await cache.write('inbox', updated, _encodeList, at: list.fetchedAt),
-          error: inbox.error,
-          loading: inbox.loading);
-    }
+    await _editMailList(folder, (list) => [for (final m in list) m.id == id ? m.withUnread(!read) : m]);
+    final step = read ? -1 : 1;
     final count = mailUnread.data;
-    if (count != null) {
-      final n = (count.value + (read ? -1 : 1)).clamp(0, 1 << 30);
+    if (folder == MailFolder.inbox && count != null) {
+      final n = (count.value + step).clamp(0, 1 << 30);
+      mailUnread = Snapshot(
+          data: await cache.write('mailUnread', n, (v) => v, at: count.fetchedAt),
+          error: mailUnread.error,
+          loading: mailUnread.loading);
+    }
+    if (mailCounts[folder] case final c?) {
+      mailCounts = {...mailCounts, folder: MailFolderCount((c.unread + step).clamp(0, c.total), c.total)};
+    }
+    notifyListeners();
+  }
+
+  /// Moves [m] from [from] to [to] (deleting is a move to Deleted) and takes
+  /// it off [from]'s list. Returns the message as it now is in [to], for an
+  /// undo, or null when Exchange didn't give its new id.
+  Future<MailHeader?> moveMail(MailHeader m, {required MailFolder from, required MailFolder to}) async {
+    final id = await mail.move(m.id, to);
+    await _editMailList(from, (list) => [for (final x in list) if (x.id != m.id) x]);
+    final count = mailUnread.data;
+    if (m.unread && count != null && (from == MailFolder.inbox || to == MailFolder.inbox)) {
+      final n = (count.value + (from == MailFolder.inbox ? -1 : 1)).clamp(0, 1 << 30);
       mailUnread = Snapshot(
           data: await cache.write('mailUnread', n, (v) => v, at: count.fetchedAt),
           error: mailUnread.error,
           loading: mailUnread.loading);
     }
     notifyListeners();
+    _refreshLoaded([to]);
+    return id == null
+        ? null
+        : MailHeader(
+            id: id, from: m.from, to: m.to, subject: m.subject, received: m.received, preview: m.preview, unread: m.unread);
+  }
+
+  /// Sends [m]. A sent draft leaves Drafts; Sent gets the copy.
+  Future<void> sendMail(OutgoingMail m) async {
+    await mail.send(m);
+    if (m.kind == ComposeKind.draft) {
+      await _editMailList(MailFolder.drafts, (list) => [for (final x in list) if (x.id != m.ref!.id) x]);
+      notifyListeners();
+    }
+    _refreshLoaded([MailFolder.sent, MailFolder.drafts]);
+  }
+
+  /// Saves [m] to Drafts, or the changes to a saved draft.
+  Future<void> saveMailDraft(OutgoingMail m) async {
+    await mail.saveDraft(m);
+    _refreshLoaded([MailFolder.drafts]);
+  }
+
+  /// Refreshes those of [folders] that have been opened, and the counts, in
+  /// the background: after a send or a move they are out of date.
+  void _refreshLoaded(List<MailFolder> folders) {
+    for (final f in folders) {
+      if (_mailbox[f]!.list.data != null) unawaited(refreshMailFolder(f));
+    }
+    unawaited(refreshMailCounts());
+  }
+
+  /// Rewrites [f]'s loaded list, keeping its fetch time (an edit, not a fetch).
+  Future<void> _editMailList(MailFolder f, List<MailHeader> Function(List<MailHeader>) edit) async {
+    final box = _mailbox[f]!;
+    final list = box.list.data;
+    if (list == null) return;
+    box.list = Snapshot(
+        data: await cache.write(_mailKey(f), edit(list.value), _encodeList, at: list.fetchedAt),
+        error: box.list.error,
+        loading: box.list.loading);
   }
 
   Future<void> _run<T>({
@@ -424,6 +521,17 @@ class AppData extends ChangeNotifier {
     }
     notifyListeners();
   }
+}
+
+/// One mail folder as loaded so far: the first page from the last refresh
+/// (cached) and any older pages loaded since (in memory only).
+class MailboxFolder {
+  Snapshot<List<MailHeader>> list = const Snapshot();
+
+  /// Whether the server may have messages past the last loaded page.
+  bool hasMore = true;
+  bool loadingMore = false;
+  Object? moreError;
 }
 
 /// Debug-build log line: error type, Dio failure kind and URL. Never headers,

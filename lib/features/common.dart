@@ -274,8 +274,9 @@ class SkeletonRows extends StatelessWidget {
 class HeadingScaffold extends StatefulWidget {
   final String title;
   final List<Widget>? actions;
+  final Widget? bottom; // a bar under the body, such as a message's Reply
   final Widget Function(Key headingKey) body;
-  const HeadingScaffold({super.key, required this.title, required this.body, this.actions});
+  const HeadingScaffold({super.key, required this.title, required this.body, this.actions, this.bottom});
 
   @override
   State<HeadingScaffold> createState() => _HeadingScaffoldState();
@@ -314,6 +315,7 @@ class _HeadingScaffoldState extends State<HeadingScaffold> {
         actions: widget.actions,
       ),
       body: NotificationListener<ScrollNotification>(onNotification: _onScroll, child: widget.body(_heading)),
+      bottomNavigationBar: widget.bottom,
     );
   }
 }

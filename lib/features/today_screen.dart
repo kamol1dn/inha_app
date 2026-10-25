@@ -223,7 +223,7 @@ class _TodayScreenState extends State<TodayScreen> {
           child: Padding(
             padding: const EdgeInsets.only(left: 8),
             child: TextButton(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MailScreen())),
+              onPressed: () => widget.onOpenTab(4),
               child: Text('${total - 2} more'),
             ),
           ),

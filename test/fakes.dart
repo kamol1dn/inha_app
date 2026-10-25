@@ -73,17 +73,57 @@ class FakeIns implements InsApi {
 class FakeMail implements MailApi {
   /// The whole inbox, newest first; pages are cut from it.
   List<MailHeader> all = const [];
+
+  /// The other folders, whole.
+  final folders = <MailFolder, List<MailHeader>>{};
   int unread = 0;
+  Map<MailFolder, MailFolderCount> counts = const {};
+  List<MailAddress> directory = const [];
   Object? error;
   final pages = <(int limit, int offset)>[];
+  final folderPages = <MailFolder>[];
   final marked = <(String id, bool read)>[];
+  final sent = <OutgoingMail>[];
+  final saved = <OutgoingMail>[];
+  final moves = <(String id, MailFolder to)>[];
 
   @override
-  Future<List<MailHeader>> inbox({int limit = 30, int offset = 0}) async {
-    pages.add((limit, offset));
+  Future<List<MailHeader>> folder(MailFolder folder, {int limit = 30, int offset = 0}) async {
+    folderPages.add(folder);
+    if (folder == MailFolder.inbox) pages.add((limit, offset));
     if (error != null) throw error!;
-    return all.skip(offset).take(limit).toList();
+    final list = folder == MailFolder.inbox ? all : folders[folder] ?? const [];
+    return list.skip(offset).take(limit).toList();
   }
+
+  @override
+  Future<Map<MailFolder, MailFolderCount>> folderCounts() async {
+    if (error != null) throw error!;
+    return counts;
+  }
+
+  @override
+  Future<void> send(OutgoingMail m) async {
+    if (error != null) throw error!;
+    sent.add(m);
+  }
+
+  @override
+  Future<void> saveDraft(OutgoingMail m) async {
+    if (error != null) throw error!;
+    saved.add(m);
+  }
+
+  @override
+  Future<String?> move(String id, MailFolder to) async {
+    if (error != null) throw error!;
+    moves.add((id, to));
+    return 'moved-$id';
+  }
+
+  @override
+  Future<List<MailAddress>> lookup(String query) async =>
+      [for (final a in directory) if (a.label.toLowerCase().startsWith(query.toLowerCase())) a];
 
   @override
   Future<MailMessage> message(String id) async {

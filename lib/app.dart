@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'data/app_data.dart';
 import 'notifications/notifier.dart';
 import 'notifications/routes.dart';
+import 'features/compose_screen.dart';
 import 'features/details.dart';
 import 'features/courses_screen.dart';
 import 'features/deadlines_screen.dart';
@@ -12,6 +13,7 @@ import 'features/mail_screen.dart';
 import 'features/settings_screen.dart';
 import 'features/timetable_screen.dart';
 import 'features/today_screen.dart';
+import 'models/models.dart';
 import 'ui/format/format.dart';
 import 'ui/theme/app_colors.dart';
 import 'ui/theme/app_text.dart';
@@ -92,6 +94,24 @@ class InhaApp extends StatelessWidget {
         modalElevation: 0,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       ),
+      // The mail folders: paper with a rule on its open edge, no shadow.
+      drawerTheme: DrawerThemeData(
+        backgroundColor: scheme.surface,
+        scrimColor: scheme.scrim.withValues(alpha: 0.32),
+        elevation: 0,
+        shape: Border(right: rule),
+      ),
+      // The one floating button, New on the Mail tab, is ink like the badge.
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: scheme.inverseSurface,
+        foregroundColor: scheme.onInverseSurface,
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        highlightElevation: 0,
+        extendedTextStyle: text.labelLarge,
+        shape: r8,
+      ),
       dividerTheme: DividerThemeData(color: scheme.outlineVariant, space: 1, thickness: 1),
       listTileTheme: ListTileThemeData(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20),
@@ -142,6 +162,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _tab = 0;
+  MailFolder _folder = MailFolder.inbox;
   final _timetable = GlobalKey<TimetableScreenState>();
   DateTime _lastRefresh = DateTime.now();
 
@@ -224,7 +245,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       0 => dayDate(DateTime.now()),
       1 => 'Schedule',
       2 => 'Deadlines',
-      _ => 'Courses',
+      3 => 'Courses',
+      _ => _folder.label,
     };
     return PopScope(
       canPop: _tab == 0,
@@ -235,26 +257,16 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         appBar: AppBar(
           title: Text(title),
           actions: [
-            if (_tab == 0) ...[
-              IconButton(
-                tooltip: 'Mail',
-                icon: Badge(
-                  isLabelVisible: unread > 0,
-                  label: Text('$unread'),
-                  child: const Icon(Icons.mail_outline),
-                ),
-                onPressed: () => _push(const MailScreen()),
-              ),
+            if (_tab == 0)
               IconButton(
                 tooltip: 'Settings',
                 icon: const Icon(Icons.settings_outlined),
                 onPressed: () => _push(const SettingsScreen()),
               ),
-            ],
             if (_tab == 3)
               TextButton(onPressed: () => _push(const GradesScreen()), child: const Text('Grades')),
           ],
-          bottom: _anyLoading(data)
+          bottom: _anyLoading(data) || (_tab == 4 && data.mailbox(_folder).list.loading)
               ? const PreferredSize(
                   preferredSize: Size.fromHeight(2),
                   child: LinearProgressIndicator())
@@ -273,8 +285,27 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             TimetableScreen(key: _timetable),
             const DeadlinesScreen(),
             const CoursesScreen(),
+            MailScreen(folder: _folder),
           ],
         ),
+        // The Mail tab's folders, behind the menu button where Back would be.
+        drawer: _tab == 4
+            ? MailDrawer(
+                selected: _folder,
+                onSelect: (f) {
+                  Navigator.of(context).pop();
+                  setState(() => _folder = f);
+                },
+              )
+            : null,
+        floatingActionButton: _tab == 4
+            ? FloatingActionButton.extended(
+                tooltip: 'New message',
+                onPressed: () => openCompose(context),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('New'),
+              )
+            : null,
         // The one strong line in the app: ink above the tabs (DESIGN.md 5).
         bottomNavigationBar: DecoratedBox(
           position: DecorationPosition.foreground,
@@ -282,19 +313,24 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           child: NavigationBar(
           selectedIndex: _tab,
           onDestinationSelected: (i) => setState(() => _tab = i),
-          destinations: const [
-            NavigationDestination(
+          destinations: [
+            const NavigationDestination(
                 icon: Icon(Icons.today_outlined), selectedIcon: Icon(Icons.today), label: 'Today'),
-            NavigationDestination(
+            const NavigationDestination(
                 icon: Icon(Icons.calendar_view_day_outlined),
                 selectedIcon: Icon(Icons.calendar_view_day),
                 label: 'Schedule'),
-            NavigationDestination(
+            const NavigationDestination(
                 icon: Icon(Icons.assignment_outlined),
                 selectedIcon: Icon(Icons.assignment),
                 label: 'Deadlines'),
-            NavigationDestination(
+            const NavigationDestination(
                 icon: Icon(Icons.school_outlined), selectedIcon: Icon(Icons.school), label: 'Courses'),
+            NavigationDestination(
+                icon: Badge(isLabelVisible: unread > 0, label: Text('$unread'), child: const Icon(Icons.mail_outline)),
+                selectedIcon:
+                    Badge(isLabelVisible: unread > 0, label: Text('$unread'), child: const Icon(Icons.mail)),
+                label: 'Mail'),
           ],
           ),
         ),
