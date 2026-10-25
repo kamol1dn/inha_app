@@ -381,11 +381,13 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
 - **Tapping a class** opens its course.
 
 **Deadlines.**
-- **Filters** first: a course chip and kind chips, then "Show done".
+- **Filters** first: a course chip and kind chips in one scrolling row, then "Show done" as a checkbox on its own line under them
+  (the whole line is the target).
 - **Grouping:** day sections with rules and `titleMedium` headers. `Overdue` comes first, in danger `fg` with its icon, only when
   something is overdue. Then `Today`, `Tomorrow`, `Sat 25 Oct`. Empty days are omitted.
 - **Row:** the rail's deadline row without the line: the due time in `numeral` on the left, the title, then state and course.
-- **Done items** are hidden behind "Show done"; when shown, they carry an ok `StatusLine`: `Submitted Tue 21:14`.
+- **Done items** show by default and carry an ok `StatusLine`: `Submitted Tue 21:14`. Unticking "Show done" hides them, and counts as
+  a filter for the "Nothing matches these filters" note.
 - **Tapping a row** opens the deadline sheet: the kind (icon and word), eClass's full title in `headlineSmall`, the course, a rule, the due time or
   watch window, the status, submission or watch progress (a 4dp `onSurface` bar on `outlineVariant`), and a `FilledButton`
   "Open in eClass", with "Course attendance and grade" as a `TextButton` below.
@@ -506,7 +508,7 @@ codes never reach the screen.
 ## 10. Microcopy
 
 - **State the fact, the source and the time,** in plain, specific sentences. Numbers are always digits.
-- **Buttons** are a verb plus 1–3 words: "Retry", "Sign in", "Open in eClass", "Show done".
+- **Buttons** are a verb plus 1–3 words: "Retry", "Sign in", "Open in eClass".
 - **Banned:** exclamation marks, "Oops", "Whoops", "Uh-oh", "Hey", "Let's", "Awesome", "Great job", "seamlessly",
   "Something went wrong", "please", "sorry".
 - **Errors never blame the student,** and they say what still works ("Showing data from …").

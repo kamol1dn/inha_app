@@ -79,7 +79,8 @@ class Prefs {
   set notificationsAsked(bool v) => _p.setBool('notify.asked', v);
 
   /// Show submitted assignments, attempted quizzes and watched VODs too.
-  bool get showDone => _p.getBool('deadlines.showDone') ?? false;
+  /// On unless the student turned it off.
+  bool get showDone => _p.getBool('deadlines.showDone') ?? true;
   set showDone(bool v) => _p.setBool('deadlines.showDone', v);
 
   /// Allowed absences per eClass course id, as the student set them.

@@ -45,7 +45,8 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
       if (!showDone && isDone(d, att)) return false;
       return true;
     }).toList();
-    final filtered = kinds != Prefs.defaultDeadlineKinds || course != null || showDone;
+    // Done work shows by default, so hiding it is what narrows the list.
+    final filtered = kinds != Prefs.defaultDeadlineKinds || course != null || !showDone;
 
     final overdue = shown.where((d) => d.end.isBefore(now)).toList();
     final groups = <String, List<Deadline>>{};
@@ -59,13 +60,11 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
         _FilterBar(
           kinds: kinds,
           course: course,
-          showDone: showDone,
           courses: _courseNames(all, att),
           onKinds: (v) => setState(() => prefs.deadlineKinds = v),
           onCourse: (v) => setState(() => prefs.deadlineCourse = v),
-          onShowDone: (v) => setState(() => prefs.showDone = v),
         ),
-        const SizedBox(height: 8),
+        _ShowDone(value: showDone, onChanged: (v) => setState(() => prefs.showDone = v)),
         const OfflineRow(),
         if (data.deadlines.data == null && data.deadlines.error is LoginRequired)
           EmptyNote('Sign in to eClass to see deadlines and attendance.',
@@ -109,20 +108,16 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
 class _FilterBar extends StatelessWidget {
   final Set<DeadlineKind> kinds;
   final String? course;
-  final bool showDone;
   final List<String> courses;
   final ValueChanged<Set<DeadlineKind>> onKinds;
   final ValueChanged<String?> onCourse;
-  final ValueChanged<bool> onShowDone;
 
   const _FilterBar({
     required this.kinds,
     required this.course,
-    required this.showDone,
     required this.courses,
     required this.onKinds,
     required this.onCourse,
-    required this.onShowDone,
   });
 
   @override
@@ -139,16 +134,43 @@ class _FilterBar extends StatelessWidget {
             selected: kinds.contains(k),
             onSelected: (on) => onKinds(on ? {...kinds, k} : ({...kinds}..remove(k))),
           ),
-          const SizedBox(width: 8),
+          if (k != DeadlineKind.values.last) const SizedBox(width: 8),
         ],
-        FilterChip(
-          label: const Text('Show done'),
-          selected: showDone,
-          onSelected: onShowDone,
-        ),
       ]),
     );
   }
+}
+
+/// "Show done" as a checkbox on its own line under the chips: it shows or
+/// hides finished work rather than filtering by a kind, and at the end of
+/// the chip row it scrolled out of sight. The whole line is the target.
+class _ShowDone extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _ShowDone({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) => MergeSemantics(
+        child: InkWell(
+          onTap: () => onChanged(!value),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: gutter - 6),
+              child: Row(children: [
+                Checkbox(
+                  value: value,
+                  onChanged: (v) => onChanged(v ?? false),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 4),
+                Text('Show done', style: Theme.of(context).textTheme.bodyMedium),
+              ]),
+            ),
+          ),
+        ),
+      );
 }
 
 class _CourseChip extends StatelessWidget {
