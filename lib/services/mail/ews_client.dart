@@ -44,16 +44,16 @@ class EwsClient implements MailApi {
   }
 
   @override
-  Future<List<MailHeader>> inbox({int limit = 30, int offset = 0}) async {
+  Future<List<MailHeader>> folder(MailFolder folder, {int limit = 30, int offset = 0}) async {
     if (_preview) {
       try {
-        return parseFindItem(await _call(findInboxEnvelope(limit: limit, offset: offset)));
+        return parseFindItem(await _call(findItemsEnvelope(folder: folder, limit: limit, offset: offset)));
       } on EwsError catch (e) {
         if (!previewRejectionCodes.contains(e.code)) rethrow;
       }
     }
     final headers = parseFindItem(
-        await _call(findInboxEnvelope(limit: limit, offset: offset, withPreview: false)));
+        await _call(findItemsEnvelope(folder: folder, limit: limit, offset: offset, withPreview: false)));
     _preview = false; // worked without item:Preview: stop asking for it
     return headers;
   }
@@ -67,6 +67,40 @@ class EwsClient implements MailApi {
 
   @override
   Future<int> unreadCount() async => parseGetFolder(await _call(getInboxFolderEnvelope()));
+
+  @override
+  Future<Map<MailFolder, MailFolderCount>> folderCounts() async =>
+      parseFolderCounts(await _call(getFolderCountsEnvelope()));
+
+  @override
+  Future<void> send(OutgoingMail m) async {
+    if (m.kind != ComposeKind.draft) {
+      parseItemId(await _call(createItemEnvelope(m, send: true)), 'CreateItem');
+      return;
+    }
+    // Sending needs the draft's current change key, which an update moves on.
+    var (id, changeKey) = (m.ref!.id, m.ref!.changeKey);
+    if (draftChanges(m)) {
+      (id, changeKey) = parseItemId(await _call(updateDraftEnvelope(m)), 'UpdateItem') ?? (id, changeKey);
+    }
+    parseSendItem(await _call(sendItemEnvelope(id, changeKey)));
+  }
+
+  @override
+  Future<void> saveDraft(OutgoingMail m) async {
+    if (m.kind != ComposeKind.draft) {
+      parseItemId(await _call(createItemEnvelope(m, send: false)), 'CreateItem');
+    } else if (draftChanges(m)) {
+      parseItemId(await _call(updateDraftEnvelope(m)), 'UpdateItem');
+    }
+  }
+
+  @override
+  Future<String?> move(String id, MailFolder to) async =>
+      parseItemId(await _call(moveItemEnvelope(id, to)), 'MoveItem')?.$1;
+
+  @override
+  Future<List<MailAddress>> lookup(String query) async => parseResolveNames(await _call(resolveNamesEnvelope(query)));
 
   /// POSTs [envelope] and returns the SOAP response text.
   Future<String> _call(String envelope) async {

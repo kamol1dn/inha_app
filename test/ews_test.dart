@@ -51,8 +51,8 @@ final itemNotFound = response(
 
 void main() {
   group('envelopes', () {
-    test('FindItem: inbox page, IdOnly + five properties, newest first', () {
-      final xml = findInboxEnvelope();
+    test('FindItem: inbox page, IdOnly + six properties, newest first', () {
+      final xml = findItemsEnvelope();
       expect(xml, startsWith('<?xml version="1.0" encoding="utf-8"?>'));
       expect(xml, contains('<t:RequestServerVersion Version="Exchange2013"/>'));
       expect(xml, contains('<m:FindItem Traversal="Shallow">'));
@@ -60,6 +60,7 @@ void main() {
       for (final f in [
         'item:Subject',
         'message:From',
+        'item:DisplayTo',
         'item:DateTimeReceived',
         'message:IsRead',
         'item:Preview',
@@ -87,13 +88,13 @@ void main() {
     });
 
     test('FindItem without Preview, with paging and another version', () {
-      final xml = findInboxEnvelope(
+      final xml = findItemsEnvelope(
           limit: 10, offset: 20, withPreview: false, serverVersion: 'Exchange2010_SP2');
       expect(xml, isNot(contains('item:Preview')));
       expect(xml, contains('<t:FieldURI FieldURI="message:IsRead"/>'));
       expect(xml, contains('MaxEntriesReturned="10" Offset="20"'));
       expect(xml, contains('<t:RequestServerVersion Version="Exchange2010_SP2"/>'));
-      expect(readSoap(xml).find('AdditionalProperties')!.elements, hasLength(4));
+      expect(readSoap(xml).find('AdditionalProperties')!.elements, hasLength(5));
     });
 
     test('GetItem: header fields, attachments and text body of the exact id', () {
@@ -108,6 +109,11 @@ void main() {
         'message:IsRead',
         'item:Attachments',
         'item:Body',
+        'message:ToRecipients',
+        'message:CcRecipients',
+        'message:BccRecipients',
+        'message:ReceivedBy',
+        'item:IsDraft',
       ]);
       expect(xml, contains('<t:ItemId Id="${ids[1]}"/>'));
       final shape = readSoap(xml).find('ItemShape')!;
@@ -366,7 +372,7 @@ void main() {
     test('success: SOAP POST with Basic auth; inbox, message, read flag, unread count', () async {
       final (client, fake) = make((r) => (200, routeOk(r)));
 
-      final inbox = await client.inbox();
+      final inbox = await client.folder(MailFolder.inbox);
       expect(inbox.map((h) => h.id), ids);
       expect(inbox[2].from, 'noreply@eclass.inha.example');
       expect((await client.message(ids[1])).body, getItemBody);
@@ -391,7 +397,7 @@ void main() {
 
     test('401 is LoginRequired(Service.mail)', () async {
       final (client, fake) = make((r) => (401, '<html><body>401 - Unauthorized</body></html>'));
-      await expectLater(client.inbox(),
+      await expectLater(client.folder(MailFolder.inbox),
           throwsA(isA<LoginRequired>().having((e) => e.service, 'service', Service.mail)));
       // One attempt only: a wrong password must not cost extra failed logons.
       expect(fake.sent.map((r) => r.login), [login]);
@@ -408,14 +414,14 @@ void main() {
       final (client, fake) =
           make((r) => (200, r.body.contains('item:Preview') ? previewError : routeOk(r)));
 
-      final inbox = await client.inbox();
+      final inbox = await client.folder(MailFolder.inbox);
       expect(inbox.map((h) => h.id), ids);
       expect(fake.sent, hasLength(2));
       expect(fake.sent[0].body, contains('<t:FieldURI FieldURI="item:Preview"/>'));
       expect(fake.sent[1].body, isNot(contains('item:Preview')));
       expect(fake.sent[1].body, contains('<t:FieldURI FieldURI="message:IsRead"/>'));
 
-      await client.inbox(offset: 30);
+      await client.folder(MailFolder.inbox, offset: 30);
       expect(fake.sent, hasLength(3));
       expect(fake.sent[2].body, isNot(contains('item:Preview')));
       expect(fake.sent[2].body, contains('Offset="30"'));
@@ -424,13 +430,13 @@ void main() {
     test('schema validation fault (HTTP 500) is retried the same way', () async {
       final (client, fake) =
           make((r) => r.body.contains('item:Preview') ? (500, schemaFault) : (200, routeOk(r)));
-      expect(await client.inbox(), hasLength(5));
+      expect(await client.folder(MailFolder.inbox), hasLength(5));
       expect(fake.sent, hasLength(2));
     });
 
     test('a retry that fails too surfaces the error, without looping', () async {
       final (client, fake) = make((r) => (500, schemaFault));
-      await expectLater(client.inbox(),
+      await expectLater(client.folder(MailFolder.inbox),
           throwsA(isA<EwsError>().having((e) => e.code, 'code', 'ErrorSchemaValidation')));
       expect(fake.sent, hasLength(2));
     });
@@ -462,7 +468,7 @@ void main() {
     test('network errors are rethrown without the Authorization header', () async {
       final (client, _) = make((r) => throw DioException.connectionError(
           requestOptions: r.options, reason: 'Failed host lookup: mail.inha.uz'));
-      final error = await client.inbox().then<Object?>((_) => null, onError: (Object e) => e);
+      final error = await client.folder(MailFolder.inbox).then<Object?>((_) => null, onError: (Object e) => e);
       expect(error, isA<DioException>());
       final e = error as DioException;
       expect(e.requestOptions.headers.keys.map((k) => k.toLowerCase()), isNot(contains('authorization')));

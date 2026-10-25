@@ -30,7 +30,7 @@ class ScheduleTarget extends NotificationTarget {
 /// The item is gone (submitted, moved, the course dropped): its tab. A
 /// home-screen widget opens a tab directly with `tab:<n>`.
 class TabTarget extends NotificationTarget {
-  final int tab; // 0 Today, 1 Schedule, 2 Deadlines, 3 Courses
+  final int tab; // 0 Today, 1 Schedule, 2 Deadlines, 3 Courses, 4 Mail
   const TabTarget(this.tab);
 }
 
@@ -61,7 +61,7 @@ NotificationTarget? notificationTarget(
   }
   if (key.startsWith(tabKeyPrefix)) {
     final tab = int.tryParse(key.substring(tabKeyPrefix.length));
-    return tab != null && tab >= 0 && tab <= 3 ? TabTarget(tab) : null;
+    return tab != null && tab >= 0 && tab <= 4 ? TabTarget(tab) : null;
   }
   return null;
 }

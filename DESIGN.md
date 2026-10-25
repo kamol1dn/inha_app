@@ -248,19 +248,20 @@ scrim, with no shadow.
 
 ## 6. Navigation
 
-A `NavigationBar` with 4 destinations, on `surface`, under the 1dp `onSurface` rule. No indicator pill: the selected tab is `primary`,
+A `NavigationBar` with 5 destinations, on `surface`, under the 1dp `onSurface` rule. No indicator pill: the selected tab is `primary`,
 its icon filled and its label 600; the others are `onSurfaceVariant`, outlined, 500. Labels are always shown.
 
 | Tab | Icon | Answers | Notes |
 |---|---|---|---|
-| Today | `today` | Where next, what's urgent | The start screen. App bar actions: Mail (unread `Badge`) and Settings (gear) |
+| Today | `today` | Where next, what's urgent | The start screen. App bar action: Settings (gear) |
 | Schedule | `calendar_view_day` | The day's classes and rooms | One day at a time on a rail, using the week strip or a swipe |
 | Deadlines | `assignment` | Everything due, eClass VOD windows included | Grouped by day |
 | Courses | `school` | Attendance, VOD progress and grades by course | App bar action "Grades" opens INS grades |
+| Mail | `mail` | What the university wrote | Last. The inbox unread count is a `Badge` on the icon. The menu button (where Back would be) opens the folders; New writes a message |
 
 - **The unread badge is ink** (`inverseSurface` with `onInverseSurface` text): a count, not an alarm.
-- **Settings and Mail are pushed screens, not tabs.** Settings is reached only from the gear on Today (tooltip "Settings"). Mail is
-  reached from Today's app bar or its mail rows.
+- **Settings is a pushed screen, not a tab,** reached only from the gear on Today (tooltip "Settings"). Today's mail rows open the
+  message on top of Today; its "N more" switches to the Mail tab.
 - **Each tab keeps its own scroll position** (`IndexedStack`).
 - **Back** from another tab goes to Today; back on Today exits.
 - **Tapping a notification** opens the item's detail on top of the tab that owns it.
@@ -268,7 +269,7 @@ its icon filled and its label 600; the others are `onSurfaceVariant`, outlined, 
 ## 7. Today screen
 
 ```
-Fri 23 Oct                                     [mail 8] [gear]
+Fri 23 Oct                                              [gear]
 ──────────────────────────────────────────────────────────────  rule
 [offline row, only when offline]
  13:20  ●  Now ───────────────────────────────────────────────   primary
@@ -410,11 +411,13 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
 - **Course detail** gets a `Midterm` section after Due: the sitting as a row, or `No midterm on the timetable for this course.`
 
 **Deadlines.**
-- **Filters** first: a course chip and kind chips, then "Show done".
+- **Filters** first: a course chip and kind chips in one scrolling row, then "Show done" as a checkbox on its own line under them
+  (the whole line is the target).
 - **Grouping:** day sections with rules and `titleMedium` headers. `Overdue` comes first, in danger `fg` with its icon, only when
   something is overdue. Then `Today`, `Tomorrow`, `Sat 25 Oct`. Empty days are omitted.
 - **Row:** the rail's deadline row without the line: the due time in `numeral` on the left, the title, then state and course.
-- **Done items** are hidden behind "Show done"; when shown, they carry an ok `StatusLine`: `Submitted Tue 21:14`.
+- **Done items** show by default and carry an ok `StatusLine`: `Submitted Tue 21:14`. Unticking "Show done" hides them, and counts as
+  a filter for the "Nothing matches these filters" note.
 - **Tapping a row** opens the deadline sheet: the kind (icon and word), eClass's full title in `headlineSmall`, the course, a rule, the due time or
   watch window, the status, submission or watch progress (a 4dp `onSurface` bar on `outlineVariant`), and a `FilledButton`
   "Open in eClass", with "Course attendance and grade" as a `TextButton` below.
@@ -447,10 +450,21 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
   attendance record for it.
 
 **Mail.**
-- **List:** ruled rows: the sender in muted `bodyMedium` with the time on the right, the subject (`titleSmall` when unread, `bodyLarge`
+- **Folders:** Inbox, Drafts, Sent, Deleted, Junk, Notes, in a drawer behind the menu button: paper with a rule on its open edge, no
+  shadow. The selected folder is marked like the selected tab (`primary`, filled icon, 600). Inbox and Junk show their unread count,
+  Drafts how many are waiting. The app bar title is the folder's name.
+- **New** is the one floating button in the app: ink (`inverseSurface`) like the badge, radius 8, elevation 0, only on the Mail tab.
+- **List:** in Sent and Drafts the first line is `To <recipients>` instead of the sender. A draft opens in the composer. ruled rows: the sender in muted `bodyMedium` with the time on the right, the subject (`titleSmall` when unread, `bodyLarge`
   when read), and a one-line preview. No unread dot: weight carries it.
 - **Message:** the subject in `headlineSmall` (it fades into the empty app bar once scrolled away), the sender in `titleSmall` and the
-  time, attachments (name and size), a rule, then the body in `bodyLarge` with tappable links. "Mark as unread" is in the app bar.
+  time, attachments (name and size), a rule, then the body in `bodyLarge` with tappable links. App bar: "Mark as unread" and Delete
+  (in Deleted, "Move to Inbox"); in Inbox and Junk a menu moves it to Junk or back ("Not junk"). Under a rule at the foot: Reply,
+  Reply all (only when someone besides the sender got it) and Forward; Sent mail gets only Forward. Every move says so in a snack bar
+  with Undo. Nothing is deleted for good: Delete moves to Deleted, as Outlook does.
+- **Composer:** plain text. Header lines (To, Cc and Bcc behind "Cc, Bcc", Subject) are label-and-field rows between rules, the fields
+  without boxes; the body below. Typing three letters of a name lists matching people and lists from the university directory under
+  the line. A reply shows its recipients and `RE:` subject as fixed lines, since Exchange sets them, and says the original is quoted
+  under what you write. Send is the app bar's icon; leaving with anything written asks "Keep this as a draft?" (Discard, Save draft).
 
 **Grades.** The GPA first, as a plain line: `3.87` in `headlineMedium` with `GPA of 4.5 · 98 credits · year 3` beside it. Then each term,
 newest first, under a `titleMedium` header: ruled rows with the course in `bodyLarge`, its credits in muted `bodyMedium`, and the letter
@@ -524,7 +538,7 @@ codes never reach the screen.
 ## 10. Microcopy
 
 - **State the fact, the source and the time,** in plain, specific sentences. Numbers are always digits.
-- **Buttons** are a verb plus 1–3 words: "Retry", "Sign in", "Open in eClass", "Show done".
+- **Buttons** are a verb plus 1–3 words: "Retry", "Sign in", "Open in eClass".
 - **Banned:** exclamation marks, "Oops", "Whoops", "Uh-oh", "Hey", "Let's", "Awesome", "Great job", "seamlessly",
   "Something went wrong", "please", "sorry".
 - **Errors never blame the student,** and they say what still works ("Showing data from …").

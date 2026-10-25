@@ -165,7 +165,7 @@ void main() {
         ('Deadlines', const DeadlinesScreen(), true),
         ('Courses', const CoursesScreen(), true),
         ('Course detail', const CourseDetailScreen(courseId: 2622, name: 'Artificial Intelligence'), false),
-        ('Mail', const MailScreen(), false),
+        ('Mail', const MailScreen(), true),
         ('Grades', const GradesScreen(), false),
         ('Absence limits', const AbsenceLimitsScreen(), false),
         ('Exams', const ExamsScreen(), false),

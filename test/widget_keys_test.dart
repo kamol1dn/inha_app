@@ -55,6 +55,7 @@ void main() {
     test('tab keys open the tab', () {
       expect(notificationTarget('tab:0'), isA<TabTarget>().having((t) => t.tab, 'tab', 0));
       expect(notificationTarget('tab:3'), isA<TabTarget>().having((t) => t.tab, 'tab', 3));
+      expect(notificationTarget('tab:4'), isA<TabTarget>().having((t) => t.tab, 'tab', 4)); // Mail
       expect(notificationTarget('tab:9'), isNull);
       expect(notificationTarget('tab:x'), isNull);
     });

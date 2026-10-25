@@ -127,7 +127,23 @@ Basic`), so the app uses EWS SOAP with `Authorization: Basic` and never touches 
   `ConflictResolution="AlwaysOverwrite"`, no ChangeKey) marks a message read or unread.
   `SuppressReadReceipts="true"` (Exchange 2013 schema) so opening a message never sends a
   read receipt for the student. Checked live: the flag shows up in the next `GetFolder`.
-- `GetFolder` inbox → `UnreadCount` for the badge.
+- `GetFolder` inbox → `UnreadCount` for the badge; one `GetFolder` on all six folders (`inbox`, `drafts`, `sentitems`,
+  `deleteditems`, `junkemail`, `notes`, the folders OWA shows) → `UnreadCount` and `TotalCount` for the drawer.
+- `FindItem` works the same on any of those folders; `item:DisplayTo` gives Sent and Drafts their "To" line. `GetItem` also asks
+  for `message:ToRecipients`, `CcRecipients`, `BccRecipients`, `ReceivedBy` (the student's own address, so Reply all can leave it out)
+  and `item:IsDraft`; its `ItemId` carries the `ChangeKey` replies need.
+- **Sending** (`CreateItem MessageDisposition="SendAndSaveCopy"`, copy to `sentitems`): a new `Message` (Subject, plain-text Body,
+  To/Cc/Bcc in that schema order), or `ReplyToItem` / `ReplyAllToItem` / `ForwardItem` with `ReferenceItemId` (Id and ChangeKey) and
+  `NewBodyContent BodyType="Text"`. Exchange adds `RE:`/`FW:`, picks a reply's recipients and quotes the original (as HTML) under
+  the new text; a forward lists its own recipients before the reference. `SaveOnly` to `drafts` saves instead of sending.
+- **A saved draft** is sent with `UpdateItem` of only the changed fields (an emptied recipient line is a `DeleteItemField`), whose
+  response has the new ChangeKey, then `SendItem SaveItemToFolder="true"`. The body is only rewritten when it changed, because it
+  goes back as plain text and would flatten a reply draft's quoted HTML.
+- **Delete** is `MoveItem` to `deleteditems` (Junk and "Not junk" are moves too); the response gives the new id, which Undo uses.
+  The app never hard-deletes.
+- **Directory search:** `ResolveNames` with `SearchScope="ActiveDirectoryContacts"` and `ReturnFullContactData="false"` finds
+  students and staff by name or address (OWA's people search). Several matches come back as `ResponseClass="Warning"`
+  (`ErrorNameResolutionMultipleResults`), none as an error, `ErrorNameResolutionNoResults`.
 - Paging: `IndexedPageItemView` `Offset` = messages already loaded; a page shorter than
   `MaxEntriesReturned` is the last one.
 - Username: the **student ID**, not the email address (confirmed by the student;

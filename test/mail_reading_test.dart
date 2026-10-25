@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inha_app/data/app_data.dart';
 import 'package:inha_app/features/link_text.dart';
+import 'package:inha_app/models/models.dart';
 import 'package:inha_app/ui/format/format.dart';
 
 import 'fakes.dart';
@@ -56,7 +57,7 @@ void main() {
       await data.refreshMail();
       expect(data.inbox.data!.value, hasLength(AppData.mailPageSize));
       expect(data.mailUnread.data!.value, 7);
-      expect(data.mailHasMore, isTrue);
+      expect(data.mailbox(MailFolder.inbox).hasMore, isTrue);
       expect(mail.pages, [(30, 0)]);
     });
 
@@ -66,7 +67,7 @@ void main() {
       await data.refreshMail();
       await data.loadMoreMail();
       expect(data.inbox.data!.value.map((m) => m.id), [for (var i = 0; i < 45; i++) 'id$i']);
-      expect(data.mailHasMore, isFalse);
+      expect(data.mailbox(MailFolder.inbox).hasMore, isFalse);
       await data.loadMoreMail(); // nothing left: no request
       expect(mail.pages, [(30, 0), (30, 30)]);
     });
@@ -78,11 +79,11 @@ void main() {
       mail.error = Exception('offline');
       await data.loadMoreMail();
       expect(data.inbox.data!.value, hasLength(30));
-      expect(data.mailMoreError, isNotNull);
+      expect(data.mailbox(MailFolder.inbox).moreError, isNotNull);
       mail.error = null;
       await data.loadMoreMail();
       expect(data.inbox.data!.value, hasLength(40));
-      expect(data.mailMoreError, isNull);
+      expect(data.mailbox(MailFolder.inbox).moreError, isNull);
     });
 
     test('marking read updates the server, the row and the count, and survives a restart', () async {

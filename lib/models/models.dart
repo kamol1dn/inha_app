@@ -316,10 +316,46 @@ class GradeReport {
       );
 }
 
-/// A mail message header (no body) for the inbox list.
+/// The mail folders the app shows, in the drawer's order, with their EWS
+/// distinguished folder ids.
+enum MailFolder {
+  inbox('inbox', 'Inbox'),
+  drafts('drafts', 'Drafts'),
+  sent('sentitems', 'Sent'),
+  deleted('deleteditems', 'Deleted'),
+  junk('junkemail', 'Junk'),
+  notes('notes', 'Notes');
+
+  const MailFolder(this.ewsId, this.label);
+  final String ewsId;
+  final String label;
+
+  /// Folders whose rows name who the mail went to rather than who sent it.
+  bool get outgoing => this == drafts || this == sent;
+}
+
+/// Unread and total items in a folder, from Exchange.
+class MailFolderCount {
+  final int unread;
+  final int total;
+  const MailFolderCount(this.unread, this.total);
+}
+
+/// A person or list on a message: the display name and the SMTP address.
+class MailAddress {
+  final String name;
+  final String address;
+  const MailAddress(this.name, this.address);
+
+  /// The name, or the address when there is none.
+  String get label => name.isEmpty ? address : name;
+}
+
+/// A mail message header (no body) for a folder list.
 class MailHeader {
   final String id;
   final String from;
+  final String to; // Exchange's display line of the To recipients
   final String subject;
   final String preview;
   final DateTime received;
@@ -330,6 +366,7 @@ class MailHeader {
     required this.from,
     required this.subject,
     required this.received,
+    this.to = '',
     this.preview = '',
     this.unread = false,
   });
@@ -337,6 +374,7 @@ class MailHeader {
   Map<String, dynamic> toJson() => {
         'id': id,
         'from': from,
+        'to': to,
         'subject': subject,
         'preview': preview,
         'received': received.toIso8601String(),
@@ -345,6 +383,7 @@ class MailHeader {
   factory MailHeader.fromJson(Map<String, dynamic> j) => MailHeader(
         id: j['id'] as String,
         from: j['from'] as String,
+        to: (j['to'] as String?) ?? '',
         subject: j['subject'] as String,
         preview: (j['preview'] as String?) ?? '',
         received: DateTime.parse(j['received'] as String),
@@ -352,7 +391,7 @@ class MailHeader {
       );
 
   MailHeader withUnread(bool unread) => MailHeader(
-      id: id, from: from, subject: subject, received: received, preview: preview, unread: unread);
+      id: id, from: from, to: to, subject: subject, received: received, preview: preview, unread: unread);
 }
 
 /// A file attached to a message: only its name and size, not its content.
@@ -365,6 +404,7 @@ class MailAttachment {
 /// One opened message. Fetched when it is opened and not cached.
 class MailMessage {
   final String id;
+  final String changeKey; // the version Exchange wants for replies and for sending a draft
   final String from; // display name, or the address when there is none
   final String fromAddress;
   final String subject;
@@ -372,6 +412,11 @@ class MailMessage {
   final bool unread;
   final String body; // plain text, \n line breaks
   final List<MailAttachment> attachments;
+  final List<MailAddress> to;
+  final List<MailAddress> cc;
+  final List<MailAddress> bcc;
+  final String receivedBy; // the student's own address, on mail they received
+  final bool isDraft;
 
   const MailMessage({
     required this.id,
@@ -379,8 +424,34 @@ class MailMessage {
     required this.subject,
     required this.received,
     required this.body,
+    this.changeKey = '',
     this.fromAddress = '',
     this.unread = false,
     this.attachments = const [],
+    this.to = const [],
+    this.cc = const [],
+    this.bcc = const [],
+    this.receivedBy = '',
+    this.isDraft = false,
   });
+}
+
+enum ComposeKind { fresh, reply, replyAll, forward, draft }
+
+/// A message to send or to save as a draft.
+///
+/// For a reply or forward, [ref] is the original: Exchange adds the "RE:" or
+/// "FW:" subject, works out a reply's recipients and quotes the original
+/// below [body]. For [ComposeKind.draft], [ref] is the saved draft and a null
+/// field stays as saved.
+class OutgoingMail {
+  final ComposeKind kind;
+  final MailMessage? ref;
+  final List<String>? to;
+  final List<String>? cc;
+  final List<String>? bcc;
+  final String? subject;
+  final String? body;
+
+  const OutgoingMail(this.kind, {this.ref, this.to, this.cc, this.bcc, this.subject, this.body});
 }

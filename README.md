@@ -11,7 +11,7 @@ grades and university mail.
 | Deadlines | Assignments, quizzes and VOD watch windows, with "Open in eClass" | eClass |
 | Courses | Absences against the limit you set, VOD progress, the INS grade | eClass, INS |
 | Grades | GPA, credits and every course by term | INS |
-| Mail | The inbox; messages open, and opening one marks it read | University Exchange mail |
+| Mail | Inbox, Drafts, Sent, Deleted, Junk and Notes; read, reply, reply all, forward and write new mail, with names from the university directory | University Exchange mail |
 | Exams | Your midterm or final exams: when, and the rooms each uses until you set yours (on Today, Schedule and course detail too); no classes in exam week | The university's exam timetable PDF, bundled (`docs/EXAMS.md`) |
 
 Reminders (deadlines, VOD windows, new absences, classes) come as notifications, each switchable in Settings,
