@@ -128,7 +128,7 @@ void main() {
       TestWidgetsFlutterBinding.ensureInitialized();
       SharedPreferences.setMockInitialValues({});
       plugin = FakePlugin();
-      notifier = Notifier(plugin: plugin);
+      notifier = Notifier(plugin: plugin, clock: () => now); // the test's week, not today's
     });
 
     final semester = [

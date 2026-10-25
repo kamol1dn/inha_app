@@ -23,13 +23,19 @@ class Notifier {
   Notifier({
     FlutterLocalNotificationsPlugin? plugin,
     Future<SharedPreferences> Function()? prefs,
+    DateTime Function()? clock,
     this.icon = 'ic_stat_notify',
     this.scheduleMode = AndroidScheduleMode.inexactAllowWhileIdle,
   })  : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
-        _prefs = prefs ?? SharedPreferences.getInstance;
+        _prefs = prefs ?? SharedPreferences.getInstance,
+        _clock = clock ?? DateTime.now;
 
   final FlutterLocalNotificationsPlugin _plugin;
   final Future<SharedPreferences> Function() _prefs;
+
+  /// The device clock. Tests pass their own: a reminder whose time has passed
+  /// by this clock is shown rather than scheduled, whatever `now` a pass gets.
+  final DateTime Function() _clock;
 
   /// Small icon resource: `res/drawable/ic_stat_notify.xml`, the wordmark in
   /// white on transparent (Android tints it). Kept from resource shrinking by
@@ -245,7 +251,7 @@ class Notifier {
   /// Keys scheduled for later are left out on purpose, so the rules plan
   /// them again and [deliver] refreshes (or cancels) them each time.
   Future<Set<String>> sentKeys([DateTime? now]) async {
-    final at = (now ?? DateTime.now()).millisecondsSinceEpoch;
+    final at = (now ?? _clock()).millisecondsSinceEpoch;
     final recs = _decode(await _load());
     return {
       for (final e in recs.entries)
@@ -268,7 +274,7 @@ class Notifier {
     List<Lesson>? lessons,
     DateTime? now,
   }) async {
-    final at = now ?? DateTime.now();
+    final at = now ?? _clock();
     final prefs = await _load();
     final settings = NotifySettings.read(prefs);
     final plan = planNotifications(
@@ -330,7 +336,7 @@ class Notifier {
     Set<String> record = const {},
   }) {
     return _serial(() async {
-      final at = now ?? DateTime.now();
+      final at = now ?? _clock();
       final atMs = at.millisecondsSinceEpoch;
       final prefs = await _load();
       final recs = _decode(prefs);
@@ -362,7 +368,7 @@ class Notifier {
       for (final n in plan) {
         // Re-checked here: another isolate may have sent it meanwhile.
         if (recs[n.key]?.sentBy(atMs) ?? false) continue;
-        final clock = DateTime.now();
+        final clock = _clock();
         final ref = at.isAfter(clock) ? at : clock;
         try {
           if (n.when.isAfter(ref.add(_showNowSlack))) {
