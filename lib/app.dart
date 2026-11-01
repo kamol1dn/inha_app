@@ -22,10 +22,7 @@ import 'ui/theme/app_colors.dart';
 import 'ui/theme/app_text.dart';
 import 'ui/theme/status_colors.dart';
 
-/// The key of the last tapped notification, until HomeShell has opened it.
-class NotificationTaps extends ValueNotifier<String?> {
-  NotificationTaps() : super(null);
-}
+export 'notifications/routes.dart' show NotificationTaps;
 
 class InhaApp extends StatelessWidget {
   const InhaApp({super.key});
@@ -205,6 +202,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       case ScheduleTarget(:final weekday):
         setState(() => _tab = 1);
         _timetable.currentState?.showWeekday(weekday);
+      case ExamsTarget():
+        _push(const ExamsScreen());
       case TabTarget(:final tab):
         setState(() => _tab = tab);
       case null:
@@ -225,7 +224,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final data = context.read<AppData>();
     if (data.prefs.notificationsAsked) return;
     data.prefs.notificationsAsked = true;
-    await context.read<Notifier>().requestPermission();
+    // While notifications were off, nothing was planned.
+    if (await context.read<Notifier>().requestPermission()) await data.onReminderDataChanged?.call();
   }
 
   @override
@@ -275,6 +275,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               TextButton(onPressed: () => _push(const ExamsScreen()), child: const Text('Exams')),
             if (_tab == 3)
               TextButton(onPressed: () => _push(const GradesScreen()), child: const Text('Grades')),
+            if (_tab == 4)
+              IconButton(
+                tooltip: 'Search ${_folder.label}',
+                icon: const Icon(Icons.search),
+                onPressed: () => openMailSearch(context, _folder),
+              ),
           ],
         ),
         body: Column(children: [

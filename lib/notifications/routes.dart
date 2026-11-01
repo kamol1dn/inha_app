@@ -2,8 +2,16 @@
 /// top of the tab that owns it). Pure: the payload is the notification key.
 library;
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
+
 import '../models/models.dart';
 import 'rules.dart';
+
+/// The key of the last tapped notification, until HomeShell has opened it. A
+/// screen on top of the tabs can send a key here to lead to a tab as well.
+class NotificationTaps extends ValueNotifier<String?> {
+  NotificationTaps() : super(null);
+}
 
 sealed class NotificationTarget {
   const NotificationTarget();
@@ -31,6 +39,11 @@ class ScoresTarget extends NotificationTarget {
 class ScheduleTarget extends NotificationTarget {
   final int weekday;
   const ScheduleTarget(this.weekday);
+}
+
+/// An exam reminder: the Exams screen.
+class ExamsTarget extends NotificationTarget {
+  const ExamsTarget();
 }
 
 /// The item is gone (submitted, moved, the course dropped): its tab. A
@@ -72,6 +85,8 @@ NotificationTarget? notificationTarget(
     final day = DateTime.tryParse(key.substring(classKeyPrefix.length).split('|').first);
     return day == null ? const TabTarget(1) : ScheduleTarget(day.weekday);
   }
+  if (key.startsWith(examKeyPrefix)) return const ExamsTarget();
+  if (key.startsWith(noticeKeyPrefix)) return const TabTarget(0); // Today lists them
   if (key.startsWith(tabKeyPrefix)) {
     final tab = int.tryParse(key.substring(tabKeyPrefix.length));
     return tab != null && tab >= 0 && tab <= 4 ? TabTarget(tab) : null;

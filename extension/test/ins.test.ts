@@ -256,7 +256,7 @@ const password = 'p@ss w+rd&=1'; // fake, with characters that need form-encodin
 const gradesParam = 'param=FAKEgRaD3s+St4nd/1ngs==&ENGYN=Y';
 const xmlQuery = 'Value=FAKE0T0KEN0abc%3d'; // as the raw rpx page writes it
 
-type MainMode = 'redirect' | 'frameset' | 'script' | 'opaque';
+type MainMode = 'redirect' | 'frameset' | 'script' | 'opaque' | 'internal';
 type LoggedOutMode = 'redirect' | 'script';
 
 interface Req {
@@ -392,6 +392,8 @@ class FakeIns {
             return html("<script>location.href = 'STD/SJ/SJ_51001/MarkView.aspx';</script>");
           case 'opaque':
             return html('<html><body onload="go()"></body></html>');
+          case 'internal':
+            return redirect('http://ins.iutdev.ac.kr/ITIS/STD/SJ/SJ_51001/MarkView.aspx');
         }
         break;
 
@@ -534,6 +536,88 @@ describe('InsClient', () => {
     server.requests = [];
     await client.ensureLoggedIn(); // already in: just the menu check
     assert.deepEqual(server.requests.map(show), ['GET /ITIS/left.aspx']);
+  });
+
+  test('verifyLogin posts the login; a wrong one throws, and a live session is reported as untested', async () => {
+    creds = { username: 'u2510001', password: 'wrong' };
+    await assert.rejects(client.verifyLogin(), (e: unknown) => e instanceof LoginRequired && e.rejected);
+    creds = { username: 'u2510001', password };
+    assert.equal(await client.verifyLogin(), true);
+    assert.equal(server.logins.length, 2);
+
+    // INS answers Start.aspx with its frames while a session lives: there is no form to post to.
+    const frames = new InsClient(async () => creds, {
+      http: async (url, req) => {
+        const res = await server.http(url, req);
+        if (!url.endsWith('Start.aspx')) return res;
+        const bytes = new TextEncoder().encode('<frameset><frame src="left.aspx"></frameset>');
+        return { ...res, bytes, text: () => '<frameset><frame src="left.aspx"></frameset>' };
+      },
+    });
+    assert.equal(await frames.verifyLogin(), false);
+    assert.equal(server.logins.length, 2);
+  });
+
+  test('a refused login is not posted again until something changes', async () => {
+    creds = { username: 'u2510001', password: 'wrong' };
+    const told: string[] = [];
+    const c = new InsClient(async () => creds, { http: server.http, onRejected: (_, login) => void told.push(login.password) });
+    await assert.rejects(c.grades(), LoginRequired);
+    await assert.rejects(c.grades(), LoginRequired);
+    assert.equal(server.logins.length, 1);
+    assert.deepEqual(told, ['wrong']);
+    c.forgetRejected();
+    await assert.rejects(c.grades(), LoginRequired);
+    assert.equal(server.logins.length, 2);
+    creds = { username: 'u2510001', password };
+    await c.grades();
+    assert.equal(server.logins.length, 3);
+  });
+
+  test('a menu hop redirected to the internal host falls through to the direct report URL', async () => {
+    server.mainMode = 'internal';
+    await expectGrades();
+    assert.ok(server.requests.some((r) => r.url.pathname.toLowerCase().endsWith('markview_rpx.aspx')));
+  });
+
+  test('every hop failing is the network error, not a changed page', async () => {
+    await client.ensureLoggedIn();
+    const refused = new NetworkError('ins.inha.uz unreachable', 0, true);
+    const c = new InsClient(async () => creds, {
+      http: async (url, req) => {
+        if (url.includes('main.aspx') || url.includes('MarkView')) throw refused;
+        return server.http(url, req);
+      },
+    });
+    await assert.rejects(c.grades(), (e: unknown) => e === refused);
+  });
+
+  test('in an INS tab a failed menu means the session redirect: it logs in and goes on', async () => {
+    await client.ensureLoggedIn();
+    let failed = false;
+    const c = new InsClient(async () => creds, {
+      inTab: true,
+      http: async (url, req) => {
+        if (url.endsWith('left.aspx') && !failed) {
+          failed = true;
+          throw new NetworkError('ins.iutdev.ac.kr unreachable');
+        }
+        return server.http(url, req);
+      },
+    });
+    assert.ok((await c.grades()).records.length > 0);
+    // In the worker the same failure is passed up, for the caller to fall back on.
+    failed = false;
+    const worker = new InsClient(async () => creds, {
+      http: async (url, req) => {
+        if (url.endsWith('left.aspx') && !failed) {
+          failed = true;
+          throw new NetworkError('ins.inha.uz unreachable', 0, true);
+        }
+        return server.http(url, req);
+      },
+    });
+    await assert.rejects(worker.grades(), NetworkError);
   });
 
   test('no saved login: LoginRequired without posting anything', async () => {

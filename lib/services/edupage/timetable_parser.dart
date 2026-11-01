@@ -94,7 +94,8 @@ List<Lesson> parseLessons(
 /// [excludeSubjects], or its short code equals one ("BDA"); both ignore case,
 /// and blank entries are ignored.
 ///
-/// Throws [UnknownClassGroup] if [classGroup] is not in the timetable.
+/// [classGroup] is matched as typed, else with case and spaces ignored
+/// ("ice 23-1"). Throws [UnknownClassGroup] if it is not in the timetable.
 List<Lesson> lessonsFor(
   EdupageTables tables,
   String classGroup, {
@@ -108,7 +109,9 @@ List<Lesson> lessonsFor(
   final classes = _table(tables, 'classes');
   final cards = _table(tables, 'cards');
 
-  final klass = classes.where((c) => _str(c['name']) == classGroup).firstOrNull;
+  String loose(String s) => s.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  final klass = classes.where((c) => _str(c['name']) == classGroup).firstOrNull ??
+      classes.where((c) => loose(_str(c['name'])) == loose(classGroup)).firstOrNull;
   if (klass == null) throw UnknownClassGroup(classGroup, classGroupsIn(tables));
   final classId = _str(klass['id']);
 

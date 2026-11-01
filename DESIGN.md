@@ -257,7 +257,7 @@ its icon filled and its label 600; the others are `onSurfaceVariant`, outlined, 
 | Schedule | `calendar_view_day` | The day's classes and rooms | One day at a time on a rail, using the week strip or a swipe |
 | Deadlines | `assignment` | Everything due, eClass VOD windows included | Grouped by day |
 | Courses | `school` | Attendance, VOD progress and grades by course | App bar action "Grades" opens INS grades |
-| Mail | `mail` | What the university wrote | Last. The inbox unread count is a `Badge` on the icon. The menu button (where Back would be) opens the folders; New writes a message |
+| Mail | `mail` | What the university wrote | Last. The inbox unread count is a `Badge` on the icon. The menu button (where Back would be) opens the folders; New writes a message. App bar action: search (magnifier) |
 
 - **The unread badge is ink** (`inverseSurface` with `onInverseSurface` text): a count, not an alarm.
 - **Settings is a pushed screen, not a tab,** reached only from the gear on Today (tooltip "Settings"). Today's mail rows open the
@@ -456,16 +456,27 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
   Drafts how many are waiting. The app bar title is the folder's name.
 - **New** is the one floating button in the app: ink (`inverseSurface`) like the badge, radius 8, elevation 0, only on the Mail tab.
 - **List:** in Sent and Drafts the first line is `To <recipients>` instead of the sender. A draft opens in the composer. ruled rows: the sender in muted `bodyMedium` with the time on the right, the subject (`titleSmall` when unread, `bodyLarge`
-  when read), and a one-line preview. No unread dot: weight carries it.
+  when read), and a one-line preview. No unread dot: weight carries it. A 16dp paperclip before the time says it has attachments.
+- **Search:** a boxless `Search Inbox` field for the folder on show, in the app bar on its own screen in the app (the magnifier opens it,
+  and the keyboard's search key asks) and ruled above the list in the extension. Exchange does the finding, so results are not cached.
+  Nothing found says `No mail matches "lab report" in Inbox.`
 - **Message:** the subject in `headlineSmall` (it fades into the empty app bar once scrolled away), the sender in `titleSmall` and the
-  time, attachments (name and size), a rule, then the body in `bodyLarge` with tappable links. App bar: "Mark as unread" and Delete
+  time, attachments, a rule, then the body in `bodyLarge` with tappable links. An attachment is a 48dp row with its name and size: a tap
+  fetches it, with a small spinner, and opens it in an app on the phone. Only the file last opened stays on the phone, in the app's
+  cache. A failure names the file in a snack bar; an attached message opens only in webmail. App bar: "Mark as unread" and Delete
   (in Deleted, "Move to Inbox"); in Inbox and Junk a menu moves it to Junk or back ("Not junk"). Under a rule at the foot: Reply,
   Reply all (only when someone besides the sender got it) and Forward; Sent mail gets only Forward. Every move says so in a snack bar
   with Undo. Nothing is deleted for good: Delete moves to Deleted, as Outlook does.
 - **Composer:** plain text. Header lines (To, Cc and Bcc behind "Cc, Bcc", Subject) are label-and-field rows between rules, the fields
-  without boxes; the body below. Typing three letters of a name lists matching people and lists from the university directory under
-  the line. A reply shows its recipients and `RE:` subject as fixed lines, since Exchange sets them, and says the original is quoted
-  under what you write. Send is the app bar's icon; leaving with anything written asks "Keep this as a draft?" (Discard, Save draft).
+  without boxes and as tall as their line; the body below. Typing three letters of a name lists matching people and lists from the
+  university directory under the line. A reply shows its recipients and `RE:` subject as fixed lines, since Exchange sets them, and says
+  the original is quoted under what you write. "Attach file" and Send are the app bar's icons. Files sit as ruled rows above the body,
+  name and size with a Remove button, up to 25 MB of new ones on a message; a draft's saved files are listed without one. Leaving with
+  anything written asks "Keep this as a draft?" (Discard, Save draft). Back waits while a send or save is running, so a failure can't
+  lose the writing. After a failed send with files, the snack bar says a copy may be in Drafts.
+  "Attach file" adds ruled rows of name and size, each with a remove button; new files on a message can come to 25 MB, checked before
+  anything is uploaded. In the extension Send, Save draft and Attach file sit under the text, and the toolbar popup sends you to a tab to attach,
+  since a file dialog closes it.
 
 **Grades.** The GPA first, as a plain line: `3.87` in `headlineMedium` with `GPA of 4.5 · 98 credits · year 3` beside it. Then "Scores
 this semester", a ruled row per course leading to its Scores. Then each term, newest first, under a `titleMedium` header: ruled rows with
@@ -515,7 +526,8 @@ the course in `bodyLarge`, its credits in muted `bodyMedium`, and the letter in 
   `Also syncing Mail, INS` when other services are at it too. `Updating…` in the footer.
 - **First run with no cache:** a static skeleton that mirrors the real rows (`surfaceContainerHighest` blocks, radius 4, no shimmer):
   the rail's time column and two lines of text per row.
-- **Spinners:** never a full-screen `CircularProgressIndicator`. A small spinner is allowed only inside a button whose action is running.
+- **Spinners:** never a full-screen `CircularProgressIndicator`. A small spinner is allowed only inside a button or a mail attachment's
+  row whose action is running.
 - **Timeout:** 15 s per service.
 
 **Errors.** One row per failed service, in the form `<what happened>. <what you are seeing>.` plus one action. Raw exceptions and HTTP
@@ -584,12 +596,16 @@ success, re-engagement, greetings, errors that recover on their own, or anything
 | Attendance | DEFAULT | A new absence is recorded | On |
 | Grades | DEFAULT | A new or changed mark appears in eClass | On |
 | Classes | LOW | 15 min before each class, with the room in the title | Off |
+| Exams | DEFAULT | The evening before and 1 h before an exam, with the room | On |
+| eClass notifications | DEFAULT | A new unread item in eClass's notification menu | On |
 
 - **Wording:** title at most 30 characters, body at most 40. The most important fact goes first and the course name goes in the body.
   No app name, no emoji, no exclamation marks.
 - **One notification per item,** with a stable id, so the 3 h reminder replaces the 24 h one.
-- **Check before posting.** Re-sync first; if that sync fails, use the last known status. Never notify about something already
-  submitted or watched.
+- **Check on every pass.** Each refresh, in the app or the background about every 3 h, plans again from the newest data: it cancels
+  what is no longer due and withdraws what is in the tray for work now submitted, watched or marked done. A scheduled alarm can't
+  check anything when it fires on Android, so that pass is the check. Never plan a notification for something already submitted or
+  watched.
 - **Quiet hours:** 23:00–07:30. If a deadline falls inside them, its last reminder goes out at 22:00.
 - **The status-bar icon** (`ic_stat_notify`) is white on transparent; Android tints it.
 - **Tapping** opens the item's detail.

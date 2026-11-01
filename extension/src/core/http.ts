@@ -17,14 +17,17 @@ export interface HttpRequest {
   body?: string | Record<string, string>;
   /** 'include' sends and stores the browser's own cookies for that site (eClass, INS); mail uses 'omit'. */
   credentials?: RequestCredentials;
+  /** Covers the whole exchange, body included. */
   timeoutMs?: number;
+  /** Hand 5xx answers to the caller: Exchange sends its SOAP faults as HTTP 500. */
+  allow5xx?: boolean;
 }
 
 /**
  * fetch with a timeout, and every failure without an answer as a NetworkError.
  * Redirects are followed by the browser, which also keeps the cookies they set,
- * so callers look at `url` to see where a request landed. A 5xx is an error;
- * 4xx answers come back for the caller to judge.
+ * so callers look at `url` to see where a request landed. A 5xx is an error
+ * unless the caller allows it; 4xx answers come back for the caller to judge.
  */
 export async function request(url: string, req: HttpRequest = {}): Promise<HttpResponse> {
   const headers: Record<string, string> = { ...req.headers };
@@ -39,6 +42,7 @@ export async function request(url: string, req: HttpRequest = {}): Promise<HttpR
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), req.timeoutMs ?? 30_000);
   let res: Response;
+  let bytes: Uint8Array;
   try {
     res = await fetch(url, {
       method: req.method ?? (body == null ? 'GET' : 'POST'),
@@ -49,19 +53,17 @@ export async function request(url: string, req: HttpRequest = {}): Promise<HttpR
       cache: 'no-store',
       signal: ctl.signal,
     });
+    // Still inside the timeout: a connection can stall or drop in mid-body too.
+    bytes = new Uint8Array(await res.arrayBuffer());
   } catch (e) {
     const host = safeHost(url);
     if (ctl.signal.aborted) throw new NetworkError(`${host} timed out`);
-    // fetch says only "Failed to fetch". Online, for INS the cause is almost
-    // always its expired certificate; offline it is just the connection.
-    const online = typeof navigator === 'undefined' || navigator.onLine !== false;
-    throw new NetworkError(`${host} unreachable: ${(e as Error).message}`, 0, online && host === 'ins.inha.uz');
+    throw new NetworkError(`${host} unreachable: ${(e as Error).message}`, 0, await certificateRefused(url, host));
   } finally {
     clearTimeout(timer);
   }
 
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (res.status >= 500) throw new NetworkError(`${safeHost(url)} answered ${res.status}`, res.status);
+  if (res.status >= 500 && !req.allow5xx) throw new NetworkError(`${safeHost(url)} answered ${res.status}`, res.status);
   return {
     status: res.status,
     url: res.url || url,
@@ -70,6 +72,25 @@ export async function request(url: string, req: HttpRequest = {}): Promise<HttpR
     bytes,
     text: (encoding = 'utf-8') => new TextDecoder(encoding).decode(bytes),
   };
+}
+
+/**
+ * fetch says only "Failed to fetch". Online, from the worker, for INS the cause
+ * is almost always its expired certificate, but the failure can also be a
+ * redirect to its internal host (docs/ENDPOINTS.md), so a request that stops at
+ * the first answer has to fail too. In an INS tab the certificate was already
+ * accepted, so it is never the cause there.
+ */
+async function certificateRefused(url: string, host: string): Promise<boolean> {
+  if (host !== 'ins.inha.uz') return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+  if (typeof location !== 'undefined' && location.host === host) return false;
+  try {
+    await fetch(url, { redirect: 'manual', credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(10_000) });
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 function safeHost(url: string): string {

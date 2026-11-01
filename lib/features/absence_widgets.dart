@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/session.dart';
 import '../data/absence.dart';
 import '../data/app_data.dart';
 import '../models/models.dart';
@@ -105,7 +106,9 @@ class TallyCount extends StatelessWidget {
 /// Settings → Absence limits: every eClass course that takes attendance,
 /// with its limit; tapping one asks for the number.
 class AbsenceLimitsScreen extends StatelessWidget {
-  const AbsenceLimitsScreen({super.key});
+  /// Opened from Settings, so "Sign in" goes back there rather than opening another.
+  final bool fromSettings;
+  const AbsenceLimitsScreen({super.key, this.fromSettings = false});
 
   @override
   Widget build(BuildContext context) {
@@ -114,47 +117,56 @@ class AbsenceLimitsScreen extends StatelessWidget {
     final limits = data.prefs.absenceLimits;
     final courses = [...?data.attendance.data?.value.where((c) => c.classes.isNotEmpty)]
       ..sort((a, b) => a.course.name.compareTo(b.course.name));
+    void signIn() => fromSettings ? Navigator.of(context).pop() : openSettings(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Absence limits')),
-      body: ListView(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 12),
-          child: Text(
-            "How many absences each course allows. eClass doesn't publish this, so take it from the "
-            'syllabus. With a limit set, Today and Courses show how many are left.',
-            style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
-          ),
-        ),
-        if (courses.isEmpty)
-          EmptyNote('No eClass course takes attendance yet. Sign in to eClass to see them.',
-              action: 'Sign in', onAction: () => openSettings(context)),
-        for (final c in courses) ...[
-          const Rule(),
-          InkWell(
-            onTap: () => editAbsenceLimit(context, c.course),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 12),
-              child: Row(children: [
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(c.course.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
-                    const SizedBox(height: 2),
-                    Text(
-                      limits[c.course.id] == null
-                          ? 'Not set · ${AbsenceState.of(c, limits).used} so far'
-                          : AbsenceState.of(c, limits).line,
-                      style: t.textTheme.bodyMedium?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant),
-                    ),
-                  ]),
-                ),
-                const SizedBox(width: 16),
-                Text(limits[c.course.id]?.toString() ?? '', style: t.textTheme.titleMedium?.tnum),
-              ]),
+      body: RefreshIndicator(
+        onRefresh: data.refreshEclass,
+        child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+          const SyncStrip(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 12),
+            child: Text(
+              "How many absences each course allows. eClass doesn't publish this, so take it from the "
+              'syllabus. With a limit set, Today and Courses show how many are left.',
+              style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
             ),
           ),
-        ],
-        const SizedBox(height: 24),
-      ]),
+          if (data.attendance.data == null && data.attendance.error is LoginRequired)
+            EmptyNote('Sign in to eClass to see your courses.', action: 'Sign in', onAction: signIn)
+          else if (data.attendance.data == null && data.attendance.error == null)
+            const SkeletonRows(timeColumn: false)
+          else
+            SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass, onSignIn: signIn),
+          if (data.attendance.data != null && courses.isEmpty) const EmptyNote('No eClass course takes attendance.'),
+          for (final c in courses) ...[
+            const Rule(),
+            InkWell(
+              onTap: () => editAbsenceLimit(context, c.course),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 12),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(c.course.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.textTheme.titleMedium),
+                      const SizedBox(height: 2),
+                      Text(
+                        limits[c.course.id] == null
+                            ? 'Not set · ${AbsenceState.of(c, limits).used} so far'
+                            : AbsenceState.of(c, limits).line,
+                        style: t.textTheme.bodyMedium?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(limits[c.course.id]?.toString() ?? '', style: t.textTheme.titleMedium?.tnum),
+                ]),
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+        ]),
+      ),
     );
   }
 }
@@ -197,6 +209,8 @@ class _LimitDialogState extends State<_LimitDialog> {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return AlertDialog(
+      // At large text the field and its helper still fit above the keyboard.
+      scrollable: true,
       title: const Text('Allowed absences'),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(widget.course.name, style: t.textTheme.bodyMedium),

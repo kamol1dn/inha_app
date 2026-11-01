@@ -11,8 +11,10 @@ IconData deadlineIcon(DeadlineKind k) => switch (k) {
       DeadlineKind.classPeriod => Icons.class_outlined,
     };
 
-/// "Submitted Wed 21:14" for an assignment, "Attempted ..." for a quiz.
+/// "Submitted Wed 21:14" for an assignment, "Attempted ..." for a quiz, or that
+/// the student marked it themselves.
 String doneText(Deadline d) {
+  if (d.dismissed && !d.done) return 'Marked done by you';
   final verb = d.kind == DeadlineKind.quiz ? 'Attempted' : 'Submitted';
   final at = d.doneAt;
   return at == null ? verb : '$verb ${pastWhen(at)}';

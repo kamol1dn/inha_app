@@ -1,4 +1,4 @@
-import type { CredentialSource } from '../../core/credentials.ts';
+import { loginMark, type CredentialSource, type RejectionSink } from '../../core/credentials.ts';
 import { LoginRequired, NetworkError, ParseError } from '../../core/errors.ts';
 import { request, type HttpResponse } from '../../core/http.ts';
 import type { GradeReport } from '../../core/models.ts';
@@ -31,7 +31,11 @@ import {
  *
  * Every request stays on [base]'s origin: the server sometimes redirects to
  * its internal name (http://ins.iutdev.ac.kr/...), which doesn't resolve
- * outside IUT. A response that lands there is fetched again on INS.
+ * outside IUT. A response that lands there is fetched again on INS; off campus
+ * the browser's fetch fails on that hop instead, so each step of the grades
+ * chain has a way around a failed request.
+ *
+ * A login INS refused is not posted again: wrong passwords count toward a lockout.
  */
 export class InsClient {
   /** Menu text in left.aspx. */
@@ -46,14 +50,23 @@ export class InsClient {
   readonly base: URL;
   private readonly creds: CredentialSource;
   private readonly http: typeof request;
-  private loginInFlight: Promise<void> | null = null;
+  private readonly onRejected: RejectionSink;
+  private readonly inTab: boolean;
+  private loginInFlight: Promise<boolean> | null = null;
+  private rejected: string | null = null; // the mark of the login INS last refused
 
-  /** `opts.base` is the INS origin (default https://ins.inha.uz); the ITIS root under it is /ITIS/ unless the base names a path. */
-  constructor(creds: CredentialSource, opts: { base?: string; http?: typeof request } = {}) {
+  /**
+   * `opts.base` is the INS origin (default https://ins.inha.uz); the ITIS root
+   * under it is /ITIS/ unless the base names a path. `opts.inTab`: running in an
+   * INS tab, where the certificate is already accepted.
+   */
+  constructor(creds: CredentialSource, opts: { base?: string; http?: typeof request; onRejected?: RejectionSink; inTab?: boolean } = {}) {
     const base = new URL(opts.base ?? 'https://ins.inha.uz');
     this.base = base.pathname === '/' ? new URL('/ITIS/', base) : base;
     this.creds = creds;
     this.http = opts.http ?? request;
+    this.onRejected = opts.onRejected ?? (() => {});
+    this.inTab = opts.inTab ?? false;
   }
 
   private get startUrl() {
@@ -72,6 +85,22 @@ export class InsClient {
     const left = await this.get(this.leftUrl);
     if (hasMenuLinks(left.body) && !isInsLoginPage(left.body)) return;
     await this.login();
+  }
+
+  /**
+   * Tries the saved login even when a session looks alive, so saving one really
+   * tests it. False when it can't be tested: INS answers Start.aspx with its
+   * frames while a session lives, so there is no form to post it to.
+   */
+  async verifyLogin(): Promise<boolean> {
+    this.rejected = null;
+    await this.loginInFlight?.catch(() => {});
+    return this.login();
+  }
+
+  /** The student asked to try the saved login again. */
+  forgetRejected(): void {
+    this.rejected = null;
   }
 
   /** All course results plus GPA and credits. */
@@ -94,23 +123,25 @@ export class InsClient {
   // Login
   // -------------------------------------------------------------------------
 
-  /** One login at a time; concurrent callers share it. */
-  private login(): Promise<void> {
+  /** One login at a time; concurrent callers share it. True when the login was posted and taken, false when INS was still logged in. */
+  private login(): Promise<boolean> {
     this.loginInFlight ??= this.doLogin().finally(() => {
       this.loginInFlight = null;
     });
     return this.loginInFlight;
   }
 
-  private async doLogin(): Promise<void> {
+  private async doLogin(): Promise<boolean> {
     const creds = await this.creds('ins');
     if (creds == null || !creds.username.trim() || !creds.password) {
       throw new LoginRequired('ins', 'No INS login saved');
     }
+    const mark = await loginMark(creds);
+    if (mark === this.rejected) throw new LoginRequired('ins', 'INS did not accept the ID or password', true);
 
     const start = await this.get(this.startUrl);
     if (!isInsLoginPage(start.body)) {
-      if (isFrameset(start)) return; // INS still considers us logged in
+      if (isFrameset(start)) return false; // INS still considers us logged in
       throw new ParseError(`INS login page${statusSuffix(start)}`);
     }
 
@@ -132,15 +163,17 @@ export class InsClient {
       // the redirect, so ask the menu whether the login took.
       if (!(e instanceof NetworkError)) throw e;
       const left = await this.get(this.leftUrl);
-      if (hasMenuLinks(left.body) && !isInsLoginPage(left.body)) return;
+      if (hasMenuLinks(left.body) && !isInsLoginPage(left.body)) return true;
       throw e;
     }
 
-    if (loginSucceeded(page)) return;
+    if (loginSucceeded(page)) return true;
     if (page.status >= 400 && !isInsLoginPage(page.body)) {
       throw new ParseError(`INS login response${statusSuffix(page)}`);
     }
-    throw new LoginRequired('ins', loginError(page.body) ?? 'INS did not accept the ID or password');
+    this.rejected = mark;
+    await this.onRejected('ins', creds);
+    throw new LoginRequired('ins', loginError(page.body) ?? 'INS did not accept the ID or password', true);
   }
 
   // -------------------------------------------------------------------------
@@ -148,8 +181,15 @@ export class InsClient {
   // -------------------------------------------------------------------------
 
   private async gradesOnce(afterLogin: boolean): Promise<GradeReport> {
-    // 1. Menu.
-    const left = await this.get(this.leftUrl);
+    // 1. Menu. In an INS tab the certificate is accepted, so a failure here is
+    // the session's redirect to the internal host: logging in again gets past it.
+    let left: Page;
+    try {
+      left = await this.get(this.leftUrl);
+    } catch (e) {
+      if (this.inTab && !afterLogin && e instanceof NetworkError) throw new SessionExpired();
+      throw e;
+    }
     const link = findMenuLink(left.body, InsClient.gradesMenu, this.base.pathname);
     if (link == null) {
       // A missing menu before any login most likely means "logged out" in a
@@ -181,28 +221,44 @@ export class InsClient {
    */
   private async findXmlUrl(menuTarget: string): Promise<string> {
     const visited = new Set<string>([menuTarget]);
-    let page = await this.get(menuTarget);
-    visited.add(page.url);
+    let failed: NetworkError | null = null;
+    // A hop that fails (a redirect to the internal host) still visited the menu, so the direct URL may yet answer.
+    const visit = async (url: string): Promise<Page | null> => {
+      try {
+        const p = await this.get(url);
+        visited.add(p.url);
+        return p;
+      } catch (e) {
+        if (!(e instanceof NetworkError)) throw e;
+        failed ??= e;
+        return null;
+      }
+    };
 
-    for (let hop = 0; ; hop++) {
+    let page = await visit(menuTarget);
+    for (let hop = 0; page != null; hop++) {
       const xml = extractXmlUrl(page.body);
       if (xml != null) return this.pin(new URL(xml, page.url).href);
       const next = hop < InsClient.maxFrameHops ? this.nextFrame(page, visited) : null;
       if (next == null) break;
       visited.add(next);
-      page = await this.get(next);
-      visited.add(page.url);
+      const nextPage: Page | null = await visit(next);
+      if (nextPage == null) break;
+      page = nextPage;
     }
 
     const direct = this.resolve(InsClient.rpxPath);
     if (!visited.has(direct)) {
-      const rpx = await this.get(direct);
-      const xml = extractXmlUrl(rpx.body);
-      if (xml != null) return this.pin(new URL(xml, rpx.url).href);
-      page = rpx;
+      const rpx = await visit(direct);
+      if (rpx != null) {
+        const xml = extractXmlUrl(rpx.body);
+        if (xml != null) return this.pin(new URL(xml, rpx.url).href);
+        page = rpx;
+      }
     }
-    if (isSessionExpired(page.body)) throw new SessionExpired();
-    throw new ParseError(`INS grades page${statusSuffix(page)}`);
+    if (page != null && isSessionExpired(page.body)) throw new SessionExpired();
+    if (page == null && failed != null) throw failed;
+    throw new ParseError(`INS grades page${page == null ? '' : statusSuffix(page)}`);
   }
 
   /** The next page toward the report: a MarkView_rpx reference first, then any MarkView reference, skipping pages already loaded. */

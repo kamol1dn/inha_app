@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../core/credentials.dart';
@@ -16,8 +17,10 @@ import 'common.dart';
 const _channelText = {
   NotifyChannel.deadlines: ('Deadlines', 'Assignments and quizzes, 24 h and 3 h before they are due'),
   NotifyChannel.vod: ('VOD windows', 'Lecture videos not fully watched, 48 h and 6 h before the window closes'),
+  NotifyChannel.exams: ('Exams', 'The evening before and 1 h before each exam, with the room'),
   NotifyChannel.attendance: ('Attendance', 'When eClass records a new absence'),
   NotifyChannel.grades: ('Grades', 'When eClass shows a new or changed mark'),
+  NotifyChannel.announcements: ('eClass notifications', "New items in eClass's notification menu"),
   NotifyChannel.classes: ('Classes', 'The room, 15 min before each class'),
 };
 
@@ -31,12 +34,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final Map<Service, String?> _users = {};
   NotifySettings? _notify;
   bool _notifyAllowed = true;
+  String? _version;
 
   @override
   void initState() {
     super.initState();
     _load();
     _loadNotify();
+    _loadVersion();
+  }
+
+  /// "1.3.0 (4)". The next exam sheet comes with an app update and there is no
+  /// store to compare with, so the student can tell here which one they run.
+  Future<void> _loadVersion() async {
+    try {
+      final p = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _version = '${p.version} (${p.buildNumber})');
+    } catch (_) {
+      // No version to show, and nothing else depends on it.
+    }
   }
 
   Future<void> _load() async {
@@ -67,9 +83,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) await context.read<AppData>().onReminderDataChanged?.call();
   }
 
+  /// While notifications were off nothing was planned, so a yes plans them now.
   Future<void> _allowNotifications() async {
-    await context.read<Notifier>().requestPermission();
+    final data = context.read<AppData>();
+    final granted = await context.read<Notifier>().requestPermission();
     await _loadNotify();
+    if (granted) await data.onReminderDataChanged?.call();
   }
 
   @override
@@ -119,12 +138,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: const Text('Absence limits'),
           subtitle: Text(_limitsSummary(data)),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AbsenceLimitsScreen())),
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const AbsenceLimitsScreen(fromSettings: true))),
         ),
         const SectionHeader('Timetable'),
         ListTile(
           title: const Text('Class group'),
-          subtitle: Text(data.prefs.classGroup),
+          subtitle: Text(data.prefs.classGroup.isEmpty ? 'Not chosen' : data.prefs.classGroup),
           onTap: _editGroup,
         ),
         ListTile(
@@ -139,11 +159,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: _editTheme,
         ),
         const SectionHeader('About'),
+        if (_version case final v?) ListTile(title: Text('Version $v')),
         ListTile(
           title: const Text('Open-source licences'),
           subtitle: const Text('Including the Fraunces and Public Sans fonts'),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => showLicensePage(context: context, applicationName: 'IUT'),
+          onTap: () => showLicensePage(context: context, applicationName: 'IUT', applicationVersion: _version),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 24),
@@ -268,23 +289,93 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _editGroup() async {
     final data = context.read<AppData>();
-    final c = TextEditingController(text: data.prefs.classGroup);
     final v = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Class group'),
-        content: TextField(controller: c, decoration: const InputDecoration(hintText: 'ICE23-1')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: const Text('Save')),
-        ],
-      ),
+      builder: (_) => _GroupDialog(current: data.prefs.classGroup, groups: data.classGroups()),
     );
     if (v != null && v.isNotEmpty) {
       data.prefs.classGroup = v;
       setState(() {});
       data.refreshTimetable();
     }
+  }
+}
+
+/// The class group: EduPage's groups to tap, narrowed as the student types. If
+/// EduPage can't list them, the name can still be typed. Owns its text
+/// controller, which must outlive the closing animation.
+class _GroupDialog extends StatefulWidget {
+  final String current;
+  final Future<List<String>> groups;
+  const _GroupDialog({required this.current, required this.groups});
+
+  @override
+  State<_GroupDialog> createState() => _GroupDialogState();
+}
+
+class _GroupDialogState extends State<_GroupDialog> {
+  late final _field = TextEditingController(text: widget.current);
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Class group'),
+      contentPadding: const EdgeInsets.only(top: 16),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: TextField(
+              controller: _field,
+              autocorrect: false,
+              decoration: const InputDecoration(hintText: 'ICE23-1'),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          Flexible(
+            child: FutureBuilder<List<String>>(
+              future: widget.groups,
+              builder: (context, s) {
+                if (s.hasError) {
+                  return const StatusLine(Status.warning, "Couldn't load the groups from EduPage. Type yours as the timetable names it.",
+                      padding: EdgeInsets.fromLTRB(24, 12, 24, 0));
+                }
+                if (!s.hasData) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                    child: Text('Loading the groups from EduPage…',
+                        style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                  );
+                }
+                final typed = _field.text.trim().toLowerCase();
+                final matching = [for (final g in s.data!) if (g.toLowerCase().contains(typed) || g == widget.current) g];
+                return ListView(shrinkWrap: true, padding: const EdgeInsets.only(top: 8), children: [
+                  for (final g in matching)
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                      title: Text(g),
+                      trailing: g == widget.current ? const Icon(Icons.check) : null,
+                      onTap: () => Navigator.pop(context, g),
+                    ),
+                ]);
+              },
+            ),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(context, _field.text.trim()), child: const Text('Save')),
+      ],
+    );
   }
 }
 
@@ -309,6 +400,30 @@ class _LoginSheetState extends State<_LoginSheet> {
   Object? _error;
   String? _missing;
 
+  /// What the fields held when the result on show was reached. A controller also
+  /// notifies for the cursor, so this tells an edit from a tap.
+  String _resultFor = '';
+
+  String get _typed => '${_user.text}\u0000${_pass.text}';
+
+  /// An edit after a test isn't saved: the button goes back to "Save and test",
+  /// so "Done" can't close the sheet and lose it.
+  void _edited() {
+    if (_typed == _resultFor || (!_tested && _missing == null)) return;
+    setState(() {
+      _tested = false;
+      _error = null;
+      _missing = null;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _user.addListener(_edited);
+    _pass.addListener(_edited);
+  }
+
   @override
   void dispose() {
     _user.dispose();
@@ -320,12 +435,14 @@ class _LoginSheetState extends State<_LoginSheet> {
     final user = _user.text.trim();
     final password = _pass.text.isEmpty ? widget.existing?.password : _pass.text;
     if (user.isEmpty || password == null || password.isEmpty) {
+      _resultFor = _typed;
       setState(() => _missing = user.isEmpty ? 'Enter the student ID.' : 'Enter the password.');
       return;
     }
     final store = context.read<CredentialStore>();
     final sessions = context.read<Sessions>();
     final data = context.read<AppData>();
+    final typed = _typed;
     setState(() {
       _busy = true;
       _missing = null;
@@ -338,8 +455,10 @@ class _LoginSheetState extends State<_LoginSheet> {
     setState(() {
       _busy = false;
       _tested = true;
+      _resultFor = typed;
       _error = error;
     });
+    _edited(); // typed on while the test ran
   }
 
   Future<void> _signOut() async {
@@ -371,7 +490,21 @@ class _LoginSheetState extends State<_LoginSheet> {
     if (widget.service == Service.eclass) {
       await notifier.deliver(const [], cancelMissing: {vodKeyPrefix, dueKeyPrefix});
     }
+    await _refreshSignedOut(data);
     if (mounted) Navigator.pop(context);
+  }
+
+  /// With the login gone this fails at once, so the tabs say "Sign in" rather
+  /// than wait on a loading skeleton for a refresh that isn't coming. That
+  /// refusal was no login's, so it isn't kept as the account's status.
+  Future<void> _refreshSignedOut(AppData data) async {
+    await switch (widget.service) {
+      Service.eclass => data.refreshEclass(),
+      Service.ins => data.refreshGrades(),
+      Service.mail => data.refreshMail(),
+      Service.edupage => Future<void>.value(),
+    };
+    data.prefs.setAccountCheck(widget.service, null);
   }
 
   Widget? _result() {

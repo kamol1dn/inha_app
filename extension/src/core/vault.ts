@@ -16,6 +16,7 @@
 
 import type { Credentials } from './credentials.ts';
 import type { Service } from './models.ts';
+import { serial } from './serial.ts';
 
 const DB = 'iut-vault';
 const STORE = 'keys';
@@ -26,9 +27,24 @@ interface Sealed {
   username: string;
   iv: string; // base64
   data: string; // base64 AES-GCM ciphertext of the password
+  rejected?: number; // when the service refused this login: see refusalHolds
 }
 
+/**
+ * How long a refused login stays unposted unless the student acts. A wrong
+ * password counts toward the domain's lockout; a passing server fault taken for
+ * a refusal mends itself at one failed logon a day.
+ */
+export const refusalHolds = 24 * 3600e3;
+
+export const stillRefused = (rejected: number | undefined, now = Date.now()) => rejected != null && now - rejected < refusalHolds;
+
+/** A saved login as it is stored, to put back if a new one turns out wrong. */
+export type SealedLogin = Sealed;
+
 type Vault = Partial<Record<Service, Sealed>>;
+
+const writes = serial();
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -70,20 +86,26 @@ async function readVault(): Promise<Vault> {
   return ((await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY] as Vault | undefined) ?? {};
 }
 
+/** One read-modify-write of the vault, in turn with the others. `change` returns false to leave it as it was. */
+function updateVault(change: (vault: Vault) => boolean | void | Promise<boolean | void>): Promise<void> {
+  return writes(async () => {
+    const vault = await readVault();
+    if ((await change(vault)) !== false) await chrome.storage.local.set({ [STORAGE_KEY]: vault });
+  });
+}
+
+/** Saves a login. A new one has not been refused by anyone, so that mark goes with the old one. */
 export async function saveLogin(service: Service, login: Credentials): Promise<void> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const data = new Uint8Array(
     await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await key(), new TextEncoder().encode(login.password)),
   );
-  const vault = await readVault();
-  vault[service] = { username: login.username.trim(), iv: b64(iv), data: b64(data) };
-  await chrome.storage.local.set({ [STORAGE_KEY]: vault });
+  await updateVault((vault) => {
+    vault[service] = { username: login.username.trim(), iv: b64(iv), data: b64(data) };
+  });
 }
 
-/** The saved login, or null. A blob the key can't open (the key was lost) counts as none. */
-export async function readLogin(service: Service): Promise<Credentials | null> {
-  const sealed = (await readVault())[service];
-  if (!sealed) return null;
+async function unseal(sealed: Sealed): Promise<Credentials | null> {
   try {
     const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(sealed.iv) }, await key(), unb64(sealed.data));
     return { username: sealed.username, password: new TextDecoder().decode(plain) };
@@ -92,10 +114,47 @@ export async function readLogin(service: Service): Promise<Credentials | null> {
   }
 }
 
-export async function clearLogin(service: Service): Promise<void> {
-  const vault = await readVault();
-  delete vault[service];
-  await chrome.storage.local.set({ [STORAGE_KEY]: vault });
+/** The saved login, or null. A blob the key can't open (the key was lost) counts as none. */
+export async function readLogin(service: Service): Promise<Credentials | null> {
+  const sealed = (await readVault())[service];
+  return sealed ? unseal(sealed) : null;
+}
+
+/** The saved login as stored, for restoreLogin. */
+export const readSealedLogin = async (service: Service): Promise<SealedLogin | undefined> => (await readVault())[service];
+
+/** Puts back what readSealedLogin returned, which may be nothing. */
+export function restoreLogin(service: Service, sealed: SealedLogin | undefined): Promise<void> {
+  return updateVault((vault) => {
+    if (sealed) vault[service] = sealed;
+    else delete vault[service];
+  });
+}
+
+/** Marks the saved login as refused, if it is still the one that was tried: a newer one hasn't been. */
+export function markLoginRejected(service: Service, tried: Credentials): Promise<void> {
+  return updateVault(async (vault) => {
+    const sealed = vault[service];
+    const current = sealed ? await unseal(sealed) : null;
+    if (!sealed || current?.username !== tried.username.trim() || current.password !== tried.password) return false;
+    sealed.rejected = Date.now();
+  });
+}
+
+/** Allows one more try of a refused login: the student asked for it. */
+export function clearLoginRejected(service: Service): Promise<void> {
+  return updateVault((vault) => {
+    if (!vault[service]?.rejected) return false;
+    delete vault[service]!.rejected;
+  });
+}
+
+export const loginRejected = async (service: Service): Promise<boolean> => stillRefused((await readVault())[service]?.rejected);
+
+export function clearLogin(service: Service): Promise<void> {
+  return updateVault((vault) => {
+    delete vault[service];
+  });
 }
 
 /** The saved usernames, for Settings. Never the passwords. */

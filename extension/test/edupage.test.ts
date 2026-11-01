@@ -333,6 +333,15 @@ describe('EdupageClient', () => {
     client = new EdupageClient({ http: server.http });
   });
 
+  test('lessonsAndGroups(): a group no longer on the timetable still gives the list', async () => {
+    const got = await client.lessonsAndGroups('ICE99-9');
+    assert.equal(got.unknownGroup, true);
+    assert.deepEqual(got.lessons, []);
+    assert.ok(got.groups.includes('ICE23-1'));
+    assert.equal((await client.lessonsAndGroups('ICE23-1')).unknownGroup, false);
+    assert.equal((await client.lessonsAndGroups('')).unknownGroup, false);
+  });
+
   test("lessons(): warm-up GET, then the two RPCs with the script's bodies, no cookies", async () => {
     assert.deepEqual(await client.lessons('ICE23-1', ['Big Data']), python);
     assert.deepEqual(

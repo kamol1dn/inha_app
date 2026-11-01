@@ -394,7 +394,8 @@ class DueRow extends StatelessWidget {
     final t = Theme.of(context);
     final d = deadline;
     final done = isDone(d, attendance);
-    final status = done ? null : deadlineStatus(d, now);
+    // A class period isn't due: it gets no status and no "Due in" wording.
+    final status = done || !isDue(d) ? null : deadlineStatus(d, now);
     final fg = status == null ? null : statusColors(context).of(status).fg;
     final muted = t.textTheme.bodyMedium!.copyWith(color: t.colorScheme.onSurfaceVariant);
     final vod = vodFor(d, attendance);
@@ -414,7 +415,7 @@ class DueRow extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(rowTitle(d.title), maxLines: 2, overflow: TextOverflow.ellipsis, style: titleStyle),
         if (done)
-          StatusLine(Status.ok, d.kind == DeadlineKind.vod ? 'Watched' : doneText(d), padding: EdgeInsets.zero)
+          StatusLine(Status.ok, vod?.done == true ? 'Watched' : doneText(d), padding: EdgeInsets.zero)
         else if (status != null)
           StatusLine(status, dueWarning(d, vod, now), padding: EdgeInsets.zero)
         else
@@ -437,9 +438,13 @@ String dueState(Deadline d, VodProgress? vod) => switch (d.kind) {
     };
 
 /// The status line of an urgent item: "Due in 5 h · not submitted",
-/// "Overdue 2 h · not attempted", "62% watched, 21 min left".
+/// "Overdue 2 h · not attempted", "62% watched, 21 min left", and for a window
+/// that has closed "Closed 2 h ago · 62% watched".
 String dueWarning(Deadline d, VodProgress? vod, DateTime now) {
   if (d.kind == DeadlineKind.vod) {
+    if (d.end.isBefore(now)) {
+      return 'Closed ${ago(d.end, now: now)} · ${vod == null ? 'no watch progress' : '${vod.percent.floor()}% watched'}';
+    }
     if (vod == null) return 'Closes ${relative(d.end, now: now)} · no watch progress yet';
     final left = (vod.length.inMinutes * (100 - vod.percent) / 100).ceil();
     return vod.percent < 1 ? 'Not started, $left min' : '${vod.percent.floor()}% watched, $left min left';
@@ -459,6 +464,13 @@ String classWhen(DateTime day, Lesson l, DateTime now) {
   final h = dayHeader(day, now: now);
   if (h == 'Today' || h == 'Tomorrow') return '${h.toLowerCase()} ${l.start}';
   return '${weekdayShort(day.weekday)} ${l.start}';
+}
+
+/// "today 14:00", "tomorrow 13:00" or "next Mon 13:00": a class's time after
+/// other words on a line.
+String nextClassWhen(DateTime day, Lesson l, DateTime now) {
+  final when = classWhen(day, l, now);
+  return when.startsWith('to') ? when : 'next $when';
 }
 
 /// "Today 14:00" from "today 14:00".

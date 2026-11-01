@@ -42,6 +42,45 @@ class ParseError implements Exception {
   String toString() => 'Could not read $what';
 }
 
+/// Nothing can be fetched until the student answers something in the app:
+/// [message] says what, as the sentence the screen shows.
+class SetupNeeded implements Exception {
+  final String message;
+  SetupNeeded(this.message);
+  @override
+  String toString() => message;
+}
+
+/// Some courses of a list could not be read. The list is still fresh for the
+/// others; the failed ones show what the cache had. Sits in the source's
+/// error next to the data, so the screen can say so.
+class PartialRefresh implements Exception {
+  final List<String> courses;
+  final Object cause; // the first failure
+  PartialRefresh(this.courses, this.cause);
+  @override
+  String toString() => '${courses.length} courses failed: $cause';
+}
+
+/// The network failed: nothing answered, or the answer broke off.
+bool isNetworkError(Object? e) =>
+    e is DioException &&
+    (e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.error is SocketException ||
+        e.error is HttpException ||
+        e.error is HandshakeException);
+
+/// The server answered, with a 5xx. The device is online.
+bool isServerError(Object? e) =>
+    e is DioException && e.type == DioExceptionType.badResponse && (e.response?.statusCode ?? 0) >= 500;
+
+/// A failure worth retrying soon: the network or the server, not the login or
+/// the page.
+bool isWorthRetrying(Object? e) =>
+    e is PartialRefresh ? isWorthRetrying(e.cause) : isNetworkError(e) || isServerError(e);
+
 /// One Dio per service, each with its own persistent cookie jar so sessions
 /// survive app restarts and a fresh login is only needed when one expires.
 class Sessions {

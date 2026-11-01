@@ -312,6 +312,16 @@ export function matchExams(period: ExamPeriod, courses: StudentCourse[], classGr
   return { period, exams: [...mine.values()].sort((a, b) => order.get(a.exam)! - order.get(b.exam)!), unlisted };
 }
 
+/** The room the student sits in, once known: the one they set, or the only room the exam uses. */
+export const examRoom = (m: MyExam): string | null => m.room ?? (m.exam.rooms.length === 1 ? m.exam.rooms[0] : null);
+
+/** "The timetable lists 2 sittings; check which is yours." */
+export const sittingsLine = (m: MyExam) => `The timetable lists ${m.sittings} sittings; check which is yours.`;
+
+/** "Midterm · B209 or B210", "Midterm · Dr.Sarvar · B305": a sitting's second line, with the sheet's note only where it tells sittings apart. */
+export const examLine = (m: MyExam, p: ExamPeriod) =>
+  [periodName(p), ...(m.sittings > 1 && m.exam.read.note ? [m.exam.read.note] : []), examRoom(m) ?? roomChoice(m.exam.rooms)].join(' · ');
+
 /** "B209", "B209 or B210", "B304(A–C), B305 or B201". */
 export function roomChoice(rooms: string[]): string {
   const parts: string[] = [];

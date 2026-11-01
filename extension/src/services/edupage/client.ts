@@ -1,7 +1,7 @@
 import { NetworkError, ParseError } from '../../core/errors.ts';
 import { request } from '../../core/http.ts';
 import type { Lesson } from '../../core/models.ts';
-import { chooseTtNum, classGroupsIn, lessonsFor, parseTables, type EdupageTables } from './parser.ts';
+import { chooseTtNum, classGroupsIn, lessonsFor, parseTables, UnknownClassGroup, type EdupageTables } from './parser.ts';
 
 /**
  * The public EduPage timetable at iut.edupage.org over its RPC endpoints
@@ -36,10 +36,20 @@ export class EdupageClient {
     return lessonsFor(await this.tables(), classGroup, excludeSubjects);
   }
 
-  /** One download for both: the class group's lessons (none when it is blank) and every group, for the picker. */
-  async lessonsAndGroups(classGroup: string, excludeSubjects: Iterable<string> = []): Promise<{ lessons: Lesson[]; groups: string[] }> {
+  /**
+   * One download for both: every group, for the picker, and the class group's
+   * lessons (none when it is blank). A group no longer on the timetable (a new
+   * term renamed it) still gives the list, so a new one can be picked.
+   */
+  async lessonsAndGroups(classGroup: string, excludeSubjects: Iterable<string> = []): Promise<{ lessons: Lesson[]; groups: string[]; unknownGroup: boolean }> {
     const tables = await this.tables();
-    return { lessons: classGroup ? lessonsFor(tables, classGroup, excludeSubjects) : [], groups: classGroupsIn(tables) };
+    const groups = classGroupsIn(tables);
+    try {
+      return { lessons: classGroup ? lessonsFor(tables, classGroup, excludeSubjects) : [], groups, unknownGroup: false };
+    } catch (e) {
+      if (!(e instanceof UnknownClassGroup)) throw e;
+      return { lessons: [], groups, unknownGroup: true };
+    }
   }
 
   /** Class groups EduPage knows, for the picker in Settings. */

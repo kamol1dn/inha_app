@@ -7,14 +7,21 @@
 
 import { courseFromTitle, isMarked, itemScore, plainNumber, type CourseAttendance, type CourseGrades, type Deadline, type GradeItem, type Lesson, type VodProgress } from '../core/models.ts';
 import type { NotifyChannel } from '../core/store.ts';
+import { examKey, roomChoice, type ExamMatch } from './exams.ts';
 import { clock, dayKey, fromDayKey, HOUR, isoWeekday, MIN, parseHm, DAY } from './format.ts';
 import { CourseScore, isAttendanceMark } from './scores.ts';
+import { courseOf, reminderStem } from './status.ts';
+
+export { reminderStem };
 
 /** Reminders before a VOD window closes. Watching in the window is what counts for attendance. */
 export const vodReminderLeads = [48 * HOUR, 6 * HOUR];
 export const deadlineReminderLeads = [24 * HOUR, 3 * HOUR];
 const remindedKinds = new Set(['assignment', 'quiz', 'other']);
 export const classReminderLead = 15 * MIN;
+/** An exam's reminders: at 20:00 the evening before, and this long before it. */
+export const examReminderLead = HOUR;
+const examEveningHour = 20;
 /** A late reminder is skipped when the next one for the same item comes within this anyway. */
 const lateSkipWithin = HOUR;
 /** Absences older than this are not announced, so a first run doesn't announce a semester. */
@@ -54,8 +61,6 @@ const dayTime = (t: number) => {
 const weekdayDayMonth = (d: Date) => `${wd[isoWeekday(d) - 1]} ${d.getDate()} ${mon[d.getMonth()]}`;
 const dayMonth = (d: Date) => `${d.getDate()} ${mon[d.getMonth()]}`;
 
-/** Minute-precision UTC stamp, so keys don't depend on the zone. */
-const stamp = (t: number) => new Date(Math.floor(t / MIN) * MIN).toISOString().slice(0, 16).replace(/[-:]/g, '') + 'Z';
 const leadTag = (ms: number) => (ms % HOUR === 0 ? `${ms / HOUR}h` : `${ms / MIN}m`);
 
 function lengthText(sec: number): string {
@@ -65,13 +70,19 @@ function lengthText(sec: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
-/** The part of a deadline's reminder keys that names the item: every key is `<stem>|<lead>`. */
-export function reminderStem(d: Deadline): string {
-  const item = `${norm(courseName(d.courseName))}|${norm(d.title)}|${stamp(d.end)}`;
-  return d.kind === 'vod' ? `vod:${item}` : `due:${d.kind}:${item}`;
+/**
+ * The id of a notification, so a later reminder for the same item replaces the
+ * earlier one in the tray: the key minus its lead, for the items with several
+ * reminders. Sent records keep the whole key.
+ */
+export function notificationId(key: string): string {
+  return /^(vod|due|exam):/.test(key) ? key.slice(0, key.lastIndexOf('|')) : key;
 }
 
-function inQuiet(t: number): boolean {
+/** Whether a notification id is one withdrawn when its item goes away (watched, handed in, marked done, moved). */
+export const withdrawable = (id: string) => /^(vod|due|exam):/.test(id);
+
+export function inQuiet(t: number): boolean {
   const d = new Date(t);
   const m = d.getHours() * 60 + d.getMinutes();
   return m >= quietHours.start || m < quietHours.end;
@@ -128,9 +139,11 @@ function reminderTimes(now: number, end: number, leads: number[], notBefore: num
 }
 
 function findVod(d: Deadline, attendance: CourseAttendance[]): VodProgress[] {
-  const course = norm(courseName(d.courseName));
+  const vods = courseOf(d, attendance)?.vods ?? [];
+  const byModule = d.moduleId == null ? [] : vods.filter((v) => v.moduleId === d.moduleId);
+  if (byModule.length) return byModule;
   const title = norm(d.title);
-  return attendance.filter((a) => norm(a.course.name) === course).flatMap((a) => a.vods.filter((v) => norm(v.title) === title));
+  return vods.filter((v) => norm(v.title) === title);
 }
 
 function vodStatus(progress: VodProgress[]): string {
@@ -196,6 +209,10 @@ export interface PlanInput {
   absenceLimits?: Record<string, number>;
   /** Days with no classes ('YYYY-MM-DD'): the exam weeks. */
   classFree?: Set<string>;
+  /** The student's exams in the period on show. */
+  exams?: ExamMatch | null;
+  /** What the student marked as done by hand: reminderStem of each. */
+  dismissed?: readonly string[];
   /** eClass URL of a deadline's activity. */
   itemUrl?: (d: Deadline) => string | null;
   courseUrl?: (id: number) => string;
@@ -209,7 +226,9 @@ export function planNotifications(p: PlanInput): PlannedNotification[] {
     if (!out.has(n.key)) out.set(n.key, n);
   };
 
+  const dismissed = new Set(p.dismissed ?? []);
   for (const d of deadlines) {
+    if (dismissed.has(reminderStem(d))) continue;
     const url = p.itemUrl?.(d) ?? null;
     const course = courseName(d.courseName);
     if (d.kind === 'vod') {
@@ -273,6 +292,28 @@ export function planNotifications(p: PlanInput): PlannedNotification[] {
   for (const g of p.courseGrades ?? []) {
     // A mark can wait for the morning too.
     for (const n of newMarks(now, g, p.seenGrades?.[g.course.id] ?? {}, p.courseUrl?.(g.course.id) ?? null)) moveOutOfQuiet([n], Infinity, now, quiet).forEach(add);
+  }
+
+  for (const mine of p.exams?.exams ?? []) {
+    const { exam, sittings, room } = mine;
+    const day = new Date(exam.start);
+    const evening = new Date(day.getFullYear(), day.getMonth(), day.getDate() - 1, examEveningHour).getTime();
+    const key = `exam:${examKey(p.exams!.period, exam)}`;
+    const where = room ?? roomChoice(exam.rooms);
+    const at = clock(exam.start);
+    const place = where ? `${where} at ${at}` : `At ${at}, room not set`;
+    const caveat = sittings > 1 ? ` ${sittings} sittings of this course are listed: check yours.` : '';
+    const title = `${clean(mine.course.name)} exam`;
+    const reminders = reminderTimes(now, exam.start, [exam.start - evening, examReminderLead]).map(([lead, when]) => ({
+      key: `${key}|${lead === examReminderLead ? leadTag(lead) : 'evening'}`,
+      title,
+      body: lead === examReminderLead ? `${place}.${caveat}` : `${dayKey(when) === dayKey(exam.start) ? 'Today' : 'Tomorrow'}: ${place}.${caveat}`,
+      when,
+      channel: 'exams' as const,
+      quiet: false,
+      url: null,
+    }));
+    moveOutOfQuiet(reminders, exam.start, now, quiet).forEach(add);
   }
 
   const today = new Date(now);

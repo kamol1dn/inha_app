@@ -141,6 +141,13 @@ export function updatedAt(t: number, now = new Date()): string {
   return daysBetween(at, now) === 0 ? clock(at) : `${wd[isoWeekday(at) - 1]} ${clock(at)}`;
 }
 
+/** "today 14:00", "tomorrow 13:00", "Mon 13:00": when a class on `day` is, from `now`. */
+export function classWhen(day: number | Date, start: string, now: number | Date): string {
+  const h = dayHeader(day, asDate(now));
+  if (h === 'Today' || h === 'Tomorrow') return `${h.toLowerCase()} ${start}`;
+  return `${wd[isoWeekday(asDate(day)) - 1]} ${start}`;
+}
+
 /** "09:00" to minutes after midnight, or null. */
 export function parseHm(s: string): number | null {
   const m = /^\s*(\d{1,2}):(\d{2})/.exec(s);

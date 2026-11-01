@@ -39,7 +39,9 @@ class CoursesScreen extends StatelessWidget {
         else if (data.attendance.data == null && data.attendance.error == null)
           const SkeletonRows(timeColumn: false)
         else
-          SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass),
+          SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass, coveredByOfflineRow: true),
+        if (at != null && courses.isEmpty && data.attendance.error == null)
+          EmptyNote('eClass lists no courses for you.', checked: at),
         if (unset > 0)
           Padding(
             padding: const EdgeInsets.fromLTRB(gutter, 8, 8, 4),
@@ -127,7 +129,7 @@ class _CourseRow extends StatelessWidget {
                       status,
                       [
                         switch (absence.left!) { > 0 && final l => '$l left', 0 => 'At the limit', final l => 'Over by ${-l}' },
-                        if (when != null) 'next $when',
+                        if (n != null) nextClassWhen(n.day, n.lesson, now),
                       ].join(' · '),
                       padding: EdgeInsets.zero)
                 else if (plain.isNotEmpty)

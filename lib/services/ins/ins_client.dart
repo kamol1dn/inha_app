@@ -88,6 +88,9 @@ class InsClient implements InsApi {
     if (creds == null || creds.username.trim().isEmpty || creds.password.isEmpty) {
       throw LoginRequired(Service.ins, 'No INS login saved');
     }
+    if (await _credentials.isRefused(Service.ins, creds)) {
+      throw LoginRequired(Service.ins, 'INS did not accept the ID or password');
+    }
 
     final start = await _get(_startUri);
     if (!isInsLoginPage(start.body)) {
@@ -114,6 +117,7 @@ class InsClient implements InsApi {
     if (page.status >= 400 && !isInsLoginPage(page.body)) {
       throw ParseError('INS login response${page.statusSuffix}');
     }
+    await _credentials.markRefused(Service.ins, creds);
     throw LoginRequired(Service.ins, loginError(page.body) ?? 'INS did not accept the ID or password');
   }
 

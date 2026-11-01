@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/session.dart';
 import '../data/absence.dart';
 import '../data/app_data.dart';
 import '../data/exams.dart';
+import '../data/rail.dart';
 import '../data/urgency.dart';
 import '../models/models.dart';
+import '../notifications/routes.dart';
+import '../notifications/rules.dart' show classKeyPrefix;
 import '../services/eclass/eclass_links.dart';
 import '../ui/format/format.dart';
 import '../ui/theme/app_text.dart';
@@ -45,7 +49,11 @@ class CourseDetailScreen extends StatelessWidget {
         title: name,
         body: (heading) => ListView(children: [
           _heading(context, name, '', heading),
-          const EmptyNote('This course is no longer on your eClass dashboard.'),
+          if (data.attendance.data == null && data.attendance.error == null)
+            const SkeletonRows(timeColumn: false)
+          else
+            SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass),
+          if (data.attendance.data != null) const EmptyNote('This course is no longer on your eClass dashboard.'),
         ]),
       );
     }
@@ -65,6 +73,7 @@ class CourseDetailScreen extends StatelessWidget {
         child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
           _heading(context, c.course.name, [c.course.code, c.course.professor].where((s) => s.isNotEmpty).join(' · '),
               heading),
+          SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass),
           if (c.classes.isEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
@@ -74,21 +83,18 @@ class CourseDetailScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(gutter, 20, gutter, 0),
               child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 16, runSpacing: 8, children: [
-                Text(limit == null || absent > limit ? '$absent' : '$absent of $limit',
-                    style: t.textTheme.headlineMedium?.copyWith(color: countColor)),
+                Text(limit == null ? '$absent' : '$absent of $limit',
+                    style: t.textTheme.headlineMedium?.tnum.copyWith(color: countColor)),
                 Tally(absence, height: 28),
+                if (isStale(data.attendance, const Duration(hours: 3))) StaleMarker(data.attendance.data!.fetchedAt),
               ]),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, 0),
               child: Text(
                 [
-                  limit == null
-                      ? '${absent == 1 ? 'absence' : 'absences'} · limit not set'
-                      : absent > limit
-                          ? 'absences · limit $limit'
-                          : 'allowed absences used',
-                  if (held.isNotEmpty) 'of ${held.length} ${held.length == 1 ? 'class' : 'classes'} so far',
+                  limit == null ? '${absent == 1 ? 'absence' : 'absences'} · limit not set' : 'allowed absences used',
+                  if (held.isNotEmpty) '${held.length} ${held.length == 1 ? 'class' : 'classes'} held so far',
                 ].join(' · '),
                 style: muted,
               ),
@@ -128,25 +134,34 @@ class CourseDetailScreen extends StatelessWidget {
             ScoresRow(g),
           ],
           SectionHeader('Grade', source: data.grades, staleAfter: const Duration(hours: 24)),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 8),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-              Expanded(
-                child: Text(
-                  grade == null
-                      ? (data.grades.data == null ? 'Sign in to INS to see grades.' : 'INS has no record of this course.')
-                      // INS labels the term in progress "Course registration".
-                      : '${grade.graded ? grade.term : 'This semester'} · ${grade.credits.toStringAsFixed(1)} credits',
-                  style: muted,
+          if (grade == null && data.grades.data == null)
+            if (data.grades.error is LoginRequired)
+              EmptyNote('Sign in to INS to see grades.', action: 'Sign in', onAction: () => openSettings(context))
+            else if (data.grades.error == null)
+              const SkeletonRows(count: 1, timeColumn: false)
+            else
+              SourceError(data.grades, 'INS', onRetry: data.refreshGrades)
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                Expanded(
+                  child: Text(
+                    grade == null
+                        ? 'INS has no record of this course.'
+                        // INS labels the term in progress "Course registration".
+                        : '${grade.graded ? grade.term : 'This semester'} · ${grade.credits.toStringAsFixed(1)} credits',
+                    style: muted,
+                  ),
                 ),
-              ),
-              if (grade != null)
-                Text(grade.graded ? grade.letter : 'Not graded yet',
-                    style: grade.graded ? t.textTheme.titleMedium : muted),
-            ]),
-          ),
+                if (grade != null)
+                  Text(grade.graded ? grade.letter : 'Not graded yet',
+                      style: grade.graded ? t.textTheme.titleMedium : muted),
+              ]),
+            ),
+          ..._timetable(context, data, c.course, now),
           if (c.vods.isNotEmpty) ...[
-            const SectionHeader('VOD lectures'),
+            SectionHeader('VOD lectures', source: data.attendance),
             for (final v in c.vods)
               Padding(
                 padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 8),
@@ -167,7 +182,7 @@ class CourseDetailScreen extends StatelessWidget {
               ),
           ],
           if (held.isNotEmpty) ...[
-            const SectionHeader('Classes so far'),
+            SectionHeader('Classes so far', source: data.attendance),
             for (final (i, e) in held.reversed.indexed) ...[
               if (i > 0) const Rule(),
               ConstrainedBox(
@@ -188,6 +203,44 @@ class CourseDetailScreen extends StatelessWidget {
         ]),
       ),
     );
+  }
+
+  /// When and where the course meets each week. Short, so before the long lists.
+  /// A row opens Schedule on its day.
+  static List<Widget> _timetable(BuildContext context, AppData data, Course course, DateTime now) {
+    final weekly = [...?data.lessons.data?.value.where((l) => isLessonOf(l, course))]..sort((a, b) {
+        final byDay = a.weekday.compareTo(b.weekday);
+        return byDay != 0 ? byDay : a.start.compareTo(b.start);
+      });
+    if (weekly.isEmpty) return const [];
+    final t = Theme.of(context);
+    return [
+      SectionHeader('In the timetable', source: data.lessons, staleAfter: const Duration(hours: 24)),
+      for (final (i, l) in weekly.indexed) ...[
+        if (i > 0) const Rule(),
+        InkWell(
+          onTap: () {
+            final inDays = (l.weekday - now.weekday) % 7;
+            final day = DateTime(now.year, now.month, now.day + inDays);
+            context.read<NotificationTaps>().value = '$classKeyPrefix${day.toIso8601String()}';
+          },
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 12),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                Text('${weekdayShort(l.weekday)} ${l.start}', style: t.textTheme.numeral),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text([l.room, l.kind, l.teacher].where((s) => s.isNotEmpty).join(' · '),
+                      style: t.textTheme.bodyMedium?.tnum.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ],
+    ];
   }
 
   /// The course's sitting in the exam period on show, or that the timetable

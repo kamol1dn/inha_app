@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/cache.dart';
@@ -10,6 +9,8 @@ import '../services/edupage/edupage_client.dart';
 import '../services/ins/ins_client.dart';
 import '../services/mail/ews_client.dart';
 import 'app_data.dart';
+
+export '../core/session.dart' show isNetworkError, isServerError, isWorthRetrying;
 
 /// Everything the app runs on, built from persistent state only (cookie
 /// jars, the credential store, the JSON cache). The UI and the background
@@ -37,13 +38,8 @@ class AppServices {
     );
     eclass.loginStep = (login) => data.sync.step('eClass', 'signing in', login);
     ins.loginStep = (login) => data.sync.step('INS', 'signing in', login);
+    data.hasLogin = (s) async => await credentials.read(s) != null;
     return AppServices(data, sessions, credentials);
   }
 }
 
-/// A failure worth retrying soon: the network, not the login or the page.
-bool isNetworkError(Object? e) =>
-    e is DioException &&
-    (e.type == DioExceptionType.connectionError ||
-        e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout);

@@ -26,9 +26,21 @@ class FakeCredentials implements CredentialStore {
   @override
   Future<Credentials?> read(Service s) async => s == Service.ins ? creds : null;
   @override
-  Future<void> write(Service s, Credentials c) async => creds = c;
+  Future<void> write(Service s, Credentials c) async {
+    creds = c;
+    refused.remove(s);
+  }
+
   @override
   Future<void> clear(Service s) async => creds = null;
+
+  /// The last login refused, by service, as the real store remembers it.
+  final refused = <Service, Credentials>{};
+  @override
+  Future<void> markRefused(Service s, Credentials c) async => refused[s] = c;
+  @override
+  Future<bool> isRefused(Service s, Credentials c) async =>
+      refused[s]?.username == c.username && refused[s]?.password == c.password;
 }
 
 /// How `main.aspx?param=<grades>` answers.
@@ -296,6 +308,18 @@ void main() {
     );
     expect(server.logins, hasLength(1));
     expect(server.requests.where((r) => r.path.contains('markview')), isEmpty);
+  });
+
+  test('a refused login is not posted again until one is saved', () async {
+    creds.creds = const Credentials('u2510001', 'wrong');
+    await expectLater(client.grades(), throwsA(isA<LoginRequired>()));
+    await expectLater(client.grades(), throwsA(isA<LoginRequired>()));
+    await expectLater(client.ensureLoggedIn(), throwsA(isA<LoginRequired>()));
+    expect(server.logins, hasLength(1));
+
+    await creds.write(Service.ins, const Credentials('u2510001', password));
+    await client.ensureLoggedIn();
+    expect(server.logins, hasLength(2));
   });
 
   test('ensureLoggedIn: bad password throws, good password passes', () async {

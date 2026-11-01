@@ -2,9 +2,10 @@
 // every course by term from INS, newest first. The scores don't wait for INS,
 // whose expired certificate can keep it out of reach.
 
-import type { GradeRecord } from '../../core/models.ts';
+import { isGraded, plainNumber, termGpa, type GradeRecord } from '../../core/models.ts';
 import type { Snapshot } from '../../core/store.ts';
-import { ErrorRow, isStale, Skeleton, Stale } from '../common.tsx';
+import { ErrorRow, isStale, Skeleton, Stale, StatusLine } from '../common.tsx';
+import { creditsByCategory, creditWord, termLine } from '../derive.ts';
 import { ScoresRow } from './scores.tsx';
 
 function ScoresThisSemester({ snap, now }: { snap: Snapshot; now: number }) {
@@ -16,6 +17,8 @@ function ScoresThisSemester({ snap, now }: { snap: Snapshot; now: number }) {
         Scores this semester
         {isStale(snap, 'eclass', cached.fetchedAt, now) && <span class="right"><Stale at={cached.fetchedAt} /></span>}
       </h2>
+      {/* One course's pages failed: the rest are fresh, and its old marks are still listed. */}
+      {snap.state.eclass?.marksError && <StatusLine status="warning">Some marks didn't update from eClass.</StatusLine>}
       <div class="rows">
         {cached.value.map((g) => <ScoresRow key={g.course.id} g={g} showCourse />)}
       </div>
@@ -34,48 +37,43 @@ export function Grades({ snap, now }: { snap: Snapshot; now: number }) {
       </>
     );
   }
+  const fetchedAt = snap.cache.grades!.fetchedAt;
   const terms = new Map<number, GradeRecord[]>();
   for (const r of report.records) terms.set(r.termKey, [...(terms.get(r.termKey) ?? []), r]);
-  const graded = report.records.filter((r) => r.letter && r.letter !== '-');
+  const categories = creditsByCategory(report.records);
   return (
     <>
-      {err && <ErrorRow service="ins" error={err} />}
-      {isStale(snap, 'ins', snap.cache.grades!.fetchedAt, now) && <Stale at={snap.cache.grades!.fetchedAt} />}
+      {err && <ErrorRow service="ins" error={err} at={fetchedAt} />}
+      {isStale(snap, 'ins', fetchedAt, now) && <Stale at={fetchedAt} />}
       <div class="gpa">
-        <div>
-          <span class="t-hm">{report.gpa.toFixed(2)}</span>
-          <span class="t-bm muted">GPA of 4.5</span>
-        </div>
-        <div>
-          <span class="t-hm">{report.creditsEarned}</span>
-          <span class="t-bm muted">credits earned</span>
-        </div>
-        <div>
-          <span class="t-hm">{graded.length}</span>
-          <span class="t-bm muted">courses graded</span>
-        </div>
+        <span class="t-hm">{report.gpa.toFixed(2)}</span>
+        <span class="t-bm muted tnum">GPA of 4.5 · {plainNumber(report.creditsEarned)} credits{report.yearOfStudy ? ` · year ${report.yearOfStudy}` : ''}</span>
       </div>
+      {categories.length > 0 && (
+        <p class="t-bm muted tnum" style={{ margin: '4px 0 0' }}>
+          {categories.map(([name, credits]) => `${name} ${plainNumber(credits)}`).join(' · ')}
+        </p>
+      )}
       <ScoresThisSemester snap={snap} now={now} />
       {[...terms.entries()]
         .sort((a, b) => b[0] - a[0])
         .map(([key, records]) => {
           // INS labels the term in progress "Course registration"; nothing in it is graded yet.
-          const inProgress = records.every((r) => !r.letter || r.letter === '-');
-          const credits = records.reduce((sum, r) => sum + r.credits, 0);
+          const inProgress = records.every((r) => !isGraded(r));
           return (
             <section class="section" key={key}>
               <h2>
                 {inProgress ? 'This semester' : records[0].term}
-                <span class="right muted">{inProgress ? 'Not graded yet' : `${credits} credits`}</span>
+                <span class="right muted tnum">{inProgress ? 'Not graded yet' : termLine(records, termGpa(records))}</span>
               </h2>
               <div class="rows">
                 {records.map((r) => (
                   <div key={r.code + r.name} class="row" style={{ alignItems: 'center' }}>
                     <div class="main">
-                      <span class="t-ts ellipsis">{r.name}</span>
-                      <span class="t-bm muted">{[r.code, `${r.credits} credits`, r.category].filter(Boolean).join(' · ')}</span>
+                      <span class="t-bl clamp2">{r.name}</span>
+                      <span class="t-bm muted tnum">{[creditWord(r.credits), r.category].filter(Boolean).join(' · ')}</span>
                     </div>
-                    <span class={`grade-letter ${r.letter === '-' ? 'muted' : ''}`}>{r.letter === '-' ? '–' : r.letter}</span>
+                    {isGraded(r) ? <span class="grade-letter">{r.letter}</span> : <span class="t-bm muted">Not graded</span>}
                   </div>
                 ))}
               </div>

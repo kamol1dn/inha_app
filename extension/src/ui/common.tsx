@@ -2,13 +2,16 @@
 // route, icons, and the status and error rows of DESIGN.md 3 and 7.
 
 import type { ComponentChildren } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
-import { describeError, type ErrorInfo } from '../core/errors.ts';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import type { ErrorInfo } from '../core/errors.ts';
 import type { Service } from '../core/models.ts';
 import { call } from '../core/rpc.ts';
 import { readSnapshot, watchSnapshot, type Snapshot } from '../core/store.ts';
 import { dayDate, updatedAt } from '../data/format.ts';
 import type { Status } from '../data/status.ts';
+import { errorLine, isOffline, offlineCovers, oldestFetch } from './derive.ts';
+
+export { Tally } from './tally.tsx';
 
 // ---- Data ----
 
@@ -96,6 +99,7 @@ const paths = {
   junk: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9A7.9 7.9 0 0 1 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1A7.9 7.9 0 0 1 20 12c0 4.42-3.58 8-8 8z',
   inbox: 'M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 12h-4c0 1.66-1.35 3-3 3s-3-1.34-3-3H5V5h14v10z',
   classic: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
+  offline: 'M19.35 10.04A7.49 7.49 0 0 0 12 4c-1.48 0-2.85.43-4.01 1.17l1.46 1.46A5.47 5.47 0 0 1 12 6a5.5 5.5 0 0 1 5.5 5.5v.5H19a3 3 0 0 1 3 3c0 1.13-.64 2.11-1.56 2.62l1.45 1.45A4.98 4.98 0 0 0 24 15c0-2.64-2.05-4.78-4.65-4.96zM3 5.27l2.75 2.74A7.48 7.48 0 0 0 0 15a6 6 0 0 0 6 6h11.73l2 2L21 21.73 4.27 5 3 5.27zM7.73 10l8 8H6a4 4 0 0 1 0-8h1.73z',
   person: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
 };
 
@@ -118,21 +122,6 @@ export const StatusLine = ({ status, children }: { status: Status; children: Com
   </span>
 );
 
-/** Absences as tally marks: used ones in the status color, the remainder faint. No limit: used only. */
-export function Tally({ used, limit, status }: { used: number; limit: number | null; status: Status | null }) {
-  const total = limit == null ? used : Math.max(used, limit);
-  const marks = [];
-  for (let i = 0; i < total; i++) {
-    if (i > 0 && i % 5 === 0) marks.push(<i key={`g${i}`} class="gap" />);
-    marks.push(<i key={i} class={i < used ? '' : 'faint'} />);
-  }
-  return (
-    <span class={`tally ${status ? `fg-${status}` : ''}`} aria-hidden="true">
-      {marks}
-    </span>
-  );
-}
-
 // ---- Stale and failed data (DESIGN.md 7) ----
 
 /** How old each source may get before it is marked stale. */
@@ -150,8 +139,8 @@ export const Stale = ({ at }: { at: number }) => (
   </span>
 );
 
-/** One error row for a failed service, with the next step (DESIGN.md 10). */
-export function ErrorRow({ service, error }: { service: Service; error: ErrorInfo }) {
+/** One error row for a failed service, with what is still on screen (`at`, when the cache has it) and the next step (DESIGN.md 10). */
+export function ErrorRow({ service, error, at }: { service: Service; error: ErrorInfo; at?: number | null }) {
   const [busy, setBusy] = useState(false);
   const signIn = error.name === 'LoginRequired';
   const setup = error.name === 'SetupNeeded';
@@ -167,7 +156,7 @@ export function ErrorRow({ service, error }: { service: Service; error: ErrorInf
   };
   return (
     <div class="error-row" role="alert">
-      <StatusLine status="danger">{setup ? error.message : describeError(error, service)}</StatusLine>
+      <StatusLine status="danger">{errorLine(error, service, at)}</StatusLine>
       <span class="grow" />
       {signIn || setup ? (
         <a class="btn" href={frame === 'popup' ? chrome.runtime.getURL('pages/app.html#/settings') : '#/settings'} target={frame === 'popup' ? '_blank' : undefined}>
@@ -175,9 +164,39 @@ export function ErrorRow({ service, error }: { service: Service; error: ErrorInf
         </a>
       ) : (
         <button class="btn" disabled={busy} onClick={retry}>
-          {cert ? 'Open INS' : 'Try again'}
+          {cert ? 'Open INS' : 'Retry'}
         </button>
       )}
+    </div>
+  );
+}
+
+/** A service's error row, unless it is the network failure the offline row already reports. */
+export function SourceError({ snap, service, at }: { snap: Snapshot; service: Service; at?: number | null }) {
+  const error = snap.state[service]?.error;
+  if (!error || offlineCovers(snap, error)) return null;
+  return <ErrorRow service={service} error={error} at={at} />;
+}
+
+/** One row for the connection, in place of the services' own network rows (DESIGN.md 8, Offline). */
+export function OfflineRow({ snap }: { snap: Snapshot }) {
+  const [busy, setBusy] = useState(false);
+  if (!isOffline(snap)) return null;
+  const at = oldestFetch(snap);
+  const retry = async () => {
+    setBusy(true);
+    try {
+      await call('sync', 'all', true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="error-row offline" role="status">
+      <span class="offline-icon"><Icon name="offline" /></span>
+      <span>{at == null ? 'Offline.' : `Offline. Showing data from ${updatedAt(at)}.`}</span>
+      <span class="grow" />
+      <button class="btn" disabled={busy} onClick={retry}>Retry</button>
     </div>
   );
 }
@@ -190,15 +209,40 @@ export const Skeleton = ({ lines = 3 }: { lines?: number }) => (
   </div>
 );
 
+const focusables = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])';
+
+/** A modal sheet: focus moves in on opening, Tab stays inside, and focus goes back to what opened it. */
 export function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ComponentChildren }) {
+  const box = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const el = box.current!;
+    // Inside eClass this all lives in a shadow root, where document.activeElement is only the host.
+    const root = el.getRootNode() as Document | ShadowRoot;
+    const opener = root.activeElement as HTMLElement | null;
+    const inside = () => [...el.querySelectorAll<HTMLElement>(focusables)];
+    (inside()[0] ?? el).focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close.current();
+      if (e.key !== 'Tab') return;
+      const all = inside();
+      const at = root.activeElement;
+      const to = !all.length ? el : !el.contains(at) ? all[0] : e.shiftKey && at === all[0] ? all[all.length - 1] : !e.shiftKey && at === all[all.length - 1] ? all[0] : null;
+      if (to) {
+        e.preventDefault();
+        to.focus();
+      }
+    };
     addEventListener('keydown', key);
-    return () => removeEventListener('keydown', key);
-  }, [onClose]);
+    return () => {
+      removeEventListener('keydown', key);
+      opener?.focus?.();
+    };
+  }, []);
   return (
     <div class="scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div class="dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <div class="dialog" ref={box} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
         <h2>{title}</h2>
         {children}
       </div>

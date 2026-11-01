@@ -10,6 +10,8 @@ import type { MailMessage, OutgoingMail } from '../src/core/models.ts';
 import { EwsClient, basicAuth, loginCandidates } from '../src/services/mail/ews.ts';
 import {
   EwsError,
+  composeError,
+  createAttachmentEnvelope,
   createItemEnvelope,
   draftChanges,
   ewsFault,
@@ -25,6 +27,7 @@ import {
   getItemEnvelope,
   moveItemEnvelope,
   parseAttachment,
+  parseCreateAttachment,
   parseFindItem,
   parseFolderCounts,
   parseGetFolder,
@@ -709,6 +712,12 @@ function fakeResponse(url: string, status: number, body: string): HttpResponse {
   };
 }
 
+test('findLinks: a stray % in a mailto link leaves it as written', () => {
+  const [link] = findLinks('Write to <mailto:100%@inha.example>');
+  assert.equal(link.url, 'mailto:100%@inha.example');
+  assert.equal(link.label, '100%@inha.example');
+});
+
 describe('EwsClient', () => {
   const password = 'pa:ss&wörd';
   const login = 'INHA\\U2610999'; // what a saved bare ID is sent as
@@ -809,12 +818,162 @@ describe('EwsClient', () => {
     assert.equal(sent.length, 2);
   });
 
-  test('a 500 that http.ts turned into a NetworkError is retried without Preview too', async () => {
-    const { client, sent } = make((r) =>
-      r.body.includes('item:Preview') ? new NetworkError('mail.inha.uz answered 500', 500) : [200, routeOk(r)],
-    );
-    assert.equal((await client.folder('inbox')).length, 5);
+  test('a 500 that is no SOAP fault says nothing about Preview, and is a server error', async () => {
+    let up = false;
+    const { client, sent } = make((r) => (up ? [200, routeOk(r)] : [500, '<html><body>IIS</body></html>']));
+    await assert.rejects(client.folder('inbox'), (e: unknown) => e instanceof NetworkError && e.status === 500);
+    assert.equal(sent.length, 1);
+    up = true;
+    await client.folder('inbox');
+    assert.ok(sent[1].body.includes('item:Preview'), 'Preview is still asked for');
+  });
+
+  test('a SOAP fault on HTTP 500 reaches the caller with its code', async () => {
+    const { client, sent } = make(() => [500, schemaFault]);
+    await assert.rejects(client.message(ids[0]), throwsCode('ErrorSchemaValidation'));
+    assert.equal(sent[0].req.allow5xx, true);
+  });
+
+  test('calls at once with a wrong password cost one logon, and later ones none', async () => {
+    const { client, sent } = make(() => [401, '']);
+    const results = await Promise.allSettled([client.unreadCount(), client.folderCounts(), client.folder('inbox')]);
+    assert.ok(results.every((r) => r.status === 'rejected' && r.reason instanceof LoginRequired && r.reason.rejected));
+    assert.equal(sent.length, 1);
+    await assert.rejects(client.unreadCount(), LoginRequired);
+    assert.equal(sent.length, 1);
+    client.forgetRejected();
+    await assert.rejects(client.unreadCount(), LoginRequired);
     assert.equal(sent.length, 2);
+  });
+
+  test('a good login is answered once, then calls run side by side', async () => {
+    const { client, sent } = make((r) => [200, routeOk(r)]);
+    await Promise.all([client.unreadCount(), client.folder('inbox'), client.unreadCount()]);
+    assert.equal(sent.length, 3);
+  });
+
+  test('a call that fails on the network hands the try to the next', async () => {
+    let down = true;
+    const { client, sent } = make((r) => {
+      if (!down) return [200, routeOk(r)];
+      down = false;
+      return new NetworkError('mail.inha.uz unreachable');
+    });
+    const [a, b] = await Promise.allSettled([client.unreadCount(), client.unreadCount()]);
+    assert.equal(a.status, 'rejected');
+    assert.equal(b.status, 'fulfilled');
+    assert.equal(sent.length, 2);
+  });
+
+  test('a new password is tried, and the refused one is reported once', async () => {
+    let password = 'old';
+    const told: string[] = [];
+    let posts = 0;
+    const client = new EwsClient(
+      async () => ({ username: 'U2610999', password }),
+      async (url) => {
+        posts++;
+        return fakeResponse(url, password === 'new' ? 200 : 401, fixture('ews_getfolder.xml'));
+      },
+      undefined,
+      (_, login) => void told.push(login.password),
+    );
+    await assert.rejects(client.unreadCount(), LoginRequired);
+    await assert.rejects(client.unreadCount(), LoginRequired);
+    assert.deepEqual(told, ['old']);
+    assert.equal(posts, 1);
+    password = 'new';
+    assert.equal(await client.unreadCount(), 12);
+    assert.equal(posts, 2);
+  });
+
+  test('search: QueryString on the page asked for, escaped; a plain folder sends none', async () => {
+    const { client, sent } = make((r) => [200, routeOk(r)]);
+    assert.equal((await client.search('sent', ' drop & retake ', 30, 30)).length, 5);
+    assert.ok(sent[0].body.includes('<m:QueryString>drop &amp; retake</m:QueryString>'));
+    assert.ok(sent[0].body.includes('<t:DistinguishedFolderId Id="sentitems"/>'));
+    assert.ok(sent[0].body.includes('Offset="30"'));
+    const order = readSoap(sent[0].body).find('FindItem')!.elements.map((e) => e.name);
+    assert.deepEqual(order.slice(-2), ['ParentFolderIds', 'QueryString'], "the schema's order");
+    await client.folder('inbox');
+    assert.ok(!sent[1].body.includes('QueryString'));
+  });
+
+  describe('sending files', () => {
+    const file = { name: 'note <1>.pdf', contentType: 'application/pdf', base64: 'QUJD' };
+    const created = response('CreateItem', '<m:ResponseCode>NoError</m:ResponseCode><m:Items><t:Message><t:ItemId Id="d1" ChangeKey="k1"/></t:Message></m:Items>');
+    const attached = (n: number) =>
+      response('CreateAttachment', `<m:ResponseCode>NoError</m:ResponseCode><m:Attachments><t:FileAttachment><t:AttachmentId Id="a${n}" RootItemId="d1" RootItemChangeKey="k${n + 1}"/></t:FileAttachment></m:Attachments>`);
+    const sentOk = response('SendItem', '<m:ResponseCode>NoError</m:ResponseCode>');
+    const route = () => {
+      let n = 0;
+      return (r: Sent): Reply => {
+        if (r.body.includes('<m:CreateItem')) return [200, created];
+        if (r.body.includes('<m:CreateAttachment')) return [200, attached(++n)];
+        if (r.body.includes('<m:UpdateItem')) return [200, response('UpdateItem', '<m:ResponseCode>NoError</m:ResponseCode><m:Items><t:Message><t:ItemId Id="d1" ChangeKey="k9"/></t:Message></m:Items>')];
+        return [200, sentOk];
+      };
+    };
+
+    test('CreateAttachment: parent at its change key, escaped name, content as given', () => {
+      const parsed = readSoap(createAttachmentEnvelope({ id: 'd1', changeKey: 'k1' }, file)).find('CreateAttachment')!;
+      assert.deepEqual(parsed.child('ParentItemId')!.attributes, { Id: 'd1', ChangeKey: 'k1' });
+      const a = parsed.find('FileAttachment')!;
+      assert.deepEqual([a.child('Name')!.text, a.child('ContentType')!.text, a.child('Content')!.text], ['note <1>.pdf', 'application/pdf', 'QUJD']);
+    });
+
+    test('parseCreateAttachment reads the new change key, and a refusal is an EwsError', () => {
+      assert.deepEqual(parseCreateAttachment(attached(1)), { id: 'd1', changeKey: 'k2' });
+      assert.throws(
+        () => parseCreateAttachment(response('CreateAttachment', '<m:ResponseCode>ErrorAttachmentSizeLimitExceeded</m:ResponseCode>', 'Error')),
+        throwsCode('ErrorAttachmentSizeLimitExceeded'),
+      );
+    });
+
+    test('a new message is saved, gets each file in turn, then goes out at the last change key', async () => {
+      const { client, sent } = make(route());
+      await client.send({ kind: 'fresh', to: ['a@inha.example'], subject: 'Note', body: 'Hi', attachments: [file, { ...file, name: 'b.pdf' }] });
+      assert.deepEqual(sent.map((r) => /<m:(CreateItem|CreateAttachment|SendItem)/.exec(r.body)![1]), ['CreateItem', 'CreateAttachment', 'CreateAttachment', 'SendItem']);
+      assert.ok(sent[0].body.includes('MessageDisposition="SaveOnly"'));
+      assert.deepEqual(readSoap(sent[2].body).find('ParentItemId')!.attributes, { Id: 'd1', ChangeKey: 'k2' });
+      assert.deepEqual(readSoap(sent[3].body).find('SendItem')!.find('ItemId')!.attributes, { Id: 'd1', ChangeKey: 'k3' });
+    });
+
+    test('without files a message still goes out in one request', async () => {
+      const { client, sent } = make(() => [200, response('CreateItem', '<m:ResponseCode>NoError</m:ResponseCode>')]);
+      await client.send({ kind: 'fresh', to: ['a@inha.example'], attachments: [] });
+      assert.equal(sent.length, 1);
+      assert.ok(sent[0].body.includes('MessageDisposition="SendAndSaveCopy"'));
+    });
+
+    test('a file Exchange refuses stops the send, and what was written stays in Drafts', async () => {
+      const { client, sent } = make((r) =>
+        r.body.includes('<m:CreateItem') ? [200, created] : [200, response('CreateAttachment', '<m:ResponseCode>ErrorAttachmentSizeLimitExceeded</m:ResponseCode>', 'Error')],
+      );
+      await assert.rejects(client.send({ kind: 'fresh', to: ['a@inha.example'], attachments: [file] }), throwsCode('ErrorAttachmentSizeLimitExceeded'));
+      assert.equal(sent.length, 2);
+    });
+
+    test('a saved draft gets its changes, then the files, then goes out', async () => {
+      const { client, sent } = make(route());
+      await client.send({ kind: 'draft', ref: { id: 'd1', changeKey: 'k0' }, subject: 'Note', attachments: [file] });
+      assert.deepEqual(readSoap(sent[1].body).find('ParentItemId')!.attributes, { Id: 'd1', ChangeKey: 'k9' });
+      assert.deepEqual(readSoap(sent[2].body).find('SendItem')!.find('ItemId')!.attributes, { Id: 'd1', ChangeKey: 'k2' });
+    });
+
+    test('saving keeps files on the draft, new or saved', async () => {
+      const { client, sent } = make(route());
+      await client.saveDraft({ kind: 'fresh', subject: 'Note', attachments: [file] });
+      assert.deepEqual(sent.map((r) => /<m:(CreateItem|CreateAttachment|SendItem)/.exec(r.body)![1]), ['CreateItem', 'CreateAttachment']);
+      await client.saveDraft({ kind: 'draft', ref: { id: 'd1', changeKey: 'k5' }, attachments: [file] });
+      assert.deepEqual(readSoap(sent[2].body).find('ParentItemId')!.attributes, { Id: 'd1', ChangeKey: 'k5' });
+    });
+
+    test('composeError says what the student can act on', () => {
+      assert.equal(composeError(new EwsError('ErrorMessageSizeExceeded'), true), 'Mail refused the attachment: it is too big.');
+      assert.equal(composeError(new NetworkError('x', 0), true), "Couldn't reach Mail. Check the connection.");
+      assert.equal(composeError(new NetworkError('x', 503), true), "Mail didn't send it. Try again.");
+    });
   });
 
   test('a retry that fails too surfaces the error, without looping', async () => {

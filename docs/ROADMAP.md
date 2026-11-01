@@ -32,7 +32,8 @@ release build). What is left from it:
 - **Not exercised live:** signing out (it deletes the saved login on the emulator; unit
   tests cover it), a rejected password (lockout risk), and a submitted assignment (none
   this term; the parser follows Moodle's markup and was checked on a finished quiz).
-- **Attachments** are listed with name and size but don't open yet.
+- **Attachments** open in an app on the phone and can be added when writing, and mail can be
+  searched. All three are tested only against fakes; they haven't run against the live server.
 - **Waiting on the student:** installing the phone APK (sent as
   `app-arm64-v8a-release.apk`) and signing in on the phone; real absence limits per course
   (Settings > Absence limits); choosing a Phase B direction.
@@ -224,7 +225,7 @@ Calls made without the student, to review:
 - **UK programme sittings go only to UK groups** (AI, CS, DS, BM, IT); an ICE or CSE student
   never sees `(UK) Operating System`.
 
-Next: an Exams reminder channel, and the widgets and AppFunctions showing the exams.
+The Exams reminder channel is in. Next: the widgets and AppFunctions showing the exams.
 
 ## How to work on this
 

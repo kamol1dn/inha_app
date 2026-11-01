@@ -2,15 +2,16 @@
 // mail. On a wide screen the rail is the left column and the rest the right.
 
 import type { ComponentChildren } from 'preact';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import type { CourseAttendance, Deadline } from '../../core/models.ts';
 import type { Snapshot } from '../../core/store.ts';
-import { roomChoice, periodName, type MyExam } from '../../data/exams.ts';
-import { clock, dayHeader, duration, HOUR, pastWhen, relative, rowTitle, updatedAt } from '../../data/format.ts';
-import { AbsenceState, courseFor, isDone, isDue, needsAttention, troubleOrder } from '../../data/status.ts';
+import { examLine, examRoom, roomChoice, periodName, sittingsLine, type ExamPeriod, type MyExam } from '../../data/exams.ts';
+import { clock, dayHeader, dayKey, duration, HOUR, pastWhen, relative, rowTitle, updatedAt, weekdayShort, isoWeekday } from '../../data/format.ts';
+import { AbsenceState, courseFor, isDue, needsAttention } from '../../data/status.ts';
 import { itemUrl } from '../../services/eclass/links.ts';
-import { eclassTarget, ErrorRow, isStale, Skeleton, Stale, StatusLine } from '../common.tsx';
-import { classesOn, examMatch, examsOn, type DayClass } from '../derive.ts';
-import { AbsenceRow, deadlineLine, lessonLine } from '../rows.tsx';
+import { eclassTarget, isStale, OfflineRow, Skeleton, SourceError, Stale, StatusLine } from '../common.tsx';
+import { attendanceSummary, classesOn, deadlineLine, examMatch, examSection, examsOn, inTrouble, nothingDue, oldestFetch, railLaterClasses, type DayClass } from '../derive.ts';
+import { AbsenceRow, lessonLine } from '../rows.tsx';
 
 type Node = 'now' | 'class' | 'class past' | 'class live' | 'due' | 'due warning' | 'due danger' | null;
 
@@ -26,15 +27,25 @@ interface RailItem {
   body: ComponentChildren;
 }
 
-function troubleFor(subject: string, att: CourseAttendance[], limits: Record<string, number>): AbsenceState | null {
-  const c = courseFor(subject, att);
-  if (!c) return null;
-  const s = AbsenceState.of(c, limits);
-  return s.trouble ? s : null;
+/** A class opens its course; with no course in eClass, Schedule on its day. */
+function classHref(c: DayClass, att: CourseAttendance[]): string {
+  const course = courseFor(c.lesson.subject, att);
+  return course ? `#/courses/${course.course.id}` : `#/schedule/${dayKey(c.start)}`;
 }
 
-function classBody(c: DayClass, att: CourseAttendance[], limits: Record<string, number>) {
-  const trouble = troubleFor(c.lesson.subject, att, limits);
+/** Hands out each course's attendance warning once: it goes on the course's first class on the rail. */
+function firstWarning(att: CourseAttendance[], limits: Record<string, number>) {
+  const warned = new Set<number>();
+  return (subject: string): AbsenceState | null => {
+    const c = courseFor(subject, att);
+    const s = c ? inTrouble(c, limits) : null;
+    if (!c || !s || warned.has(c.course.id)) return null;
+    warned.add(c.course.id);
+    return s;
+  };
+}
+
+function classBody(c: DayClass, trouble: AbsenceState | null) {
   return (
     <>
       <span class="t-tm ellipsis">{c.lesson.subject}</span>
@@ -48,8 +59,8 @@ function classBody(c: DayClass, att: CourseAttendance[], limits: Record<string, 
   );
 }
 
-function dueItem(d: Deadline, att: CourseAttendance[], now: number): RailItem {
-  const { text, status } = deadlineLine(d, att, now);
+function dueItem(d: Deadline, att: CourseAttendance[], now: number, dismissed: readonly string[]): RailItem {
+  const { text, status } = deadlineLine(d, att, now, dismissed);
   const plain = !status || status === 'ok';
   return {
     key: `due${d.moduleId ?? d.title}${d.end}`,
@@ -75,25 +86,53 @@ function dueItem(d: Deadline, att: CourseAttendance[], now: number): RailItem {
   };
 }
 
-function examBody(e: MyExam, periodLabel: string) {
+function examBody(e: MyExam, period: ExamPeriod | null) {
   return (
     <>
       <span class="t-tm ellipsis">{e.course.eclass?.name ?? e.course.name}</span>
-      <span class="t-bm muted">
-        {periodLabel} · {e.room ?? roomChoice(e.exam.rooms)}
-      </span>
+      <span class="t-bm muted">{period ? examLine(e, period) : examRoom(e) ?? roomChoice(e.exam.rooms)}</span>
+      {e.sittings > 1 && <StatusLine status="info">{sittingsLine(e)}</StatusLine>}
     </>
   );
 }
 
-/** Builds the rail: overdue, now and the hero, the rest of today, then the next days up to 72 h. */
-function buildRail(snap: Snapshot, now: number): { items: RailItem[]; hero: ComponentChildren | null; anyDue: boolean } {
+/**
+ * The room, the largest text in the app: on one line, scaled down until it fits
+ * (DESIGN.md 4). It is measured rather than set by width, so it also fits the
+ * narrower content area inside eClass.
+ */
+function RoomLine({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current!;
+    const fit = () => {
+      el.style.fontSize = '';
+      const full = parseFloat(getComputedStyle(el).fontSize);
+      if (el.scrollWidth > el.clientWidth && el.clientWidth > 0) el.style.fontSize = `${Math.floor((full * el.clientWidth) / el.scrollWidth)}px`;
+    };
+    fit();
+    const seen = new ResizeObserver(fit);
+    seen.observe(el);
+    // The bundled face can arrive after the first measure.
+    void document.fonts?.ready.then(fit);
+    return () => seen.disconnect();
+  }, [text]);
+  return <span ref={ref} class="t-display room-line">{text}</span>;
+}
+
+/** Builds the rail: overdue, now and the hero, the rest of today, then the next days. */
+function buildRail(snap: Snapshot, now: number): { items: RailItem[]; anyDue: boolean } {
   const att = snap.cache.attendance?.value ?? [];
   const lessons = snap.cache.lessons?.value ?? [];
+  // No timetable at all (first run, EduPage failing, no group chosen) says nothing about classes.
+  const timetableKnown = !!snap.cache.lessons;
   const limits = snap.settings.absenceLimits;
+  const dismissed = snap.settings.dismissed;
   const deadlines = (snap.cache.deadlines?.value ?? []).filter(isDue);
   const match = examMatch(snap, now);
-  const attention = needsAttention(deadlines, att, now);
+  const period = match?.period ?? null;
+  const attention = needsAttention(deadlines, att, now, dismissed);
+  const warning = firstWarning(att, limits);
   const today = new Date(now);
   const items: RailItem[] = [];
 
@@ -101,7 +140,7 @@ function buildRail(snap: Snapshot, now: number): { items: RailItem[]; hero: Comp
   const overdue = attention.filter((d) => d.end < now);
   if (overdue.length) {
     items.push({ key: 'overdue', node: null, day: true, body: <StatusLine status="danger">Overdue</StatusLine> });
-    overdue.forEach((d) => items.push(dueItem(d, att, now)));
+    overdue.forEach((d) => items.push(dueItem(d, att, now, dismissed)));
   }
 
   // Today's classes, or exams in an exam week.
@@ -114,41 +153,37 @@ function buildRail(snap: Snapshot, now: number): { items: RailItem[]; hero: Comp
   const live = slots.find((s) => s.start <= now && now < s.end);
   const next = live ?? slots.find((s) => s.start > now);
 
-  let hero: ComponentChildren | null = null;
+  if (!live) items.push({ key: 'now', node: 'now', time: clock(now), body: <span class="nowline">Now</span> });
   if (next) {
     const label = live
       ? `Now · until ${clock(next.end)} · ${duration(next.end - now)} left`
       : `Next · ${relative(next.start, now)}`;
-    const room = next.cls ? next.cls.lesson.room || 'Room not set' : next.exam!.room ?? 'Room not set';
+    const room = next.cls ? next.cls.lesson.room || 'Room not set' : examRoom(next.exam!) ?? 'Room not set';
     const name = next.cls ? next.cls.lesson.subject : next.exam!.course.eclass?.name ?? next.exam!.course.name;
     const detail = next.cls
       ? [next.cls.lesson.kind, next.cls.lesson.teacher].filter(Boolean).join(' · ')
-      : `${match ? periodName(match.period) : 'Exam'} · ${duration(next.exam!.exam.end - next.exam!.exam.start)}${next.exam!.room ? '' : ` · ${roomChoice(next.exam!.exam.rooms)}`}`;
-    const trouble = next.cls ? troubleFor(next.cls.lesson.subject, att, limits) : null;
-    hero = (
-      <>
-        <span class="t-ll fg-primary">{label}</span>
-        <span class="t-display" style={{ margin: '4px 0' }}>{room}</span>
-        <span class="t-tl">{name}</span>
-        {detail && <span class="t-bm muted">{detail}</span>}
-        {trouble && (
-          <StatusLine status={trouble.status!}>
-            {trouble.line} · {trouble.tag}
-          </StatusLine>
-        )}
-      </>
-    );
-  }
-
-  if (!live) items.push({ key: 'now', node: 'now', time: clock(now), body: <span class="nowline">Now</span> });
-  if (next) {
+      : `${period ? periodName(period) : 'Exam'} · ${duration(next.exam!.exam.end - next.exam!.exam.start)}${examRoom(next.exam!) ? '' : ` · ${roomChoice(next.exam!.exam.rooms)}`}`;
+    const trouble = next.cls ? warning(next.cls.lesson.subject) : null;
     items.push({
       key: 'hero',
       node: live ? 'class live' : 'class',
       time: clock(next.start),
       end: clock(next.end),
-      href: next.exam ? '#/exams' : '#/schedule',
-      body: hero,
+      href: next.exam ? '#/exams' : `#/schedule/${dayKey(next.start)}`,
+      body: (
+        <>
+          <span class="t-ll fg-primary">{label}</span>
+          <RoomLine text={room} />
+          <span class="t-tl">{name}</span>
+          {detail && <span class="t-bm muted">{detail}</span>}
+          {trouble && (
+            <StatusLine status={trouble.status!}>
+              {trouble.line} · {trouble.tag}
+            </StatusLine>
+          )}
+          {next.exam && next.exam.sittings > 1 && <StatusLine status="info">{sittingsLine(next.exam)}</StatusLine>}
+        </>
+      ),
     });
   }
 
@@ -157,45 +192,36 @@ function buildRail(snap: Snapshot, now: number): { items: RailItem[]; hero: Comp
   const later: { at: number; item: RailItem }[] = [];
   for (const s of slots) {
     if (s === next || s.end <= now) continue;
-    if (s.cls) later.push({ at: s.start, item: { key: `c${s.start}`, node: 'class', time: clock(s.start), end: clock(s.end), href: '#/schedule', body: classBody(s.cls, att, limits) } });
-    else later.push({ at: s.start, item: { key: `e${s.start}`, node: 'class', time: clock(s.start), end: clock(s.end), href: '#/exams', body: examBody(s.exam!, match ? periodName(match.period) : 'Exam') } });
+    if (s.cls) later.push({ at: s.start, item: { key: `c${s.start}`, node: 'class', time: clock(s.start), end: clock(s.end), href: classHref(s.cls, att), body: classBody(s.cls, warning(s.cls.lesson.subject)) } });
+    else later.push({ at: s.start, item: { key: `e${s.start}`, node: 'class', time: clock(s.start), end: clock(s.end), href: '#/exams', body: examBody(s.exam!, period) } });
   }
-  attention.filter((d) => d.end >= now && d.end < endOfToday).forEach((d) => later.push({ at: d.end, item: dueItem(d, att, now) }));
+  attention.filter((d) => d.end >= now && d.end < endOfToday).forEach((d) => later.push({ at: d.end, item: dueItem(d, att, now, dismissed) }));
   later.sort((a, b) => a.at - b.at).forEach((x) => items.push(x.item));
 
   const lastEnd = slots.length ? Math.max(...slots.map((s) => s.end)) : null;
-  if (!slots.length) items.push({ key: 'noclass', node: null, body: <span class="t-bm muted">No classes today</span> });
-  else if (lastEnd! > now) items.push({ key: 'free', node: null, time: clock(lastEnd!), body: <span class="t-bm muted">Free for the rest of the day</span> });
+  if (!slots.length) {
+    if (timetableKnown) items.push({ key: 'noclass', node: null, body: <span class="t-bm muted">No classes today</span> });
+  } else if (lastEnd! > now) items.push({ key: 'free', node: null, time: clock(lastEnd!), body: <span class="t-bm muted">Free for the rest of the day</span> });
   else if (!next) items.push({ key: 'nomore', node: null, body: <span class="t-bm muted">No more classes today</span> });
 
-  // The next days within 72 h: what is due, the first class of the next day
-  // with classes, the next class of every course in trouble, and exams.
-  let firstClassShown = false;
-  const troubleShown = new Set<string>();
-  for (let i = 1; i <= 3; i++) {
-    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
-    const dayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i + 1).getTime();
-    const dayItems: { at: number; item: RailItem }[] = [];
-    const dayClasses = classesOn(day, lessons);
-    dayClasses.forEach((c, idx) => {
-      const t = troubleFor(c.lesson.subject, att, limits);
-      const show = (!firstClassShown && idx === 0) || (t && !troubleShown.has(c.lesson.subject));
-      if (!show) return;
-      if (t) troubleShown.add(c.lesson.subject);
-      dayItems.push({ at: c.start, item: { key: `c${c.start}`, node: 'class', time: clock(c.start), end: clock(c.end), href: '#/schedule', body: classBody(c, att, limits) } });
-    });
-    if (dayClasses.length) firstClassShown = true;
-    examsOn(day, match).forEach((e) => {
-      if (e.exam.start - now > 72 * HOUR) return;
-      dayItems.push({ at: e.exam.start, item: { key: `e${e.exam.start}${e.exam.cell}`, node: 'class', time: clock(e.exam.start), end: clock(e.exam.end), href: '#/exams', body: examBody(e, match ? periodName(match.period) : 'Exam') } });
-    });
-    attention.filter((d) => d.end >= dayEnd - 24 * HOUR && d.end < dayEnd && d.end >= endOfToday).forEach((d) => dayItems.push({ at: d.end, item: dueItem(d, att, now) }));
-    if (!dayItems.length) continue;
-    items.push({ key: `day${i}`, node: null, day: true, body: <span class="t-tm">{dayHeader(day, today)}</span> });
-    dayItems.sort((a, b) => a.at - b.at).forEach((x) => items.push(x.item));
+  // The next days: what is due and exams within 72 h, the first class of the
+  // next day with classes, and the next class of every course in trouble.
+  const days = new Map<string, { at: number; item: RailItem }[]>();
+  const put = (at: number, item: RailItem) => days.set(dayKey(at), [...(days.get(dayKey(at)) ?? []), { at, item }]);
+  for (const c of railLaterClasses(lessons, att, limits, now)) {
+    put(c.start, { key: `c${c.start}`, node: 'class', time: clock(c.start), end: clock(c.end), href: classHref(c, att), body: classBody(c, warning(c.lesson.subject)) });
+  }
+  for (const e of match?.exams ?? []) {
+    if (e.exam.start < endOfToday || e.exam.start - now > 72 * HOUR) continue;
+    put(e.exam.start, { key: `e${e.exam.start}${e.exam.cell}`, node: 'class', time: clock(e.exam.start), end: clock(e.exam.end), href: '#/exams', body: examBody(e, period) });
+  }
+  attention.filter((d) => d.end >= endOfToday).forEach((d) => put(d.end, dueItem(d, att, now, dismissed)));
+  for (const [key, list] of [...days.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    items.push({ key: `day${key}`, node: null, day: true, body: <span class="t-tm">{dayHeader(list[0].at, today)}</span> });
+    list.sort((a, b) => a.at - b.at).forEach((x) => items.push(x.item));
   }
 
-  return { items, hero, anyDue: attention.length > 0 };
+  return { items, anyDue: attention.length > 0 };
 }
 
 function Rail({ items }: { items: RailItem[] }) {
@@ -230,11 +256,34 @@ function Rail({ items }: { items: RailItem[] }) {
   );
 }
 
-/** "Nothing due in the next 3 days. Next: Lab 6, Multimedia Computing, Mon 3 Nov 23:59." */
-function nothingDue(deadlines: Deadline[], att: CourseAttendance[], now: number): string {
-  const next = deadlines.filter((d) => isDue(d) && d.end > now && !isDone(d, att)).sort((a, b) => a.end - b.end)[0];
-  if (!next) return deadlines.length ? 'Nothing due in the next 3 days.' : 'No deadlines in eClass.';
-  return `Nothing due in the next 3 days. Next: ${rowTitle(next.title)}, ${next.courseName}, ${relative(next.end, now)}.`;
+/** The exam week at a glance, while some of the student's exams lie beyond the rail's 72 h. */
+function ExamsSection({ snap, now }: { snap: Snapshot; now: number }) {
+  const match = examMatch(snap, now);
+  const left = examSection(snap, match, now);
+  if (!match || !left) return null;
+  const name = periodName(match.period);
+  return (
+    <section class="section">
+      <h2>{name} exams</h2>
+      {!left.length && <p class="t-bm" style={{ margin: '4px 0' }}>None of your courses is on the {name.toLowerCase()} timetable.</p>}
+      <div class="rows">
+        {left.map((e) => {
+          const at = new Date(e.exam.start);
+          return (
+            <a key={e.exam.cell + e.exam.slot} class="row" href="#/exams">
+              <div class="t-num tnum row-time">
+                <span>{clock(at)}</span>
+                <span class="t-num-s muted">{weekdayShort(isoWeekday(at))} {at.getDate()}</span>
+              </div>
+              <div class="main">{examBody(e, match.period)}</div>
+            </a>
+          );
+        })}
+      </div>
+      {left.some((e) => !examRoom(e)) && <StatusLine status="info">Rooms aren't included, for your privacy: choose an exam to set yours.</StatusLine>}
+      <div><a class="btn" href="#/exams" style={{ marginLeft: '-12px' }}>Show exam week</a></div>
+    </section>
+  );
 }
 
 export function Today({ snap, now }: { snap: Snapshot; now: number }) {
@@ -247,36 +296,41 @@ export function Today({ snap, now }: { snap: Snapshot; now: number }) {
   const timetableErr = state.edupage?.error;
   const loading = !cache.attendance && !cache.lessons && (state.eclass?.busy || state.edupage?.busy || !state.eclass);
 
-  const ordered = troubleOrder(att, settings.absenceLimits, lessons);
-  const trouble = ordered.filter((c) => AbsenceState.of(c, settings.absenceLimits).trouble);
-  const rest = att.length - trouble.length;
-  const noLimits = att.filter((c) => settings.absenceLimits[c.course.id] == null);
+  const summary = attendanceSummary(att, settings.absenceLimits, lessons);
 
   const inbox = (cache.inbox?.value ?? []).filter((m) => m.unread);
   const unread = cache.mailUnread?.value ?? inbox.length;
-  const notes = (cache.notifications?.value ?? []).filter((n) => !n.read).slice(0, 4);
-  const updated = Math.max(...(['lessons', 'deadlines', 'attendance', 'inbox'] as const).map((k) => cache[k]?.fetchedAt ?? 0));
+  const notices = cache.notifications?.value ?? [];
+  const notes = notices.filter((n) => !n.read).slice(0, 4);
+  const updated = oldestFetch(snap);
   const busy = Object.values(state).some((s) => s?.busy);
+  const timetableOld = !timetableErr && cache.lessons && isStale(snap, 'edupage', cache.lessons.fetchedAt, now);
+  const eclassOld = !eclassErr && cache.deadlines && isStale(snap, 'eclass', cache.deadlines.fetchedAt, now);
 
   return (
     <div class="cols">
       <div>
-        {timetableErr && !cache.lessons && <ErrorRow service="edupage" error={timetableErr} />}
-        {eclassErr && <ErrorRow service="eclass" error={eclassErr} />}
-        {cache.lessons && isStale(snap, 'edupage', cache.lessons.fetchedAt, now) && (
-          <div style={{ padding: '8px 0' }}>
-            <span class="stale">Timetable as of {pastWhen(cache.lessons.fetchedAt)}</span>
+        <OfflineRow snap={snap} />
+        <SourceError snap={snap} service="edupage" at={cache.lessons?.fetchedAt} />
+        <SourceError snap={snap} service="eclass" at={cache.deadlines?.fetchedAt} />
+        {(timetableOld || eclassOld) && (
+          <div style={{ padding: '8px 0', display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+            {timetableOld && <span class="stale">Timetable as of {pastWhen(cache.lessons!.fetchedAt)}</span>}
+            {eclassOld && <span class="stale">eClass as of {pastWhen(cache.deadlines!.fetchedAt)}</span>}
           </div>
         )}
         {loading ? <Skeleton lines={5} /> : <Rail items={items} />}
-        {!loading && !anyDue && cache.deadlines && (
+        {/* Never an all-clear a failed refresh can't back up. */}
+        {!loading && !anyDue && cache.deadlines && !eclassErr && (
           <div style={{ padding: '12px 0 0 92px' }}>
-            <StatusLine status="ok">{nothingDue(deadlines, att, now)}</StatusLine>
+            <StatusLine status="ok">{nothingDue(deadlines, att, now, settings.dismissed)}</StatusLine>
           </div>
         )}
       </div>
 
       <div>
+        <ExamsSection snap={snap} now={now} />
+
         <section class="section">
           <h2>
             <a href="#/courses" style={{ color: 'inherit' }}>Attendance</a>
@@ -287,23 +341,14 @@ export function Today({ snap, now }: { snap: Snapshot; now: number }) {
           ) : (
             <>
               <div class="rows">
-                {trouble.map((c) => (
-                  <AbsenceRow key={c.course.id} c={c} limits={settings.absenceLimits} href={`#/courses/${c.course.id}`} />
+                {summary.trouble.map((c) => (
+                  <AbsenceRow key={c.course.id} c={c} limits={settings.absenceLimits} lessons={lessons} now={now} href={`#/courses/${c.course.id}`} />
                 ))}
               </div>
-              <div style={{ padding: '8px 0' }}>
-                {noLimits.length === att.length && att.length ? (
-                  <StatusLine status="info">
-                    No limit set:{' '}
-                    {att
-                      .map((c) => `${c.course.name} ${c.classes.filter((e) => e.mark === 'absent').length}`)
-                      .join(' · ')}
-                  </StatusLine>
-                ) : (
-                  <StatusLine status="ok">
-                    {trouble.length ? `The other ${rest} ${rest === 1 ? 'course is' : 'courses are'} within their limit.` : `All ${att.length} courses are within their limit.`}
-                  </StatusLine>
-                )}
+              <div class="status-lines">
+                {summary.ok && <StatusLine status="ok">{summary.ok}</StatusLine>}
+                {summary.info && <StatusLine status="info">{summary.info}</StatusLine>}
+                {summary.note && <span class="t-bm">{summary.note}</span>}
               </div>
             </>
           )}
@@ -334,9 +379,9 @@ export function Today({ snap, now }: { snap: Snapshot; now: number }) {
           </section>
         )}
 
-        {notes.length > 0 && (
+        {notices.length > 0 && (
           <section class="section">
-            <h2>From eClass</h2>
+            <h2><a href="#/notifications" style={{ color: 'inherit' }}>From eClass</a></h2>
             <div class="rows">
               {notes.map((n) => (
                 <a key={n.id} class="row" href={n.url ?? 'https://eclass.inha.ac.kr/'} target={eclassTarget}>
@@ -347,6 +392,7 @@ export function Today({ snap, now }: { snap: Snapshot; now: number }) {
                 </a>
               ))}
             </div>
+            <a class="btn" href="#/notifications" style={{ marginLeft: '-12px' }}>All {notices.length} notifications</a>
           </section>
         )}
 

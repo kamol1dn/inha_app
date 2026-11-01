@@ -55,7 +55,9 @@ export function parseCourses(html: string): Course[] {
  *
  * Times come from the `time=<unix>` parameter of the date links, never from
  * the visible "Today"/"Tomorrow" text. One link is the due time; two are the
- * start and end of a window (VODs).
+ * start and end of a window (VODs). Moodle splits a long quiz window into
+ * "(Quiz opens)" and "(Quiz closes)" events; only the closing one is due, so the
+ * opening one is left out.
  */
 export function parseUpcoming(html: string): Deadline[] {
   const doc = parseHtml(html);
@@ -76,6 +78,7 @@ export function parseUpcoming(html: string): Deadline[] {
     const href = referer?.querySelector('a[href]')?.getAttribute('href');
     const mod = href ? modulePattern.exec(href) : null;
     const type = mod?.[1] ?? null;
+    if (opensEvent.test(title)) continue;
     const kind: DeadlineKind =
       type === 'vod'
         ? 'vod'
@@ -97,6 +100,7 @@ export function parseUpcoming(html: string): Deadline[] {
     out.push({
       title,
       courseName: text(e.querySelector('.course')),
+      courseId: intParam(e.querySelector('.course a[href]')?.getAttribute('href') ?? null, 'id'),
       kind,
       start: times.length >= 2 ? times[0] : null,
       end: times[times.length - 1],
@@ -196,14 +200,57 @@ export function parseVodProgress(html: string): VodProgress[] {
       firstInt(weekCell.querySelector('[title]')?.getAttribute('title') ?? '');
     if (week == null) throw new ParseError('eClass VOD progress week');
 
+    const window = cells.map((c) => c.querySelector('[data-eterm]')).find((b) => b != null);
     out.push({
       week,
       title,
       lengthSec: parseClock(text(cells[2])),
       percent: parsePercent(text(cells[cells.length - 1])),
+      opens: unixAttr(window, 'data-sterm'),
+      closes: unixAttr(window, 'data-eterm'),
     });
   }
   return out;
+}
+
+export interface VodModule {
+  name: string;
+  moduleId: number;
+}
+
+/**
+ * A course's VOD list, `GET /mod/vod/index.php?id=<course>`: each VOD's name and
+ * course module id, from its `view.php?id=<module>` link, in page order. The
+ * progress page's `data-modid` is the VOD's instance id, not a course module, so
+ * a VOD's link can only come from here. The page is an extra: anything unexpected
+ * gives an empty list, never an error.
+ */
+export function parseVodModules(html: string): VodModule[] {
+  const doc = parseHtml(html);
+  const root = doc.querySelector('#region-main') ?? doc.body;
+  const out: VodModule[] = [];
+  for (const a of Array.from(root?.querySelectorAll('a[href]') ?? [])) {
+    const href = (a.getAttribute('href') ?? '').trim();
+    const moduleId = vodLink.test(href) ? intParam(href, 'id') : null;
+    const name = text(a);
+    if (moduleId != null && name) out.push({ name, moduleId });
+  }
+  return out;
+}
+
+/**
+ * Fills in each VOD's moduleId from parseVodModules, matching on the name with
+ * case and spacing ignored. A repeated name takes the links in order; a row with
+ * no link stays without an id.
+ */
+export function withVodModules(vods: VodProgress[], modules: VodModule[]): VodProgress[] {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const byName = new Map<string, number[]>();
+  for (const m of modules) byName.set(norm(m.name), [...(byName.get(norm(m.name)) ?? []), m.moduleId]);
+  return vods.map((v) => {
+    const moduleId = byName.get(norm(v.title))?.shift();
+    return moduleId == null ? v : { ...v, moduleId };
+  });
 }
 
 export interface Submission {
@@ -262,12 +309,11 @@ export function parseQuizSubmission(html: string): Submission {
   let done = false;
   let at: number | null = null;
   for (const row of Array.from(doc.querySelectorAll('table.quizattemptsummary tbody tr'))) {
-    const cell = row.querySelector('td');
-    if (cell == null) continue;
-    const t = text(cell);
-    if (!/^(Finished|종료)/i.test(t)) continue;
+    // The state's column moves: a quiz with several attempts allowed adds an attempt number before it.
+    const state = Array.from(row.querySelectorAll('td')).map((td) => text(td)).find((t) => /^(Finished|종료)/i.test(t));
+    if (state == null) continue;
     done = true;
-    const when = parseDateTime(t);
+    const when = parseDateTime(state);
     if (when != null && (at == null || when > at)) at = when;
   }
   return { done, at };
@@ -533,6 +579,18 @@ export function parseNotifications(json: string): EclassNotification[] {
 const classPeriodTitle = /\[\d+\]\s*-\s*\d+\s*교시\s*$/;
 
 const modulePattern = /\/mod\/([a-z0-9_]+)\/view\.php\?(?:[^#]*&)?id=(\d+)/;
+
+/** An event that only says when something opens: "(Quiz opens)", "(Assignment opens)". Nothing is due then. */
+const opensEvent = /\((?:[^()]*\s)?opens\)\s*$/i;
+
+/** `view.php?id=<module>` as the VOD list writes it, relative or in full. */
+const vodLink = /^(?:view\.php|.*\/mod\/vod\/view\.php)\?/;
+
+/** A time attribute in unix seconds, as ms; null when missing or zero. */
+function unixAttr(el: Element | null | undefined, name: string): number | null {
+  const v = Number(el?.getAttribute(name)?.trim() || NaN);
+  return v > 0 ? v * 1000 : null;
+}
 
 /**
  * Text of an HTML snippet (Moodle sends some notification fields as HTML).

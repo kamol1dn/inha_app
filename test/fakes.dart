@@ -35,10 +35,39 @@ class FakeEclass implements EclassApi {
 
   @override
   @override
-  Future<List<Deadline>> upcoming() async => error == null ? deadlines : throw error!;
+  Future<List<Deadline>> upcoming() async {
+    upcomingCalls++;
+    return error == null ? deadlines : throw error!;
+  }
+
+  int upcomingCalls = 0;
+
+  /// A course's own calendar page, by course id; empty when not set up. A
+  /// course listed in [failingUpcoming] fails.
+  Map<int, List<Deadline>> upcomingById = const {};
+  Set<int> failingUpcoming = {};
+
   @override
-  Future<CourseAttendance> attendance(Course course) async =>
-      attendanceById[course.id] ?? CourseAttendance(course: course);
+  Future<List<Deadline>> upcomingIn(Course course) async {
+    if (error != null) throw error!;
+    if (failingUpcoming.contains(course.id)) throw Exception('eClass did not answer');
+    return upcomingById[course.id] ?? const [];
+  }
+
+  /// The bell menu.
+  List<EclassNotification> notices = const [];
+
+  @override
+  Future<List<EclassNotification>> notifications() async => error == null ? notices : throw error!;
+
+  /// Courses whose attendance or marks page fails, with what it fails with.
+  Map<int, Object> failingCourses = const {};
+
+  @override
+  Future<CourseAttendance> attendance(Course course) async {
+    if (failingCourses[course.id] case final e?) throw e;
+    return attendanceById[course.id] ?? CourseAttendance(course: course);
+  }
 
   /// Submission state by module id; a module listed in [failing] throws.
   Map<int, ({bool done, DateTime? at})> submissions = {};
@@ -57,16 +86,28 @@ class FakeEclass implements EclassApi {
   Map<int, CourseGrades> gradesById = const {};
 
   @override
-  Future<CourseGrades> courseGrades(Course course) async =>
-      gradesById[course.id] ?? CourseGrades(course: course, source: GradeSource.none);
+  Future<CourseGrades> courseGrades(Course course) async {
+    if (failingCourses[course.id] case final e?) throw e;
+    return gradesById[course.id] ?? CourseGrades(course: course, source: GradeSource.none);
+  }
 }
 
 class FakeTimetable implements TimetableApi {
   List<Lesson> lessonList = const [];
   Object? error;
+
+  /// Each fetch waits for this when set, so a test can overlap two of them.
+  Future<void>? gate;
+  final asked = <String>[];
+
   @override
-  Future<List<Lesson>> lessons(String classGroup, {Set<String> excludeSubjects = const {}}) async =>
-      error == null ? lessonList : throw error!;
+  Future<List<Lesson>> lessons(String classGroup, {Set<String> excludeSubjects = const {}}) async {
+    asked.add(classGroup);
+    final answer = [for (final l in lessonList) l]; // what this request saw
+    await gate;
+    return error == null ? answer : throw error!;
+  }
+
   @override
   Future<List<String>> classGroups() async => const [];
 }
@@ -99,6 +140,22 @@ class FakeMail implements MailApi {
   final sent = <OutgoingMail>[];
   final saved = <OutgoingMail>[];
   final moves = <(String id, MailFolder to)>[];
+  final searches = <(MailFolder folder, String query)>[];
+  Map<String, MailFile> files = const {};
+
+  @override
+  Future<List<MailHeader>> search(MailFolder folder, String query, {int limit = 30, int offset = 0}) async {
+    searches.add((folder, query));
+    if (error != null) throw error!;
+    final list = folder == MailFolder.inbox ? all : folders[folder] ?? const <MailHeader>[];
+    return list.where((m) => m.subject.contains(query)).skip(offset).take(limit).toList();
+  }
+
+  @override
+  Future<MailFile> attachment(String id) async {
+    if (error != null) throw error!;
+    return files[id]!;
+  }
 
   @override
   Future<List<MailHeader>> folder(MailFolder folder, {int limit = 30, int offset = 0}) async {
@@ -159,8 +216,12 @@ class FakeMail implements MailApi {
 
 /// An [AppData] over fakes and empty in-memory preferences.
 Future<(AppData, FakeEclass, FakeTimetable, FakeIns, FakeMail)> makeAppData(
-    {Map<String, Object> prefs = const {}}) async {
-  SharedPreferences.setMockInitialValues(prefs);
+    {Map<String, Object> prefs = const {}, bool classGroupChosen = true}) async {
+  SharedPreferences.setMockInitialValues({
+    'prefs.defaultsSettled': true,
+    if (classGroupChosen) 'classGroup': 'ICE23-1',
+    ...prefs,
+  });
   final p = await SharedPreferences.getInstance();
   final eclass = FakeEclass(), timetable = FakeTimetable(), ins = FakeIns(), mail = FakeMail();
   final data = AppData(

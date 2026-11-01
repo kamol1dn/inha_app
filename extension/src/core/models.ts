@@ -52,6 +52,8 @@ export type DeadlineKind = 'assignment' | 'quiz' | 'vod' | 'other' | 'classPerio
 export interface Deadline {
   title: string;
   courseName: string;
+  /** The eClass course, from the event's own link. Missing where the page gave none, and in an old cache. */
+  courseId?: number | null;
   kind: DeadlineKind;
   start: number | null;
   end: number;
@@ -76,6 +78,11 @@ export interface VodProgress {
   title: string;
   lengthSec: number;
   percent: number; // 0..100
+  /** The course module, for /mod/vod/view.php?id=<this>. Missing when the course's VOD list didn't name it, and in an old cache. */
+  moduleId?: number | null;
+  /** The watch window. Missing when the page gives none, and in an old cache. */
+  opens?: number | null;
+  closes?: number | null;
 }
 
 /** Everything attendance-related for one course. */
@@ -95,6 +102,20 @@ export interface GradeRecord {
   letter: string; // "A+", "B0", "-"
   points: number; // 4.5 scale
   category: string; // "MR-M"
+}
+
+/** A letter INS has given: '' and '-' mean the course isn't graded. */
+export const isGraded = (r: GradeRecord) => r.letter !== '' && r.letter !== '-';
+
+/**
+ * A term's GPA: points weighted by credits, over the letters that carry points
+ * (A+ to F). P, S, W and anything else INS may print carry none and are left
+ * out, so a term of only those has no GPA. Null then.
+ */
+export function termGpa(records: GradeRecord[]): number | null {
+  const counted = records.filter((r) => /^[A-DF][+0-]?$/.test(r.letter) && r.credits > 0);
+  const credits = counted.reduce((sum, r) => sum + r.credits, 0);
+  return credits ? counted.reduce((sum, r) => sum + r.points * r.credits, 0) / credits : null;
 }
 
 /** INS "View Grades and Standings". Deliberately has no field for the national ID the XML carries. */
@@ -200,6 +221,13 @@ export interface MailAttachment {
   size: number; // bytes; 0 when Exchange didn't say
 }
 
+/** A file to send with a message. */
+export interface OutgoingAttachment {
+  name: string;
+  contentType: string;
+  base64: string;
+}
+
 /** One opened message. Fetched when opened, not cached. */
 export interface MailMessage {
   id: string;
@@ -234,4 +262,6 @@ export interface OutgoingMail {
   bcc?: string[];
   subject?: string;
   body?: string;
+  /** Files to add. For 'draft', they join what the saved draft already has. */
+  attachments?: OutgoingAttachment[];
 }

@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { describeError } from '../../core/errors.ts';
 import { serviceLabel, type Service } from '../../core/models.ts';
+import { missingHosts, requestHosts } from '../../core/permissions.ts';
 import { call } from '../../core/rpc.ts';
 import { writeSettings, type NotifyChannel, type Snapshot } from '../../core/store.ts';
 import { pastWhen } from '../../data/format.ts';
@@ -21,6 +22,7 @@ function Account({ snap, a, prefill }: { snap: Snapshot; a: (typeof accounts)[nu
   const [pass, setPass] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [certificate, setCertificate] = useState(false);
   useEffect(() => {
     if (!saved && prefill.user) setUser(prefill.user);
     if (!saved && prefill.pass) setPass(prefill.pass);
@@ -34,6 +36,7 @@ function Account({ snap, a, prefill }: { snap: Snapshot; a: (typeof accounts)[nu
     try {
       const err = await call('saveLogin', a.service, user.trim(), pass);
       setResult(err ? describeError(err, a.service) : 'ok');
+      setCertificate(!!err?.certificate);
       if (!err) setPass('');
     } catch (err) {
       setResult(describeError(err, a.service));
@@ -69,6 +72,7 @@ function Account({ snap, a, prefill }: { snap: Snapshot; a: (typeof accounts)[nu
       </form>
       {result === 'ok' && <StatusLine status="ok">Signed in. Loading your data.</StatusLine>}
       {result && result !== 'ok' && <StatusLine status="danger">{result}</StatusLine>}
+      {certificate && <button class="btn" type="button" onClick={() => call('insOpenForSync')}>Open INS</button>}
     </div>
   );
 }
@@ -78,9 +82,32 @@ const channels: [NotifyChannel, string, string][] = [
   ['vod', 'VOD windows', 'Unwatched VODs, 48 h and 6 h before the window closes'],
   ['attendance', 'Attendance', 'When eClass records a new absence'],
   ['classes', 'Classes', '15 min before each class'],
+  ['exams', 'Exams', 'The evening before and 1 h before each exam'],
   ['grades', 'Grades', 'A new or changed mark in eClass'],
   ['mail', 'New mail', 'Unread mail in your inbox'],
+  ['notices', 'eClass notifications', "New ones from eClass's bell menu"],
 ];
+
+/** Shown only where the browser left the sites off (Firefox and Zen can), since then nothing loads and it looks like the connection. */
+function SiteAccess() {
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    void missingHosts().then((m) => setMissing(m.length > 0));
+  }, []);
+  if (!missing) return null;
+  const allow = async () => {
+    if (!(await requestHosts())) return;
+    setMissing(false);
+    void call('sync', 'all', true);
+  };
+  return (
+    <section class="section">
+      <h2>Site access</h2>
+      <p class="t-bm muted" style={{ margin: 0 }}>The browser hasn't let this extension reach eClass, INS, mail and the timetable, so nothing can load.</p>
+      <button class="btn" style={{ marginTop: '8px' }} onClick={allow}>Allow access</button>
+    </section>
+  );
+}
 
 export function Settings({ snap, welcome }: { snap: Snapshot; welcome: boolean }) {
   const { settings } = snap;
@@ -105,6 +132,8 @@ export function Settings({ snap, welcome }: { snap: Snapshot; welcome: boolean }
           </p>
         </>
       )}
+
+      <SiteAccess />
 
       <section class="section">
         <h2>Class group</h2>
@@ -210,7 +239,11 @@ export function Settings({ snap, welcome }: { snap: Snapshot; welcome: boolean }
                       <span class="t-bm muted">Not yet</span>
                     )}
                   </span>
-                  <button class="btn" disabled={st?.busy} onClick={() => call('sync', s, true)}>Update</button>
+                  {st?.error?.certificate ? (
+                    <button class="btn" onClick={() => call('insOpenForSync')}>Open INS</button>
+                  ) : (
+                    <button class="btn" disabled={st?.busy} onClick={() => call('sync', s, true)}>Update</button>
+                  )}
                 </div>
               );
             })}

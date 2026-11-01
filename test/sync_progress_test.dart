@@ -91,8 +91,9 @@ void main() {
       final refresh = data.refreshEclass();
       await pumpEventQueue();
       expect(data.sync.current, 'eClass: marks for Artificial Intelligence');
-      // The course list, upcoming deadlines and both attendance pages are done; both marks pages hang.
-      expect((data.sync.done, data.sync.total), (4, 6));
+      // The course list, the calendar pages (all courses, then each), the bell menu and both
+      // attendance pages are done; both marks pages hang.
+      expect((data.sync.done, data.sync.total), (7, 9));
       eclass.release();
       await refresh;
       expect(data.sync.active, isFalse);
@@ -124,7 +125,7 @@ void main() {
       });
       await tester.pump();
       expect(find.text('eClass: marks for Artificial Intelligence'), findsOneWidget);
-      expect(find.text('4 of 6'), findsOneWidget);
+      expect(find.text('7 of 9'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
 
       await tester.runAsync(() async {

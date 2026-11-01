@@ -97,6 +97,11 @@ function followTheme(initial: Theme): void {
   });
 }
 
+// A click on eClass's own Log out: nothing signs the browser back in until the student signs in again.
+document.addEventListener('click', (e) => {
+  if ((e.target as Element | null)?.closest?.('a[href*="/login/logout.php"]')) void call('eclassLoggedOut').catch(() => {});
+}, true);
+
 void (async () => {
   const settings = await readSettings();
   if (!settings.takeover) {

@@ -34,9 +34,21 @@ class FakeCredentials implements CredentialStore {
   @override
   Future<Credentials?> read(Service s) async => saved;
   @override
-  Future<void> write(Service s, Credentials c) async => saved = c;
+  Future<void> write(Service s, Credentials c) async {
+    saved = c;
+    refused.remove(s);
+  }
+
   @override
   Future<void> clear(Service s) async => saved = null;
+
+  /// The last login refused, by service, as the real store remembers it.
+  final refused = <Service, Credentials>{};
+  @override
+  Future<void> markRefused(Service s, Credentials c) async => refused[s] = c;
+  @override
+  Future<bool> isRefused(Service s, Credentials c) async =>
+      refused[s]?.username == c.username && refused[s]?.password == c.password;
 }
 
 /// A tiny eClass behind Dio: one live session cookie at a time, the login

@@ -16,13 +16,21 @@ import type { Credentials } from './credentials.ts';
 export interface Api {
   /** Refreshes one source, or all of them; `force` ignores how fresh the cache is. */
   sync(source: Service | 'all', force?: boolean): void;
-  /** Saves a login and tries it right away. Returns the error if the service refused it. */
+  /**
+   * Saves a login and always tries it, even with a live browser session. Returns
+   * why it isn't confirmed, or null. A refused login is not kept and the one
+   * before it stays (name 'LoginRequired'); for an unreachable service
+   * ('NetworkError') or one with no way to test it now ('LoginUntested') it is
+   * saved, untested.
+   */
   saveLogin(service: Service, username: string, password: string): ErrorInfo | null;
   clearLogin(service: Service): void;
   /** EduPage's class groups, for the picker. */
   classGroups(): string[];
 
   mailFolder(folder: MailFolder, offset: number): MailHeader[];
+  /** One page of what Exchange finds for query in folder, newest first. Not cached. */
+  mailSearch(folder: MailFolder, query: string, offset: number): MailHeader[];
   mailMessage(id: string): MailMessage;
   mailMarkRead(id: string, read: boolean): void;
   mailSend(m: OutgoingMail): void;
@@ -35,10 +43,16 @@ export interface Api {
   eclassAutoLogin(): boolean;
   /** From eClass's login form, when the student ticks "Remember in IUT". */
   eclassRemember(username: string, password: string): void;
+  /** From an eClass page: the student clicked Log out, so nothing signs the browser back in until they sign in again. */
+  eclassLoggedOut(): void;
 
-  /** From the INS content script: the INS login, only ever answered to an ins.inha.uz tab. */
+  /** From the INS content script: whether this tab is one the extension opened or the student chose to read grades in. */
+  insSyncAllowed(): boolean;
+  /** From the INS content script, on the student's click: lets this tab read the grades. */
+  insAdoptTab(): void;
+  /** From the INS content script: the INS login, only ever answered to a tab allowed to read the grades. */
   insLogin(): Credentials | null;
-  /** From the INS content script: grades it read through the open INS tab. */
+  /** From the INS content script: grades it read through the open INS tab. Only from a tab allowed to read them. */
   insReport(report: GradeReport | null, error: ErrorInfo | null): void;
   /** Opens INS in a tab so its content script can read the grades past the expired certificate. */
   insOpenForSync(): void;
@@ -56,10 +70,12 @@ type Reply = { ok: true; value: unknown } | { ok: false; error: ErrorInfo };
 /** Rebuilds the worker's error on this side, keeping the name describeError reads. */
 export class RemoteError extends Error {
   readonly certificate?: boolean;
+  readonly status?: number;
   constructor(info: ErrorInfo) {
     super(info.message);
     this.name = info.name;
     this.certificate = info.certificate;
+    this.status = info.status;
   }
 }
 

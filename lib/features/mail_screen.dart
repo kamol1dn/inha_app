@@ -1,9 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../core/session.dart';
 import '../data/app_data.dart';
 import '../models/models.dart';
+import '../services/mail/ews_soap.dart';
 import '../ui/format/format.dart';
 import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
@@ -13,6 +18,57 @@ import 'link_text.dart';
 
 void openMail(BuildContext context, MailHeader m, {MailFolder folder = MailFolder.inbox}) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => MailMessageScreen(header: m, folder: folder)));
+
+void openMailSearch(BuildContext context, MailFolder folder) =>
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => MailSearchScreen(folder: folder)));
+
+/// [name] as a file name on the phone. A name in a message comes from whoever
+/// sent it: this keeps it in its folder and keeps the end a viewer goes by.
+String safeFileName(String name) {
+  final clean = name
+      .split(RegExp(r'[/\\]'))
+      .last
+      .replaceAll(RegExp('[\u200e\u200f\u202a-\u202e\u2066-\u2069]'), '') // text direction tricks
+      .replaceAll(RegExp(r'[\x00-\x1f<>:"|?*]'), '_')
+      .trim()
+      .replaceFirst(RegExp(r'^\.+'), '');
+  if (clean.isEmpty) return 'Attachment';
+  // 80 letters of Korean is 240 bytes; a file name can be 255.
+  const most = 80;
+  final letters = clean.runes.toList();
+  if (letters.length <= most) return clean;
+  final dot = clean.lastIndexOf('.');
+  final end = dot > 0 && clean.length - dot <= 16 ? clean.substring(dot) : '';
+  return String.fromCharCodes(letters.take(most - end.length)) + end;
+}
+
+/// Writes [f] into [dir] and returns it. Only the file last opened stays there:
+/// mail shouldn't pile up on the phone.
+Future<File> saveMailFile(MailFile f, Directory dir) async {
+  if (await dir.exists()) await dir.delete(recursive: true);
+  await dir.create(recursive: true);
+  return File('${dir.path}/${safeFileName(f.name)}').writeAsBytes(f.bytes, flush: true);
+}
+
+/// The type to open a file as, or null to go by its name: mail servers often
+/// say only "application/octet-stream".
+String? openAsType(String contentType) {
+  final type = contentType.split(';').first.trim().toLowerCase();
+  return type.isEmpty || type == 'application/octet-stream' ? null : type;
+}
+
+/// Saves [f] to the app's cache and hands it to an app on the phone. Returns
+/// the sentence saying what stopped it, or null when it opened.
+Future<String?> openMailFile(MailFile f) async {
+  final cache = await getTemporaryDirectory();
+  final file = await saveMailFile(f, Directory('${cache.path}/mail_files'));
+  final opened = await OpenFilex.open(file.path, type: openAsType(f.contentType));
+  return switch (opened.type) {
+    ResultType.done => null,
+    ResultType.noAppToOpen => 'No app on this phone opens ${f.name}.',
+    _ => "Couldn't open ${f.name}.",
+  };
+}
 
 /// What a folder says when it is empty.
 String _emptyText(MailFolder f) => switch (f) {
@@ -165,26 +221,32 @@ class MailDrawer extends StatelessWidget {
         : f == MailFolder.inbox
             ? data.mailUnread.data?.value ?? counts?.unread ?? 0
             : counts?.unread ?? 0;
-    return InkWell(
-      onTap: () => onSelect(f),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 52),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: gutter),
-          child: Row(children: [
-            Icon(on ? _icons[f]!.$2 : _icons[f]!.$1, color: fg),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(f.label,
-                  style: t.textTheme.bodyLarge?.copyWith(
-                      color: on ? t.colorScheme.primary : null, fontWeight: on ? FontWeight.w600 : null)),
+    return MergeSemantics(
+      child: Semantics(
+        selected: on,
+        child: InkWell(
+          onTap: () => onSelect(f),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 52),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: gutter),
+              child: Row(children: [
+                Icon(on ? _icons[f]!.$2 : _icons[f]!.$1, color: fg),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(f.label,
+                      style: t.textTheme.bodyLarge?.copyWith(
+                          color: on ? t.colorScheme.primary : null, fontWeight: on ? FontWeight.w600 : null)),
+                ),
+                if (n > 0)
+                  Text('$n',
+                      semanticsLabel: f == MailFolder.drafts ? '$n waiting' : '$n unread',
+                      style: t.textTheme.bodyMedium?.tnum.copyWith(
+                          color: on ? t.colorScheme.primary : t.colorScheme.onSurfaceVariant,
+                          fontWeight: f == MailFolder.drafts ? null : FontWeight.w600)),
+              ]),
             ),
-            if (n > 0)
-              Text('$n',
-                  style: t.textTheme.bodyMedium?.tnum.copyWith(
-                      color: on ? t.colorScheme.primary : t.colorScheme.onSurfaceVariant,
-                      fontWeight: f == MailFolder.drafts ? null : FontWeight.w600)),
-          ]),
+          ),
         ),
       ),
     );
@@ -194,7 +256,8 @@ class MailDrawer extends StatelessWidget {
 class _MailRow extends StatelessWidget {
   final MailHeader m;
   final MailFolder folder;
-  const _MailRow(this.m, this.folder);
+  final VoidCallback? onTap; // in place of opening it from here
+  const _MailRow(this.m, this.folder, {this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -202,9 +265,10 @@ class _MailRow extends StatelessWidget {
     final muted = t.colorScheme.onSurfaceVariant;
     // Sent mail and drafts are about who they go to.
     final who = folder.outgoing ? (m.to.isEmpty ? 'No recipients' : 'To ${m.to}') : m.from;
+    final subject = m.subject.isEmpty ? '(no subject)' : m.subject;
     return InkWell(
-      onTap: () =>
-          folder == MailFolder.drafts ? openDraft(context, m) : openMail(context, m, folder: folder),
+      onTap: onTap ??
+          () => folder == MailFolder.drafts ? openDraft(context, m) : openMail(context, m, folder: folder),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 72),
         child: Padding(
@@ -216,11 +280,17 @@ class _MailRow extends StatelessWidget {
                     maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium?.copyWith(color: muted)),
               ),
               const SizedBox(width: 12),
+              if (m.hasAttachments) ...[
+                Icon(Icons.attach_file, size: 16, color: muted, semanticLabel: 'Has attachments'),
+                const SizedBox(width: 4),
+              ],
               Text(pastWhen(m.received), style: t.textTheme.bodySmall?.tnum.copyWith(color: muted)),
             ]),
             const SizedBox(height: 2),
-            // Weight alone says unread: no dot (DESIGN.md 8, Mail).
-            Text(m.subject.isEmpty ? '(no subject)' : m.subject,
+            // Weight alone says unread: no dot (DESIGN.md 8, Mail). A screen
+            // reader can't hear weight, so it gets the word.
+            Text(subject,
+                semanticsLabel: m.unread ? 'Unread: $subject' : null,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: m.unread ? t.textTheme.titleSmall : t.textTheme.bodyLarge),
@@ -234,13 +304,205 @@ class _MailRow extends StatelessWidget {
   }
 }
 
+/// Search in one folder: the field is the app bar, and the results are the
+/// folder's rows, newest first, with the next page as the end comes into view.
+/// Exchange searches when asked, not on every letter; nothing here is cached.
+class MailSearchScreen extends StatefulWidget {
+  final MailFolder folder;
+  const MailSearchScreen({super.key, required this.folder});
+  @override
+  State<MailSearchScreen> createState() => _MailSearchScreenState();
+}
+
+class _MailSearchScreenState extends State<MailSearchScreen> {
+  final _field = TextEditingController();
+  final _scroll = ScrollController();
+  String? _asked; // what the results are for
+  List<MailHeader>? _results;
+  Object? _error;
+  bool _hasMore = false;
+  bool _loadingMore = false;
+  Object? _moreError;
+  int _run = 0; // a newer search makes an older answer worthless
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(() {
+      if (_scroll.position.extentAfter < 600) _loadMore();
+    });
+  }
+
+  @override
+  void dispose() {
+    _field.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Asks Exchange. With [keep] the rows stay until the answer comes.
+  Future<void> _search({bool keep = false}) async {
+    final q = _field.text.trim();
+    if (q.isEmpty) return;
+    final data = context.read<AppData>();
+    final run = ++_run;
+    setState(() {
+      _asked = q;
+      _error = null;
+      _moreError = null;
+      _loadingMore = false;
+      if (!keep) _results = null;
+    });
+    try {
+      final page = await data.searchMail(q, folder: widget.folder);
+      if (!mounted || run != _run) return;
+      setState(() {
+        _results = page;
+        _hasMore = page.length >= AppData.mailPageSize;
+      });
+      if (!keep && _scroll.hasClients) _scroll.jumpTo(0);
+    } catch (e) {
+      if (mounted && run == _run) setState(() => _error = e);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final have = _results;
+    final q = _asked;
+    if (have == null || q == null || !_hasMore || _loadingMore) return;
+    final data = context.read<AppData>();
+    final run = _run;
+    setState(() {
+      _loadingMore = true;
+      _moreError = null;
+    });
+    try {
+      final page = await data.searchMail(q, folder: widget.folder, offset: have.length);
+      if (!mounted || run != _run) return;
+      final known = {for (final m in have) m.id};
+      setState(() {
+        _results = [...have, ...page.where((m) => !known.contains(m.id))];
+        _hasMore = page.length >= AppData.mailPageSize;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      if (mounted && run == _run) {
+        setState(() {
+          _moreError = e;
+          _loadingMore = false;
+        });
+      }
+    }
+  }
+
+  void _clear() {
+    _run++;
+    _field.clear();
+    setState(() {
+      _asked = null;
+      _results = null;
+      _error = null;
+      _moreError = null;
+      _hasMore = false;
+      _loadingMore = false;
+    });
+  }
+
+  /// Opens a result. It reports back when it is read or moved, since the rows
+  /// here aren't the folder's list; a draft may have changed in any way, so
+  /// the search runs again once the composer closes.
+  Future<void> _open(MailHeader m) async {
+    if (widget.folder == MailFolder.drafts) {
+      await openDraft(context, m);
+      if (mounted) await _search(keep: true);
+      return;
+    }
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => MailMessageScreen(
+        header: m,
+        folder: widget.folder,
+        onChanged: (now) {
+          if (!mounted) return;
+          setState(() => _results = [
+                for (final x in _results ?? const <MailHeader>[])
+                  if (x.id != m.id) x else ?now,
+              ]);
+        },
+      ),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final folder = widget.folder;
+    final results = _results;
+    return Scaffold(
+      appBar: AppBar(
+        title: TextField(
+          controller: _field,
+          autofocus: true,
+          textInputAction: TextInputAction.search,
+          style: t.textTheme.bodyLarge,
+          decoration: bareField('Search ${folder.label}'),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _search(),
+        ),
+        actions: [
+          if (_field.text.isNotEmpty)
+            IconButton(tooltip: 'Clear', icon: const Icon(Icons.close), onPressed: _clear),
+        ],
+      ),
+      body: ListView(controller: _scroll, children: [
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
+            child: MailLoadError(_error!, onRetry: _search),
+          )
+        else if (_asked == null)
+          EmptyNote('Finds mail in ${folder.label} by subject, text or person.')
+        else if (results == null)
+          const SkeletonRows(count: 6, timeColumn: false)
+        else if (results.isEmpty)
+          EmptyNote('No mail matches "$_asked" in ${folder.label}.'),
+        for (final (i, m) in (results ?? const <MailHeader>[]).indexed) ...[
+          if (i > 0) const Rule(),
+          _MailRow(m, folder, onTap: () => _open(m)),
+        ],
+        if (_loadingMore)
+          Padding(
+            padding: const EdgeInsets.all(gutter),
+            child: Text('Loading older mail…',
+                style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+          )
+        else if (_moreError != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: MailLoadError(_moreError!, onRetry: _loadMore),
+          ),
+        const SizedBox(height: 24),
+      ]),
+    );
+  }
+}
+
 /// One message: sender, recipients, time, subject, attachments and the
 /// plain-text body with tappable links, with Reply, Reply all and Forward
 /// under it. Opening an unread message marks it read.
 class MailMessageScreen extends StatefulWidget {
   final MailHeader header;
   final MailFolder folder;
-  const MailMessageScreen({super.key, required this.header, this.folder = MailFolder.inbox});
+
+  /// Told when the message changes: the header as it now is, or null when it
+  /// has left the folder.
+  final ValueChanged<MailHeader?>? onChanged;
+  final Future<String?> Function(MailFile) openFile;
+  const MailMessageScreen(
+      {super.key,
+      required this.header,
+      this.folder = MailFolder.inbox,
+      this.onChanged,
+      this.openFile = openMailFile});
   @override
   State<MailMessageScreen> createState() => _MailMessageScreenState();
 }
@@ -250,6 +512,8 @@ class _MailMessageScreenState extends State<MailMessageScreen> {
   Object? _error;
   late bool _unread = widget.header.unread;
   bool _busy = false;
+  bool _moving = false;
+  String? _opening; // the attachment on its way
 
   @override
   void initState() {
@@ -277,6 +541,7 @@ class _MailMessageScreenState extends State<MailMessageScreen> {
     setState(() => _busy = true);
     try {
       await context.read<AppData>().setMailRead(widget.header.id, read: read, folder: widget.folder);
+      widget.onChanged?.call(widget.header.withUnread(!read));
       if (mounted) setState(() => _unread = !read);
     } catch (e) {
       messenger.showSnackBar(SnackBar(
@@ -292,10 +557,16 @@ class _MailMessageScreenState extends State<MailMessageScreen> {
     final navigator = Navigator.of(context);
     final from = widget.folder;
     final header = widget.header.withUnread(_unread);
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _moving = true;
+    });
     try {
       final moved = await data.moveMail(header, from: from, to: to);
-      navigator.pop();
+      widget.onChanged?.call(null);
+      // Back may have closed the message already: then nothing here is left to
+      // close, and popping would take the screen under it.
+      if (mounted) navigator.pop();
       messenger.showSnackBar(SnackBar(
         content: Text('Moved to ${to.label}.'),
         action: moved == null
@@ -310,8 +581,43 @@ class _MailMessageScreenState extends State<MailMessageScreen> {
       ));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text("Couldn't move it to ${to.label}.")));
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _moving = false;
+        });
+      }
     }
+  }
+
+  /// Fetches an attachment and hands it to an app on the phone.
+  Future<void> _openAttachment(MailAttachment a) async {
+    final data = context.read<AppData>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final name = a.name.isEmpty ? 'the attachment' : a.name;
+    setState(() => _opening = a.id);
+    SnackBar? problem;
+    try {
+      final file = await data.mailAttachment(a.id);
+      // Left meanwhile: no app should jump up over wherever the student went.
+      if (!mounted) return;
+      final failed = await widget.openFile(MailFile(
+          name: file.name.isEmpty ? a.name : file.name, contentType: file.contentType, bytes: file.bytes));
+      if (failed != null) problem = SnackBar(content: Text(failed));
+    } catch (e) {
+      problem = SnackBar(
+        content: Text(switch (e) {
+          LoginRequired() => 'Mail sign-in needed.',
+          _ when isNetworkError(e) => "Couldn't reach Mail. Check the connection.",
+          ParseError() when e is! EwsError => "Couldn't open $name here. An attached message opens only in webmail.",
+          _ => "Couldn't get $name from Mail.",
+        }),
+        action: e is LoginRequired ? signInAction(navigator) : null,
+      );
+    }
+    if (problem != null) messenger.showSnackBar(problem);
+    if (mounted) setState(() => _opening = null);
   }
 
   @override
@@ -364,65 +670,63 @@ class _MailMessageScreenState extends State<MailMessageScreen> {
           ? _ReplyBar(
               reply: canReply,
               replyAll: canReply && m != null && replyAllRecipients(m).to.length + replyAllRecipients(m).cc.length > 1,
-              onCompose: m == null ? null : (kind) => openCompose(context, kind: kind, ref: m),
+              // Not while it is moving: the move closes the top screen when it lands.
+              onCompose: m == null || _moving ? null : (kind) => openCompose(context, kind: kind, ref: m),
             )
           : null,
       body: (heading) => SelectionArea(
-        child: ListView(padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 24), children: [
-          Text(subject, key: heading, style: t.textTheme.headlineSmall),
-          const SizedBox(height: 12),
-          if (from.isNotEmpty) Text(from, style: t.textTheme.titleSmall),
-          if (address.isNotEmpty && address != from) Text(address, style: muted),
-          if (m != null && m.to.isNotEmpty) Text('To ${m.to.map((a) => a.label).join(', ')}', style: muted),
-          if (m != null && m.cc.isNotEmpty) Text('Cc ${m.cc.map((a) => a.label).join(', ')}', style: muted),
-          Text(dayDateTime(m?.received ?? h.received), style: muted?.tnum),
-          if (m != null && m.attachments.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            for (final a in m.attachments)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(children: [
-                  Icon(Icons.attach_file, size: 18, color: t.colorScheme.onSurfaceVariant),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(a.name.isEmpty ? 'Attachment' : a.name,
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium),
-                  ),
-                  if (a.size > 0) ...[
-                    const SizedBox(width: 8),
-                    Text(fileSize(a.size), style: muted?.tnum),
-                  ],
-                ]),
-              ),
-          ],
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 16),
-          if (m != null)
-            m.body.isEmpty
-                ? Text('This message has no text.', style: muted)
-                : LinkText(m.body, style: t.textTheme.bodyLarge)
-          else if (_error != null)
-            Row(children: [
-              Expanded(
-                  child: StatusLine(Status.danger, describeError(_error!, 'Mail'), padding: EdgeInsets.zero)),
-              TextButton(onPressed: _load, child: const Text('Retry')),
-            ])
-          else
-            // A static skeleton of the body while it loads (DESIGN.md 8, Loading).
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              for (final w in const [1.0, 0.9, 0.95, 0.6]) ...[
-                FractionallySizedBox(
-                  widthFactor: w,
-                  child: Container(
-                    height: 16,
-                    decoration: BoxDecoration(
-                        color: t.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(4)),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
+        child: ListView(padding: const EdgeInsets.only(top: 16, bottom: 24), children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: gutter),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(subject, key: heading, style: t.textTheme.headlineSmall),
+              const SizedBox(height: 12),
+              if (from.isNotEmpty) Text(from, style: t.textTheme.titleSmall),
+              if (address.isNotEmpty && address != from) Text(address, style: muted),
+              if (m != null && m.to.isNotEmpty) Text('To ${m.to.map((a) => a.label).join(', ')}', style: muted),
+              if (m != null && m.cc.isNotEmpty) Text('Cc ${m.cc.map((a) => a.label).join(', ')}', style: muted),
+              Text(dayDateTime(m?.received ?? h.received), style: muted?.tnum),
             ]),
+          ),
+          const SizedBox(height: 8),
+          if (m != null)
+            for (final a in m.attachments)
+              AttachmentRow(
+                name: a.name,
+                size: a.size,
+                trailing: _opening == a.id
+                    ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : null,
+                // One at a time; Exchange gives no id for what it can't hand over.
+                onTap: a.id.isEmpty ? null : () => _opening == null ? _openAttachment(a) : null,
+              ),
+          const SizedBox(height: 8),
+          const Rule(),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: gutter),
+            child: m != null
+                ? (m.body.isEmpty
+                    ? Text('This message has no text.', style: muted)
+                    : LinkText(m.body, style: t.textTheme.bodyLarge))
+                : _error != null
+                    ? MailLoadError(_error!, onRetry: _load, padding: EdgeInsets.zero)
+                    // A static skeleton of the body while it loads (DESIGN.md 8, Loading).
+                    : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        for (final w in const [1.0, 0.9, 0.95, 0.6]) ...[
+                          FractionallySizedBox(
+                            widthFactor: w,
+                            child: Container(
+                              height: 16,
+                              decoration: BoxDecoration(
+                                  color: t.colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(4)),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ]),
+          ),
         ]),
       ),
     );

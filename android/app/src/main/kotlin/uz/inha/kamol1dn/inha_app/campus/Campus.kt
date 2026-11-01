@@ -112,7 +112,7 @@ internal class CacheJson(private val zone: ZoneId) {
         end = time(j.getString("end")),
         moduleId = j.intOrNull("moduleId"),
         moduleType = if (j.isNull("moduleType")) null else j.getString("moduleType"),
-        done = j.optBoolean("done", false),
+        done = j.optBoolean("done", false) || j.optBoolean("dismissed", false), // marked done in the app
         doneAt = j.timeOrNull("doneAt"),
     )
 

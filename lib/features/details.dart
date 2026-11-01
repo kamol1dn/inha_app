@@ -42,9 +42,10 @@ class _DeadlineSheet extends StatelessWidget {
     final data = context.watch<AppData>();
     final now = DateTime.now();
     final att = data.attendance.data?.value ?? const <CourseAttendance>[];
-    final course = courseFor(d.courseName, att)?.course;
+    final course = courseOfDeadline(d, att)?.course;
     final vod = vodFor(d, att);
-    final status = d.done ? null : deadlineStatus(d, now);
+    final done = isDone(d, att);
+    final status = done || !isDue(d) ? null : deadlineStatus(d, now);
     final muted = t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant);
     final item = eclassItemUrl(d);
     final link = item ?? (course == null ? null : eclassCourseUrl(course.id));
@@ -54,11 +55,20 @@ class _DeadlineSheet extends StatelessWidget {
         ? 'Watch from ${dayDateTime(start)} to ${dayDateTime(d.end)}'
         : d.kind == DeadlineKind.vod
             ? 'Closes ${dayDateTime(d.end)}'
-            : 'Due ${dayDateTime(d.end)}';
-    // Within 48 h the time left matters more than the date (DESIGN.md 8).
-    final soon = d.end.difference(now) < const Duration(hours: 48);
+            : isDue(d)
+                ? 'Due ${dayDateTime(d.end)}'
+                : dayDateTime(d.end);
+    // Within 48 h the time left matters more than the date (DESIGN.md 8). A class
+    // period isn't due, and work that is done and past has no time left to tell.
+    final past = d.end.isBefore(now);
+    final soon = isDue(d) && d.end.difference(now) < const Duration(hours: 48) && !(done && past);
     final rel = relative(d.end, now: now);
-    final left = d.end.isBefore(now) ? rel : '${d.kind == DeadlineKind.vod ? 'Closes' : 'Due'} $rel';
+    final left = switch ((d.kind == DeadlineKind.vod, past)) {
+      (true, true) => 'Closed ${ago(d.end, now: now)}',
+      (false, true) => rel,
+      (true, false) => 'Closes $rel',
+      (false, false) => 'Due $rel',
+    };
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -86,7 +96,7 @@ class _DeadlineSheet extends StatelessWidget {
             Text(left, style: muted?.tnum),
           if (d.kind == DeadlineKind.assignment || d.kind == DeadlineKind.quiz) ...[
             const SizedBox(height: 12),
-            if (d.done)
+            if (done)
               StatusLine(Status.ok, doneText(d), padding: EdgeInsets.zero)
             else
               Text(d.kind == DeadlineKind.quiz ? 'Not attempted yet' : 'Not submitted yet', style: muted),
@@ -110,6 +120,8 @@ class _DeadlineSheet extends StatelessWidget {
             const SizedBox(height: 12),
             Text('No watch progress in eClass for this video yet.', style: muted),
           ],
+          if (d.dismissed && d.kind != DeadlineKind.assignment && d.kind != DeadlineKind.quiz && vod?.done != true)
+            StatusLine(Status.ok, doneText(d), padding: const EdgeInsets.only(top: 12)),
           const SizedBox(height: 24),
           if (link != null)
             SizedBox(
@@ -133,6 +145,21 @@ class _DeadlineSheet extends StatelessWidget {
                 ),
               ),
             ),
+          // For what eClass can't track, such as work handed in on paper.
+          if (isDue(d) && !d.done && vod?.done != true)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    data.markDeadlineDone(d, done: !d.dismissed);
+                  },
+                  child: Text(d.dismissed ? 'Mark as not done' : 'Mark as done'),
+                ),
+              ),
+            ),
         ]),
       ),
     );
@@ -149,11 +176,12 @@ void openLesson(BuildContext context, Lesson lesson) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
     builder: (ctx) {
       final t = Theme.of(ctx);
       final muted = t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant);
       return SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 24),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(lesson.subject, style: t.textTheme.headlineSmall),

@@ -6,9 +6,17 @@ abstract class MailApi {
   /// One page of [folder], newest first. Throws [LoginRequired] on 401.
   Future<List<MailHeader>> folder(MailFolder folder, {int limit = 30, int offset = 0});
 
+  /// One page of the messages in [folder] matching [query], newest first. Never
+  /// cached. Exchange reads [query] as a search of the subject, body and people.
+  Future<List<MailHeader>> search(MailFolder folder, String query, {int limit = 30, int offset = 0});
+
   /// One message with its plain-text body, recipients and attachment list.
   /// Does not change its read state.
   Future<MailMessage> message(String id);
+
+  /// A file attached to a message, by [MailAttachment.id]. Throws [ParseError]
+  /// for what isn't a file (an attached message).
+  Future<MailFile> attachment(String id);
 
   /// Sets the message's read flag (no read receipt is sent).
   Future<void> markRead(String id, {bool read = true});

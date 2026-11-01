@@ -394,6 +394,8 @@ GradeReport parseGrades(String xml) {
     creditsEarned: _double(main.field('com_credit')),
     yearOfStudy: _yearOfStudy(main.field('grade')),
     records: records,
+    majorRequired: double.tryParse(main.field('junpil').trim()),
+    generalRequired: double.tryParse(main.field('kyopil').trim()),
   );
 }
 

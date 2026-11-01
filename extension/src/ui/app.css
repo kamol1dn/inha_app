@@ -136,6 +136,9 @@ a.rail-row:hover { background: var(--low); text-decoration: none; }
 .mail .list .row { padding: 12px 16px; min-height: 72px; }
 .mail .list .row.on { background: var(--low); }
 .mail .list .row .subject.unread { font-weight: 600; }
+.mail .search { position: sticky; top: 0; z-index: 1; background: var(--surface); display: flex; align-items: center; gap: 4px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--rule); }
+.mail .search input { flex: 1; min-width: 0; min-height: 44px; border: 0; background: none; outline: none; }
+.mail .trouble { margin: 8px 0; }
 .mail .reader { padding: 24px 32px 48px; }
 .mail .reader h2 { margin: 0 0 12px; font: 600 24px/30px var(--serif); }
 .mail .reader .body { white-space: pre-wrap; overflow-wrap: anywhere; font: 400 15px/24px var(--sans); margin-top: 20px; max-width: 760px; }
@@ -143,11 +146,22 @@ a.rail-row:hover { background: var(--low); text-decoration: none; }
 .mail .attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .mail .attachments button { border: 1px solid var(--rule); border-radius: 8px; background: none; padding: 8px 12px; cursor: pointer; color: var(--on-surface); }
 .mail .attachments button:hover { background: var(--low); }
+.mail .attachments button:disabled { cursor: default; }
+.mail .attachments svg { width: 16px; height: 16px; vertical-align: -3px; }
 .compose { max-width: 820px; }
+.compose fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .compose .line { display: grid; grid-template-columns: 64px 1fr; align-items: center; border-bottom: 1px solid var(--rule); }
 .compose .line label { color: var(--muted); }
 .compose .line input { border: 0; background: none; min-height: 44px; outline: none; }
+.compose .line .fixed { padding: 12px 0; overflow-wrap: anywhere; }
 .compose textarea { width: 100%; border: 0; background: none; outline: none; min-height: 320px; padding: 16px 0; font: 400 15px/24px var(--sans); resize: vertical; }
+.compose .files { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-top: 12px; }
+.compose .file { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.compose .file > svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.compose .file .ellipsis { flex: 0 1 auto; min-width: 0; }
+.compose .file .t-bs { flex: none; }
+.compose .file .icon-btn { margin-left: auto; flex: none; }
+.compose .send-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .suggest { position: absolute; z-index: 5; background: var(--bright); border: 1px solid var(--rule); border-radius: 8px; min-width: 320px; max-height: 280px; overflow-y: auto; }
 .suggest button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 12px; cursor: pointer; }
 .suggest button:hover, .suggest button.on { background: var(--low); }

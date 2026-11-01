@@ -70,12 +70,12 @@ void main() {
     expect(gradeFor(mmc, null), isNull);
   });
 
-  test('held: sessions up to and including today, not the rest of the semester', () {
+  test('held: sessions up to today, not an unmarked one today or the rest of the semester', () {
     final c = CourseAttendance(course: ai, classes: [
       AttendanceEntry(date: DateTime(2026, 10, 21), label: '1Class', mark: AttendanceMark.present),
       AttendanceEntry(date: DateTime(2026, 10, 23), label: '2Class', mark: AttendanceMark.unmarked),
       AttendanceEntry(date: DateTime(2026, 10, 28), label: '1Class', mark: AttendanceMark.unmarked),
     ]);
-    expect(c.held(now).map((e) => e.date.day), [21, 23]);
+    expect(c.held(now).map((e) => e.date.day), [21]);
   });
 }

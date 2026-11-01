@@ -42,8 +42,8 @@ class AbsenceState {
     final lim = limit;
     final noun = used == 1 ? 'absence' : 'absences';
     if (lim == null) return '$used $noun · limit not set';
-    if (used > lim) return '$used absences · limit $lim';
-    return '$used of $lim $noun used';
+    if (used > lim) return '$used $noun · limit $lim';
+    return '$used of $lim absences used';
   }
 }
 

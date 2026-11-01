@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/cache.dart';
 import '../core/session.dart';
 import '../data/app_data.dart';
-import '../data/services.dart';
+import '../services/edupage/timetable_parser.dart' show UnknownClassGroup;
 import '../ui/format/format.dart';
 import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
@@ -202,33 +202,41 @@ class OfflineRow extends StatelessWidget {
 }
 
 /// One row naming a failed service and what still works (DESIGN.md 8, Errors).
-/// Renders nothing while the source is healthy, and nothing for a network
-/// failure while the offline row already says so.
+/// Renders nothing while the source is healthy. A failure a student has to
+/// answer offers Sign in or Settings, since Retry would only fail again.
 class SourceError extends StatelessWidget {
   final Snapshot<Object?> source;
   final String serviceName;
   final VoidCallback? onRetry;
-  const SourceError(this.source, this.serviceName, {super.key, this.onRetry});
+
+  /// This screen has an [OfflineRow], so a network failure is left to that row
+  /// while the app is offline. Only the tabs that show one set this: elsewhere
+  /// the row would say nothing at all.
+  final bool coveredByOfflineRow;
+
+  /// What "Sign in" does, on a screen already on top of Settings. Opens Settings
+  /// otherwise.
+  final VoidCallback? onSignIn;
+  const SourceError(this.source, this.serviceName,
+      {super.key, this.onRetry, this.coveredByOfflineRow = false, this.onSignIn});
 
   @override
   Widget build(BuildContext context) {
     final e = source.error;
     if (e == null) return const SizedBox.shrink();
-    if (isNetworkError(e) && isOffline(context.watch<AppData>())) return const SizedBox.shrink();
+    if (coveredByOfflineRow && isNetworkError(e) && isOffline(context.watch<AppData>())) return const SizedBox.shrink();
     final at = source.data?.fetchedAt;
     final msg = describeError(e, serviceName);
-    final needsLogin = e is LoginRequired;
-    final text = at == null ? msg : '$msg Showing data from ${updatedAt(at)}.';
+    // Beside a partial refresh the data is fresh, apart from the courses it names.
+    final text = at == null || e is PartialRefresh ? msg : '$msg Showing data from ${updatedAt(at)}.';
     return Padding(
       padding: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
       child: Row(children: [
         Expanded(child: StatusLine(Status.danger, text)),
-        if (needsLogin)
-          TextButton(
-            onPressed: () =>
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
-            child: const Text('Sign in'),
-          )
+        if (e is LoginRequired)
+          TextButton(onPressed: onSignIn ?? () => openSettings(context), child: const Text('Sign in'))
+        else if (e is SetupNeeded || e is UnknownClassGroup)
+          TextButton(onPressed: () => openSettings(context), child: const Text('Settings'))
         else if (onRetry != null)
           TextButton(onPressed: onRetry, child: const Text('Retry')),
       ]),
@@ -236,19 +244,30 @@ class SourceError extends StatelessWidget {
   }
 }
 
-/// A plain sentence for an empty or signed-out state, with at most one
-/// action (DESIGN.md 8, Empty states).
+/// A plain sentence for an empty or signed-out state, an optional "Checked
+/// 08:41", and at most one action (DESIGN.md 8, Empty states).
 class EmptyNote extends StatelessWidget {
   final String text;
+  final DateTime? checked;
   final String? action;
   final VoidCallback? onAction;
-  const EmptyNote(this.text, {super.key, this.action, this.onAction});
+  const EmptyNote(this.text, {super.key, this.checked, this.action, this.onAction});
 
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(text, style: Theme.of(context).textTheme.bodyLarge),
+          if (checked case final at?)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text('Checked ${updatedAt(at)}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.tnum
+                      .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ),
           if (action != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),

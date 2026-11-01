@@ -1,8 +1,8 @@
 // When items need attention, and absences against the limits the student set.
 // Ports of lib/data/urgency.dart and lib/data/absence.dart (DESIGN.md 7).
 
-import type { Course, CourseAttendance, Deadline, GradeRecord, GradeReport, Lesson, VodProgress } from '../core/models.ts';
-import { HOUR } from './format.ts';
+import { courseFromTitle, type AttendanceEntry, type Course, type CourseAttendance, type Deadline, type GradeRecord, type GradeReport, type Lesson, type VodProgress } from '../core/models.ts';
+import { dayKey, HOUR, MIN } from './format.ts';
 
 export type Status = 'ok' | 'warning' | 'danger' | 'info';
 
@@ -14,25 +14,75 @@ const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 /** Kinds that are something due. Class periods are only shown on request. */
 export const isDue = (d: Deadline) => d.kind !== 'classPeriod';
 
-/** Calendar course names can be cut short, so match on prefix either way. */
+/**
+ * The course's attendance record for a name from another source. Calendar
+ * course names can be cut short, so after an exact match it tries a prefix
+ * either way: the longest course name the given one starts with, or the one
+ * course that starts with it. Several courses starting with it can't be told
+ * apart, so that is no match.
+ */
 export function courseFor(courseName: string, all: CourseAttendance[]): CourseAttendance | null {
   const n = norm(courseName);
   if (!n) return null;
-  return all.find((c) => {
+  let shorter: CourseAttendance | null = null;
+  const longer: CourseAttendance[] = [];
+  for (const c of all) {
     const m = norm(c.course.name);
-    return m === n || m.startsWith(n) || n.startsWith(m);
-  }) ?? null;
+    if (m === n) return c;
+    if (!m) continue;
+    if (m.startsWith(n)) longer.push(c);
+    if (n.startsWith(m) && m.length > (shorter ? norm(shorter.course.name).length : 0)) shorter = c;
+  }
+  if (!longer.length) return shorter;
+  return !shorter && longer.length === 1 ? longer[0] : null;
 }
 
-/** The progress row for a VOD-window event, or null if unknown. */
+/** An event's course: by the id its link carries, else by name. */
+export function courseOf(d: Deadline, all: CourseAttendance[]): CourseAttendance | null {
+  const byId = d.courseId == null ? null : all.find((c) => c.course.id === d.courseId);
+  return byId ?? courseFor(d.courseName, all);
+}
+
+/** The progress row for a VOD-window event, or null if unknown: by course module where known, else by title. */
 export function vodFor(d: Deadline, all: CourseAttendance[]): VodProgress | null {
   if (d.kind !== 'vod') return null;
+  const vods = courseOf(d, all)?.vods ?? [];
   const t = norm(d.title);
-  return courseFor(d.courseName, all)?.vods.find((v) => norm(v.title) === t) ?? null;
+  return (d.moduleId == null ? null : vods.find((v) => v.moduleId === d.moduleId)) ?? vods.find((v) => norm(v.title) === t) ?? null;
 }
 
-/** Nothing left to do: handed in, attempted, or (a VOD) fully watched. */
-export const isDone = (d: Deadline, att: CourseAttendance[]) => d.done || (vodFor(d, att)?.percent ?? 0) >= 100;
+/** Minute-precision UTC stamp, so keys don't depend on the zone. */
+const stamp = (t: number) => new Date(Math.floor(t / MIN) * MIN).toISOString().slice(0, 16).replace(/[-:]/g, '') + 'Z';
+
+/** The part of a deadline's reminder keys that names the item: every key is `<stem>|<lead>`. Also what Settings.dismissed holds. */
+export function reminderStem(d: Deadline): string {
+  const item = `${norm(courseFromTitle(0, d.courseName.replace(/\s+/g, ' ').trim()).name)}|${norm(d.title)}|${stamp(d.end)}`;
+  return d.kind === 'vod' ? `vod:${item}` : `due:${d.kind}:${item}`;
+}
+
+/** The student marked this as done themselves, as opposed to eClass saying so. Show it as "Marked done by you". */
+export const markedDone = (d: Deadline, dismissed: readonly string[] = []) => dismissed.length > 0 && dismissed.includes(reminderStem(d));
+
+/** Settings.dismissed with an item marked or unmarked. Oldest marks go first; they are long past by then. */
+export function withDismissed(dismissed: readonly string[], d: Deadline, done: boolean): string[] {
+  const stem = reminderStem(d);
+  const others = dismissed.filter((s) => s !== stem);
+  return (done ? [...others, stem] : others).slice(-200);
+}
+
+/** Nothing left to do: handed in, attempted, (a VOD) fully watched, or marked done by the student. */
+export const isDone = (d: Deadline, att: CourseAttendance[], dismissed: readonly string[] = []) =>
+  d.done || (vodFor(d, att)?.percent ?? 0) >= 100 || markedDone(d, dismissed);
+
+/**
+ * Sessions held so far: those before now's day, and today's once marked. eClass
+ * lists the whole semester, the weeks still to come as unmarked rows, and an
+ * unmarked class today may not have happened yet.
+ */
+export function heldClasses(c: CourseAttendance, now: number): AttendanceEntry[] {
+  const today = dayKey(now);
+  return c.classes.filter((e) => e.date < today || (e.date === today && e.mark !== 'unmarked'));
+}
 
 /** null = plain, otherwise the status the guide assigns. */
 export function deadlineStatus(d: Deadline, now: number): Status | null {
@@ -48,10 +98,10 @@ export function deadlineStatus(d: Deadline, now: number): Status | null {
 }
 
 /** Unwatched VOD windows and other deadlines due within 72 h (overdue ones kept for 24 h). Soonest first. */
-export function needsAttention(all: Deadline[], att: CourseAttendance[], now: number): Deadline[] {
+export function needsAttention(all: Deadline[], att: CourseAttendance[], now: number, dismissed: readonly string[] = []): Deadline[] {
   return all
     .filter((d) => {
-      if (!isDue(d)) return false;
+      if (!isDue(d) || markedDone(d, dismissed)) return false;
       const left = d.end - now;
       if (d.kind === 'vod') return left >= 0 && left <= todayWindow && (vodFor(d, att)?.percent ?? 0) < 100;
       return !d.done && left > -24 * HOUR && left <= todayWindow;
@@ -62,7 +112,7 @@ export function needsAttention(all: Deadline[], att: CourseAttendance[], now: nu
 /** A course's own due items, not more than a day overdue, soonest first. */
 export function courseDeadlines(course: Course, all: Deadline[], att: CourseAttendance[], now: number): Deadline[] {
   return all
-    .filter((d) => isDue(d) && d.end > now - 24 * HOUR && courseFor(d.courseName, att)?.course.id === course.id)
+    .filter((d) => isDue(d) && d.end > now - 24 * HOUR && courseOf(d, att)?.course.id === course.id)
     .sort((a, b) => a.end - b.end);
 }
 
@@ -128,8 +178,8 @@ export class AbsenceState {
   get line(): string {
     const noun = this.used === 1 ? 'absence' : 'absences';
     if (this.limit == null) return `${this.used} ${noun} · limit not set`;
-    if (this.used > this.limit) return `${this.used} absences · limit ${this.limit}`;
-    return `${this.used} of ${this.limit} ${noun} used`;
+    if (this.used > this.limit) return `${this.used} ${noun} · limit ${this.limit}`;
+    return `${this.used} of ${this.limit} absences used`;
   }
 }
 

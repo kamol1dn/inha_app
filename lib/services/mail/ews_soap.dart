@@ -5,6 +5,7 @@
 /// (FindItem, GetItem and GetFolder operations).
 library;
 
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:html/parser.dart' as html;
@@ -37,13 +38,15 @@ class EwsError extends ParseError {
 // ---------------------------------------------------------------- requests
 
 /// FindItem on a folder: ids plus subject, sender, the To line, received
-/// time, read flag and (unless [withPreview] is false) the 256-character
-/// preview, newest first.
+/// time, read flag, whether it has attachments and (unless [withPreview] is
+/// false) the 256-character preview, newest first. With [query], only the
+/// messages Exchange finds for it (its QueryString search).
 String findItemsEnvelope({
   MailFolder folder = MailFolder.inbox,
   int limit = 30,
   int offset = 0,
   bool withPreview = true,
+  String? query,
   String serverVersion = ewsServerVersion,
 }) {
   final fields = [
@@ -52,6 +55,7 @@ String findItemsEnvelope({
     'item:DisplayTo',
     'item:DateTimeReceived',
     'message:IsRead',
+    'item:HasAttachments',
     if (withPreview) 'item:Preview',
   ].map((f) => '\n        <t:FieldURI FieldURI="$f"/>').join();
   return _envelope('''
@@ -69,7 +73,7 @@ String findItemsEnvelope({
   </m:SortOrder>
   <m:ParentFolderIds>
     <t:DistinguishedFolderId Id="${folder.ewsId}"/>
-  </m:ParentFolderIds>
+  </m:ParentFolderIds>${query == null ? '' : '\n  <m:QueryString>${_escape(query)}</m:QueryString>'}
 </m:FindItem>''', serverVersion);
 }
 
@@ -100,6 +104,30 @@ String getItemEnvelope(String id, {String serverVersion = ewsServerVersion}) =>
     <t:ItemId Id="${_escape(id)}"/>
   </m:ItemIds>
 </m:GetItem>''', serverVersion);
+
+/// GetAttachment for one attachment's content (base64, as Exchange sends it).
+String getAttachmentEnvelope(String id, {String serverVersion = ewsServerVersion}) => _envelope('''
+<m:GetAttachment>
+  <m:AttachmentIds>
+    <t:AttachmentId Id="${_escape(id)}"/>
+  </m:AttachmentIds>
+</m:GetAttachment>''', serverVersion);
+
+/// CreateAttachment adding [file] to the saved message [id], at its current
+/// [changeKey].
+String createAttachmentEnvelope(String id, String changeKey, MailFile file,
+        {String serverVersion = ewsServerVersion}) =>
+    _envelope('''
+<m:CreateAttachment>
+  ${_itemId(id, changeKey, 'ParentItemId', namespace: 'm')}
+  <m:Attachments>
+    <t:FileAttachment>
+      <t:Name>${_escape(file.name)}</t:Name>
+      <t:ContentType>${_escape(file.contentType)}</t:ContentType>
+      <t:Content>${base64Encode(file.bytes)}</t:Content>
+    </t:FileAttachment>
+  </m:Attachments>
+</m:CreateAttachment>''', serverVersion);
 
 /// UpdateItem setting `message:IsRead`. Read receipts the sender asked for
 /// are suppressed: opening a message in the app must never send mail on the
@@ -263,9 +291,9 @@ String resolveNamesEnvelope(String query, {String serverVersion = ewsServerVersi
   <m:UnresolvedEntry>${_escape(query)}</m:UnresolvedEntry>
 </m:ResolveNames>''', serverVersion);
 
-String _itemId(String id, String changeKey, String element) => changeKey.isEmpty
-    ? '<t:$element Id="${_escape(id)}"/>'
-    : '<t:$element Id="${_escape(id)}" ChangeKey="${_escape(changeKey)}"/>';
+String _itemId(String id, String changeKey, String element, {String namespace = 't'}) => changeKey.isEmpty
+    ? '<$namespace:$element Id="${_escape(id)}"/>'
+    : '<$namespace:$element Id="${_escape(id)}" ChangeKey="${_escape(changeKey)}"/>';
 
 /// The To, Cc and Bcc lines of [m], in schema order, leaving out empty ones.
 String _recipients(OutgoingMail m) => [
@@ -321,6 +349,7 @@ List<MailHeader> parseFindItem(String xml) {
                   ?.toLocal() ??
               DateTime.fromMillisecondsSinceEpoch(0),
           unread: item.child('IsRead')?.text.trim().toLowerCase() == 'false',
+          hasAttachments: item.child('HasAttachments')?.text.trim().toLowerCase() == 'true',
         ),
   ];
 }
@@ -350,8 +379,10 @@ MailMessage parseMessage(String xml) {
       for (final a in item.child('Attachments')?.elements ?? const <SoapElement>[])
         if (a.child('IsInline')?.text.trim().toLowerCase() != 'true')
           MailAttachment(
+            id: a.child('AttachmentId')?.attr('Id') ?? '',
             name: a.child('Name')?.text.trim() ?? '',
             size: int.tryParse(a.child('Size')?.text.trim() ?? '') ?? 0,
+            contentType: a.child('ContentType')?.text.trim() ?? '',
           ),
     ],
     to: _addresses(item.child('ToRecipients')),
@@ -376,6 +407,31 @@ List<MailAddress> _addresses(SoapElement? line) => [
   final value = id?.attr('Id') ?? '';
   return value.isEmpty ? null : (value, id!.attr('ChangeKey') ?? '');
 }
+
+/// A file attachment from a GetAttachment response. An attached message
+/// (ItemAttachment) has no file content and is a [ParseError].
+MailFile parseAttachment(String xml) {
+  final file = _responseMessage(xml, 'GetAttachment').find('FileAttachment');
+  final content = file?.child('Content');
+  if (file == null || content == null) throw ParseError('mail (GetAttachment)');
+  final type = file.child('ContentType')?.text.trim() ?? '';
+  final List<int> bytes;
+  try {
+    bytes = base64Decode(content.text.replaceAll(RegExp(r'\s+'), ''));
+  } on FormatException {
+    throw ParseError('mail (GetAttachment)');
+  }
+  return MailFile(
+    name: file.child('Name')?.text.trim() ?? '',
+    contentType: type.isEmpty ? 'application/octet-stream' : type,
+    bytes: bytes,
+  );
+}
+
+/// The change key the message has after a CreateAttachment, which moves it on,
+/// or null when the response doesn't say.
+String? parseCreateAttachment(String xml) =>
+    _responseMessage(xml, 'CreateAttachment').find('AttachmentId')?.attr('RootItemChangeKey');
 
 /// Checks a SendItem response; throws [EwsError] when Exchange refused.
 void parseSendItem(String xml) => _responseMessage(xml, 'SendItem');

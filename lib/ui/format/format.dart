@@ -54,6 +54,13 @@ String relative(DateTime t, {DateTime? now}) {
   return '${t.day} ${_mon[t.month - 1]} ${clock(t)}';
 }
 
+/// 21 min ago / 2 h ago / 3 d ago
+String ago(DateTime t, {DateTime? now}) {
+  final p = (now ?? DateTime.now()).difference(t);
+  if (p.inHours >= 24) return '${p.inDays} d ago';
+  return p.inMinutes < 60 ? '${p.inMinutes} min ago' : '${p.inHours} h ago';
+}
+
 /// For lists of past items (mail): 14:07 today, Wed 14:07 within the week,
 /// otherwise 17 Oct (with the year if it isn't this one).
 String pastWhen(DateTime t, {DateTime? now}) {

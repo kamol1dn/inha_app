@@ -5,8 +5,8 @@ import { LoginRequired, NetworkError, ParseError } from '../src/core/errors.ts';
 import type { HttpRequest, HttpResponse } from '../src/core/http.ts';
 import { courseFromTitle, type Course, type Deadline } from '../src/core/models.ts';
 import type { Credentials } from '../src/core/credentials.ts';
-import { EclassClient } from '../src/services/eclass/client.ts';
-import { itemUrl } from '../src/services/eclass/links.ts';
+import { EclassClient, mergeUpcoming } from '../src/services/eclass/client.ts';
+import { itemUrl, vodUrl } from '../src/services/eclass/links.ts';
 import {
   extractSesskey,
   isLoginPage,
@@ -17,7 +17,9 @@ import {
   parseQuizSubmission,
   parseUpcoming,
   parseUserId,
+  parseVodModules,
   parseVodProgress,
+  withVodModules,
 } from '../src/services/eclass/parsers.ts';
 
 const unix = (seconds: number) => seconds * 1000;
@@ -498,6 +500,74 @@ function respond(body: string, { url, status = 200, redirected = false }: { url:
   return { status, url, redirected, headers: new Headers(), bytes, text: () => body };
 }
 
+describe('parseUpcoming, parts other pages rely on', () => {
+  const page = (title: string, module = 'quiz') =>
+    `<html><body id="page-calendar-view"><div class="maincalendar"><div class="eventlist"><div class="event"><div class="card-header"><h3 class="referer"><a href="https://eclass.inha.ac.kr/mod/${module}/view.php?id=9">${title}</a></h3><span class="date"><a href="/calendar/view.php?view=day&amp;time=1792954740">Sunday</a></span><div class="course"><a href="https://eclass.inha.ac.kr/course/view.php?id=2635">Blockchain</a></div></div></div></div></div></body></html>`;
+
+  test('an event that only says something opens is not a deadline', () => {
+    assert.deepEqual(parseUpcoming(page('[QUIZ] 2 Week 6 (Quiz opens)')), []);
+    assert.equal(parseUpcoming(page('[QUIZ] 2 Week 6 (Quiz closes)')).length, 1);
+    assert.deepEqual(parseUpcoming(page('Lab 2 (Assignment opens)', 'assign')), []);
+    assert.equal(parseUpcoming(page('How the market opens', 'assign')).length, 1, 'only that wording at the end, in brackets');
+  });
+
+  test('every event knows its course by id', () => {
+    assert.equal(parseUpcoming(page('Quiz'))[0].courseId, 2635);
+    const all = parseUpcoming(fixture('eclass_upcoming.html'));
+    assert.equal(all.find((d) => d.title === 'Assignment 1')!.courseId, 2622);
+  });
+
+  test('mergeUpcoming keeps one of each', () => {
+    const d: Deadline = { title: 'Lab', courseName: 'AI', kind: 'assignment', start: null, end: 1, moduleId: 1, moduleType: 'assign', done: false, doneAt: null };
+    const period: Deadline = { ...d, title: 'AI[001]-1', kind: 'classPeriod', moduleId: null, moduleType: null };
+    assert.deepEqual(mergeUpcoming([[d, period], [{ ...d }, { ...period }, { ...d, end: 2 }, { ...period, title: 'AI[001]-2' }]]).map((x) => [x.title, x.end]), [
+      ['Lab', 1],
+      ['AI[001]-1', 1],
+      ['Lab', 2],
+      ['AI[001]-2', 1],
+    ]);
+  });
+});
+
+describe('a finished quiz with several attempts allowed', () => {
+  test('the attempt number comes before the state, and it still counts as done', () => {
+    const html =
+      '<html><body id="page-mod-quiz-view"><div class="quizinfo"></div><table class="quizattemptsummary"><tbody>' +
+      '<tr><td>1</td><td>Finished<span class="statedetails">Submitted 2026-10-04 23:13</span></td></tr>' +
+      '<tr><td>2</td><td>In progress</td></tr></tbody></table></body></html>';
+    assert.deepEqual(parseQuizSubmission(html), { done: true, at: local(2026, 10, 4, 23, 13) });
+  });
+});
+
+describe('VOD rows', () => {
+  const vods = parseVodProgress(fixture('eclass_progress_2592.html'));
+  const list = (links: string) => `<html><body><div id="region-main"><table>${links}</table></div><a href="/course/view.php?id=1">Video 7</a></body></html>`;
+
+  test('carry the watch window from the Details button', () => {
+    const v = vods.find((x) => x.title === 'Video 7')!;
+    assert.deepEqual([v.opens, v.closes], [unix(1792177200), unix(1792954799)]);
+    assert.equal(v.moduleId, undefined, "data-modid is the instance, not a course module: it opens 'Invalid course module ID'");
+  });
+
+  test('parseVodModules reads view.php links only, in page order', () => {
+    const html = list('<a href="view.php?id=72441">Video 7</a><a href="https://eclass.inha.ac.kr/mod/vod/view.php?id=72743">Midterm  info</a><a href="/mod/quiz/view.php?id=5">Quiz</a><a href="view.php?id=1"> </a>');
+    assert.deepEqual(parseVodModules(html), [
+      { name: 'Video 7', moduleId: 72441 },
+      { name: 'Midterm info', moduleId: 72743 },
+    ]);
+    assert.deepEqual(parseVodModules('<html><body><p>Something else</p></body></html>'), []);
+  });
+
+  test('withVodModules matches on the name, ignoring case; a repeated name takes the links in order', () => {
+    const row = vods[0];
+    const twice = [{ ...row, title: 'Part' }, { ...row, title: 'part' }, { ...row, title: 'Other' }];
+    const out = withVodModules(twice, [{ name: 'PART', moduleId: 1 }, { name: 'Part', moduleId: 2 }]);
+    assert.deepEqual(out.map((v) => v.moduleId), [1, 2, undefined]);
+    assert.equal(vodUrl(out[0]), 'https://eclass.inha.ac.kr/mod/vod/view.php?id=1');
+    assert.equal(vodUrl(out[2]), null);
+  });
+});
+
 describe('EclassClient', () => {
   let server: FakeEclass;
   let saved: Credentials | null;
@@ -563,6 +633,78 @@ describe('EclassClient', () => {
     test('a non-optional page that 404s is an error, not an empty list', async () => {
       server.pages.delete('/calendar/view.php?view=upcoming');
       await assert.rejects(client.upcoming(), NetworkError);
+    });
+
+    test('attendance() takes VOD links from the course list when it answers', async () => {
+      server.pages.set('/mod/vod/index.php?id=2592', '<html><body><div id="region-main"><a href="view.php?id=72441">Video 7</a></div><a href="/login/logout.php">x</a></body></html>');
+      const dl = await client.attendance(lecture);
+      assert.equal(dl.vods.find((v) => v.title === 'Video 7')!.moduleId, 72441);
+      assert.equal(dl.vods.find((v) => v.title === 'Lecture 1')!.moduleId, undefined);
+    });
+
+    test('attendance() without the VOD list still has the VODs: that page is optional', async () => {
+      const failing: typeof server.http = async (url, req) => {
+        if (url.includes('/mod/vod/index.php')) throw new NetworkError('eclass.inha.ac.kr answered 500', 500);
+        return server.http(url, req);
+      };
+      const dl = await new EclassClient(async () => saved, failing).attendance(lecture);
+      assert.equal(dl.vods.length, 12);
+    });
+
+    test('allUpcoming() merges each course\'s page into the calendar\'s, each event once', async () => {
+      const page = (id: number, title: string) =>
+        `<html><body id="page-calendar-view"><a href="/login/logout.php">Log out</a><div class="maincalendar"><div class="eventlist"><div class="event"><h3 class="referer"><a href="https://eclass.inha.ac.kr/mod/assign/view.php?id=${id}">${title}</a></h3><span class="date"><a href="/calendar/view.php?view=day&amp;time=1792954500">Sunday</a></span><div class="course"><a href="https://eclass.inha.ac.kr/course/view.php?id=2622">Multimedia Computing</a></div></div></div></div></body></html>`;
+      server.pages.set('/calendar/view.php?view=upcoming&course=2622', page(99, 'Past slot ten') .replace('</div></div></div></div>', `</div><div class="event"><h3 class="referer"><a href="https://eclass.inha.ac.kr/mod/assign/view.php?id=72061">Assignment 1</a></h3><span class="date"><a href="/calendar/view.php?view=day&amp;time=1792954500">Sunday</a></span><div class="course"><a href="https://eclass.inha.ac.kr/course/view.php?id=2622">Multimedia Computing</a></div></div></div></div></div>`));
+      const { deadlines, failed } = await client.allUpcoming([multimedia, lecture]); // lecture's page 404s in the fake
+      assert.equal(failed, null);
+      assert.equal(deadlines.length, 11);
+      assert.ok(deadlines.some((d) => d.title === 'Past slot ten'));
+      assert.equal(deadlines.filter((d) => d.title === 'Assignment 1').length, 1);
+    });
+
+    test('allUpcoming(): a page that fails is reported, and the rest still comes', async () => {
+      const failing: typeof server.http = async (url, req) => {
+        if (url.includes('course=2622')) throw new NetworkError('eclass.inha.ac.kr answered 503', 503);
+        return server.http(url, req);
+      };
+      const { deadlines, failed } = await new EclassClient(async () => saved, failing).allUpcoming([multimedia]);
+      assert.equal(deadlines.length, 10);
+      assert.ok(failed instanceof NetworkError);
+    });
+
+    test('allUpcoming(): the calendar page failing costs only that page', async () => {
+      server.pages.delete('/calendar/view.php?view=upcoming');
+      server.pages.set('/calendar/view.php?view=upcoming&course=2622', fixture('eclass_upcoming.html'));
+      const { deadlines, failed } = await client.allUpcoming([multimedia]);
+      assert.equal(deadlines.length, 10);
+      assert.ok(failed instanceof NetworkError);
+    });
+
+    test('allUpcoming() with no page at all throws', async () => {
+      server.pages.delete('/calendar/view.php?view=upcoming');
+      await assert.rejects(client.allUpcoming([]), NetworkError);
+    });
+
+    test('sessionUser follows the dashboard', async () => {
+      assert.equal(client.sessionUser, null);
+      await client.courses();
+      assert.equal(client.sessionUser, 1);
+    });
+
+    test('verifyLogin() posts even with a live session', async () => {
+      await client.verifyLogin();
+      assert.equal(server.loginCount, 1);
+    });
+
+    test('verifyLogin() finds a wrong password even with a live session', async () => {
+      saved = { username: 'student', password: 'typo' };
+      await assert.rejects(client.verifyLogin(), (e: unknown) => e instanceof LoginRequired && e.rejected);
+    });
+
+    test('logout() uses the page\'s sesskey', async () => {
+      await client.logout();
+      assert.deepEqual(server.log, ['GET /', 'GET /login/logout.php?sesskey=TESTSESSKY']);
+      assert.equal(client.sessionUser, null);
     });
 
     test('submission() reads assignment and quiz pages only', async () => {
@@ -659,8 +801,32 @@ describe('EclassClient', () => {
 
     test('no saved login throws LoginRequired without posting anything', async () => {
       saved = null;
-      await assert.rejects(client.upcoming(), LoginRequired);
+      await assert.rejects(client.upcoming(), (e: unknown) => e instanceof LoginRequired && !e.rejected);
       assert.equal(server.loginCount, 0);
+    });
+
+    test('a rejected password is not posted again until something changes', async () => {
+      saved = { username: 'student', password: 'wrong' };
+      const told: string[] = [];
+      const c = new EclassClient(async () => saved, server.http, (_, login) => void told.push(login.password));
+      await assert.rejects(c.courses(), (e: unknown) => e instanceof LoginRequired && e.rejected);
+      await assert.rejects(c.upcoming(), LoginRequired);
+      await assert.rejects(c.attendance(multimedia), LoginRequired);
+      assert.equal(server.loginCount, 1);
+      assert.deepEqual(told, ['wrong']);
+
+      c.forgetRejected();
+      await assert.rejects(c.courses(), LoginRequired);
+      assert.equal(server.loginCount, 2);
+
+      saved = { username: 'student', password: 'secret' };
+      assert.equal((await c.courses()).length, 6);
+      assert.equal(server.loginCount, 3);
+    });
+
+    test('logout() with no session posts nothing', async () => {
+      await client.logout();
+      assert.deepEqual(server.log, ['GET /']);
     });
   });
 });

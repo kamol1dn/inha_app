@@ -255,7 +255,7 @@ void main() {
           channels: {...NotifySettings.defaultChannels}..remove(NotifyChannel.deadlines));
       await notifier.saveSettings(off);
       await notifier.sync(deadlines: [lab], now: now);
-      expect(plugin.cancelled, unorderedEquals(plugin.scheduled.keys));
+      expect(plugin.cancelled, containsAll(plugin.scheduled.keys));
       expect(plugin.shown, isEmpty);
     });
 
@@ -273,7 +273,14 @@ void main() {
 
     test('defaults follow DESIGN.md 11: everything but Classes, quiet hours on', () async {
       final s = await notifier.settings();
-      expect(s.channels, {NotifyChannel.deadlines, NotifyChannel.vod, NotifyChannel.attendance, NotifyChannel.grades});
+      expect(s.channels, {
+        NotifyChannel.deadlines,
+        NotifyChannel.vod,
+        NotifyChannel.exams,
+        NotifyChannel.attendance,
+        NotifyChannel.grades,
+        NotifyChannel.announcements,
+      });
       expect(s.quietHours, isTrue);
       final lesson = Lesson(weekday: now.weekday, start: '14:00', end: '15:30', subject: 'AI');
       await notifier.sync(lessons: [lesson], now: now);

@@ -12,7 +12,7 @@ eClass's own layout:
 | Course page | Absences, VODs, the eClass score, grade and what's due, above eClass's content |
 | Assignment, quiz, VOD | How long is left, or that it's done |
 
-The full views (mail with compose and reply, grades, schedule, deadlines, exams, settings) open in
+The full views (mail with search, compose and reply, and files to attach; grades, schedule, deadlines, exams, settings) open in
 eClass's content area, under its header and beside its menu. The toolbar button shows Today. Reminders follow the app's rules
 (`docs/NOTIFICATIONS.md`), plus new-mail notifications, each switchable in Settings.
 
@@ -35,9 +35,20 @@ synced, and readable only by the extension's worker and pages; each one is sent 
 service. Like the app, the extension talks to nothing but eclass.inha.ac.kr, ins.inha.uz,
 mail.inha.uz and iut.edupage.org.
 
+Saving a login always tries it, even with a live session in the browser. One a service refuses isn't
+kept, and the login before it stays. A wrong password counts toward the domain's lockout, so a saved
+login that later gets refused is not posted again for a day, unless the student saves a login or presses
+Update on that service; a refresh costs at most one failed logon.
+
+**Signing out** ends the browser's eClass session too and forgets that account's data and what it was
+told. Clicking Log out on eClass stops background logins until the student signs in again by hand. If
+someone else signs in to eClass in this browser while a login is saved, their session isn't read.
+
 **INS** still serves a certificate that expired in 2024. Browsers refuse it for background requests,
-so when the worker can't reach INS, Grades offers "Open INS": choose Proceed once, and the
-extension reads the grades from that tab (`src/content/ins.ts`).
+so when the worker can't reach INS, Grades and Settings offer "Open INS": choose Proceed once, and the
+extension reads the grades from that tab (`src/content/ins.ts`). The saved password goes only to a
+tab the extension opened or one where the student clicked "Read my grades", never to a page just
+because its address says `#iut-sync`: that certificate can't tell the real INS from a fake.
 
 ## Building
 
@@ -67,7 +78,8 @@ runs Mozilla's checks on it.
   Manage API Keys and save it as the repository secrets `AMO_JWT_ISSUER` and `AMO_JWT_SECRET`. Then a
   `v*` tag gets a signed `.xpi` on the release, which installs by opening it in Zen. Mozilla signs a
   version once, so bump `version` in `static/manifest.json` for each release.
-- Zen may ask to allow the four sites; if it doesn't, allow them under the add-on's Permissions.
+- Zen may ask to allow the four sites. If they are off, Settings shows "Allow access", and a source that can't
+  load says so instead of blaming the connection.
 - INS: Firefox keeps "Accept the risk" for INS's expired certificate as a lasting exception, so after
   doing that once in a tab, the background sync may reach INS directly.
 

@@ -15,7 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // zonedSchedule takes a TZDateTime; scheduling uses tz.UTC with absolute instants.
 import 'package:timezone/timezone.dart' as tz;
 
-import '../data/exams.dart' show classFreeDaysKey, decodeDays;
+import '../data/exams.dart' show MyExam, classFreeDaysKey, decodeDays;
 import '../models/models.dart';
 import 'rules.dart';
 
@@ -65,6 +65,15 @@ class Notifier {
   /// been seen yet, and its marks are recorded without being announced.
   static const seenGradesKey = 'notify.seenGrades.v1';
 
+  /// shared_preferences key holding where each course's marks last came from,
+  /// `{"<course id>": "gradebook"}`. The two sources write one mark differently
+  /// ("37.00/100.00", "0.37"), so marks can only be compared within a source.
+  static const seenGradeSourcesKey = 'notify.seenGradeSources.v1';
+
+  /// shared_preferences key set once eClass's bell menu has been seen: what it
+  /// held then is recorded without being announced.
+  static const noticesSeenKey = 'notify.noticesSeen.v1';
+
   static Map<int, Map<String, String>> _readSeenGrades(SharedPreferences p) {
     final raw = p.getString(seenGradesKey);
     if (raw == null) return {};
@@ -73,6 +82,14 @@ class Notifier {
         for (final e in (jsonDecode(raw) as Map<String, dynamic>).entries)
           ?int.tryParse(e.key): (e.value as Map<String, dynamic>).cast<String, String>(),
       };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Map<String, String> _readSeenSources(SharedPreferences p) {
+    try {
+      return (jsonDecode(p.getString(seenGradeSourcesKey) ?? '{}') as Map<String, dynamic>).cast<String, String>();
     } catch (_) {
       return {};
     }
@@ -110,6 +127,12 @@ class Notifier {
       description: 'Lecture videos still to watch, ${_leads(vodReminderLeads)} before the window closes',
       importance: Importance.high,
     ),
+    NotifyChannel.exams: AndroidNotificationChannel(
+      'exams',
+      'Exams',
+      description: 'Your exams, the evening before and ${_leads(const [examReminderLead])} before, with the room',
+      importance: Importance.high,
+    ),
     NotifyChannel.attendance: AndroidNotificationChannel(
       'attendance',
       'Attendance',
@@ -121,6 +144,12 @@ class Notifier {
       'Grades',
       description: 'A new or changed mark in eClass',
       importance: Importance.high,
+    ),
+    NotifyChannel.announcements: AndroidNotificationChannel(
+      'announcements',
+      'eClass notifications',
+      description: "New items in eClass's notification menu",
+      importance: Importance.defaultImportance,
     ),
     NotifyChannel.classes: AndroidNotificationChannel(
       'classes',
@@ -214,11 +243,12 @@ class Notifier {
   // Single notifications
   // -------------------------------------------------------------------------
 
-  /// Shows [n] immediately. Does not record it; [deliver] does that.
-  Future<void> show(PlannedNotification n) async {
+  /// Shows [n] immediately, under its item's id unless [id] says otherwise. Does
+  /// not record it; [deliver] does that.
+  Future<void> show(PlannedNotification n, {int? id}) async {
     if (!await init()) return;
     await _plugin.show(
-      id: idFor(n.key),
+      id: id ?? idFor(reminderItem(n.key)),
       title: n.title,
       body: n.body,
       notificationDetails: _details(n),
@@ -226,12 +256,13 @@ class Notifier {
     );
   }
 
-  /// Schedules [n] for [PlannedNotification.when] (replacing any earlier
-  /// schedule with the same key). Does not record it; [deliver] does that.
-  Future<void> schedule(PlannedNotification n) async {
+  /// Schedules [n] for [PlannedNotification.when], under its item's id unless
+  /// [id] says otherwise (replacing any earlier schedule with that id). Does not
+  /// record it; [deliver] does that.
+  Future<void> schedule(PlannedNotification n, {int? id}) async {
     if (!await init()) return;
     await _plugin.zonedSchedule(
-      id: idFor(n.key),
+      id: id ?? idFor(reminderItem(n.key)),
       // An absolute instant, so UTC is exact whatever the device zone is,
       // and the time zone database never needs loading.
       scheduledDate: tz.TZDateTime.from(n.when, tz.UTC),
@@ -248,15 +279,37 @@ class Notifier {
   /// so the rules may plan it again.
   Future<void> cancel(String key, {bool forget = false}) async {
     if (!await init()) return;
-    await _plugin.cancel(id: idFor(key));
+    await _cancelBoth(key);
     if (forget) {
       await _serial(() async {
-        final prefs = await _load();
-        final recs = _decode(prefs);
-        if (recs.remove(key) != null) await _save(prefs, recs);
+        final recs = _Records(await _load());
+        if (recs.map.remove(key) != null) await recs.save();
       });
     }
   }
+
+  /// A reminder may sit under its item's id or its own (see [deliver]).
+  Future<void> _cancelBoth(String key) async {
+    await _plugin.cancel(id: idFor(key));
+    final item = reminderItem(key);
+    if (item != key) await _plugin.cancel(id: idFor(item));
+  }
+
+  /// After signing out of eClass: removes everything that came from it, shown or
+  /// scheduled, whether or not notifications are allowed, and forgets it was
+  /// sent. The marks and courses seen are cleared with the account (Prefs).
+  Future<void> forgetEclass() => _serial(() async {
+        final recs = _Records(await _load());
+        final keys = [for (final k in recs.map.keys) if (eclassKeyPrefixes.any(k.startsWith)) k];
+        if (keys.isEmpty) return;
+        if (await init()) {
+          for (final k in keys) {
+            await _tryCancel(k);
+          }
+        }
+        keys.forEach(recs.map.remove);
+        await recs.save();
+      });
 
   /// Removes every notification and forgets every sent key, e.g. on logout.
   Future<void> cancelAll() async {
@@ -298,6 +351,8 @@ class Notifier {
     List<CourseAttendance>? attendance,
     List<Lesson>? lessons,
     List<CourseGrades>? courseGrades,
+    List<MyExam>? exams,
+    List<EclassNotification>? notices,
     DateTime? now,
   }) async {
     final at = now ?? _clock();
@@ -315,6 +370,8 @@ class Notifier {
       absenceLimits: readAbsenceLimits(prefs),
       classFree: decodeDays(prefs.getString(classFreeDaysKey)),
       seenGrades: seenGrades,
+      exams: exams ?? const [],
+      notices: notices ?? const [],
     );
 
     final seen = {...?prefs.getStringList(seenCoursesKey)?.map(int.tryParse).whereType<int>()};
@@ -324,9 +381,23 @@ class Notifier {
     };
     final attendanceOn = settings.channels.contains(NotifyChannel.attendance);
     final gradesOn = settings.channels.contains(NotifyChannel.grades);
+    final noticesOn = settings.channels.contains(NotifyChannel.announcements);
+    final noticesSeen = prefs.getBool(noticesSeenKey) ?? false;
+
+    // A grades page that opened or closed: its marks read differently now, not
+    // necessarily anything new. An item never seen before is still news.
+    final sources = _readSeenSources(prefs);
+    final rebaselined = {
+      for (final g in courseGrades ?? const <CourseGrades>[])
+        if (g.source != GradeSource.none && (sources['${g.course.id}'] ?? g.source.name) != g.source.name)
+          for (final item in g.items)
+            if (seenGrades[g.course.id]?[item.key] case final was?) gradeKey(g.course.id, item, was),
+    };
+
     bool silent(PlannedNotification n) {
       final graded = gradeCourseId(n.key);
-      if (graded != null) return !gradesOn || !seenGrades.containsKey(graded);
+      if (graded != null) return !gradesOn || !seenGrades.containsKey(graded) || rebaselined.contains(n.key);
+      if (n.key.startsWith(noticeKeyPrefix)) return !noticesOn || !noticesSeen;
       final course = absenceCourseId(n.key);
       return course != null && (!attendanceOn || firstSeen.contains(course));
     }
@@ -341,28 +412,33 @@ class Notifier {
       record: {for (final n in plan) if (silent(n)) n.key},
       cancelMissing: {
         if (deadlines != null) ...[vodKeyPrefix, dueKeyPrefix],
+        if (attendance != null) absenceKeyPrefix,
         if (lessons != null) classKeyPrefix,
         if (courseGrades != null) gradeKeyPrefix,
+        if (exams != null) examKeyPrefix,
+        if (notices != null) noticeKeyPrefix,
       },
+      withdraw: finishedItems(deadlines ?? const [], attendance ?? const []),
     );
     if (firstSeen.isNotEmpty) {
       await prefs.setStringList(seenCoursesKey, [for (final id in {...seen, ...firstSeen}) '$id']);
     }
-    if (courseGrades != null) await _advanceSeenGrades(prefs, courseGrades, seenGrades, await sentKeys(at));
+    if (notices != null && !noticesSeen) await prefs.setBool(noticesSeenKey, true);
+    if (courseGrades != null) await _advanceSeenGrades(prefs, courseGrades, await sentKeys(at));
     return shown;
   }
 
   /// Moves on to the marks that went out or were recorded. A mark that could
   /// not be delivered, or is waiting out the night, stays new for the next
   /// pass. Marks stay here when a page stops showing them (a course's grades
-  /// page closing again), so they aren't news when it comes back.
-  Future<void> _advanceSeenGrades(
-    SharedPreferences prefs,
-    List<CourseGrades> courses,
-    Map<int, Map<String, String>> seen,
-    Set<String> sent,
-  ) async {
+  /// page closing again), so they aren't news when it comes back. Read again
+  /// here, not at the start of the pass: the other isolate may have moved on.
+  Future<void> _advanceSeenGrades(SharedPreferences prefs, List<CourseGrades> courses, Set<String> sent) async {
+    await prefs.reload();
+    final seen = _readSeenGrades(prefs);
+    final sources = _readSeenSources(prefs);
     for (final g in courses) {
+      if (g.source != GradeSource.none) sources['${g.course.id}'] = g.source.name;
       final marks = seen[g.course.id] ??= {};
       for (final item in g.items) {
         if (item.marked && sent.contains(gradeKey(g.course.id, item, marks[item.key]))) {
@@ -371,6 +447,7 @@ class Notifier {
       }
     }
     await prefs.setString(seenGradesKey, jsonEncode({for (final e in seen.entries) '${e.key}': e.value}));
+    await prefs.setString(seenGradeSourcesKey, jsonEncode(sources));
   }
 
   /// Shows the items due now, schedules the rest and records every key.
@@ -383,69 +460,102 @@ class Notifier {
   /// Does nothing while notifications are off, so nothing is marked sent
   /// that the user never saw; once allowed, the rules catch up. The keys in
   /// [record] are the exception: they are marked sent without being shown,
-  /// whether or not notifications are allowed.
+  /// whether or not notifications are allowed, and an alarm still waiting for
+  /// one is cancelled. The items in [withdraw] have nothing left to do: their
+  /// reminders leave the tray and the sent list.
+  ///
+  /// An item's reminders replace each other in the tray, so they share its id,
+  /// but Android keeps one alarm per id. So the next reminder (the first in
+  /// [plan], which is sorted by time) gets the item's id, and any later one its
+  /// own until a pass finds it next and moves it over. A later reminder that
+  /// fires before any such pass stands beside the earlier one rather than
+  /// being lost.
   Future<void> deliver(
     List<PlannedNotification> plan, {
     DateTime? now,
     Set<String> cancelMissing = const {},
     Set<String> record = const {},
+    Set<String> withdraw = const {},
   }) {
     return _serial(() async {
       final at = now ?? _clock();
       final atMs = at.millisecondsSinceEpoch;
-      final prefs = await _load();
-      final recs = _decode(prefs);
-      final unrecorded = record.where((k) => !(recs[k]?.sentBy(atMs) ?? false)).toList();
+      final recs = _Records(await _load());
+      final unrecorded = record.where((k) => !(recs.map[k]?.sentBy(atMs) ?? false)).toList();
+      final supported = await init();
       for (final k in unrecorded) {
-        recs[k] = _Record(atMs, 0);
+        if (recs.map[k] != null && supported) await _tryCancel(k);
+        recs.map[k] = _Record(atMs, 0);
       }
-      if (unrecorded.isNotEmpty) await _save(prefs, recs);
+      if (unrecorded.isNotEmpty) await recs.save();
+
+      final finished = [
+        for (final k in recs.map.keys)
+          if (withdraw.contains(reminderItem(k))) k,
+      ];
+      for (final k in finished) {
+        if (!supported || await _tryCancel(k)) recs.map.remove(k);
+      }
+      if (finished.isNotEmpty) await recs.save();
+
       if (!await enabled()) return;
 
       final wanted = {for (final n in plan) n.key};
       final stale = [
-        for (final e in recs.entries)
+        for (final e in recs.map.entries)
           if (!e.value.sentBy(atMs) &&
               !wanted.contains(e.key) &&
               cancelMissing.any(e.key.startsWith))
             e.key,
       ];
       for (final key in stale) {
-        try {
-          await _plugin.cancel(id: idFor(key));
-          recs.remove(key);
-        } catch (e) {
-          debugPrint('notifications: cancel $key failed: $e');
-        }
+        if (await _tryCancel(key)) recs.map.remove(key);
       }
-      if (stale.isNotEmpty) await _save(prefs, recs);
+      if (stale.isNotEmpty) await recs.save();
 
+      final itemsPlanned = <String>{};
       for (final n in plan) {
         // Re-checked here: another isolate may have sent it meanwhile.
-        if (recs[n.key]?.sentBy(atMs) ?? false) continue;
+        if (recs.map[n.key]?.sentBy(atMs) ?? false) continue;
+        final item = reminderItem(n.key);
+        final next = itemsPlanned.add(item);
         final clock = _clock();
         final ref = at.isAfter(clock) ? at : clock;
         try {
+          final id = idFor(next ? item : n.key);
+          final waiting = recs.map[n.key];
+          // It may still be waiting under its own id, from when it wasn't next.
+          if (next && item != n.key && waiting != null) await _plugin.cancel(id: idFor(n.key));
           if (n.when.isAfter(ref.add(_showNowSlack))) {
-            await schedule(n);
-            recs[n.key] = _Record(recs[n.key]?.recordedAt ?? atMs, n.when.millisecondsSinceEpoch);
+            await schedule(n, id: id);
+            recs.map[n.key] = _Record(waiting?.recordedAt ?? atMs, n.when.millisecondsSinceEpoch);
           } else {
-            await show(n);
-            recs[n.key] = _Record(atMs, 0);
+            await show(n, id: id);
+            recs.map[n.key] = _Record(atMs, 0);
           }
         } catch (e) {
           // Not recorded, so the next pass tries again.
           debugPrint('notifications: could not deliver ${n.key}: $e');
           continue;
         }
-        await _save(prefs, recs); // after each, in case the isolate is killed
+        await recs.save(); // after each, in case the isolate is killed
       }
 
       final cutoff = at.subtract(sentKeyRetention).millisecondsSinceEpoch;
-      final before = recs.length;
-      recs.removeWhere((_, r) => r.sentBy(atMs) && r.recordedAt < cutoff);
-      if (recs.length != before) await _save(prefs, recs);
+      final before = recs.map.length;
+      recs.map.removeWhere((_, r) => r.sentBy(atMs) && r.recordedAt < cutoff);
+      if (recs.map.length != before) await recs.save();
     });
+  }
+
+  Future<bool> _tryCancel(String key) async {
+    try {
+      await _cancelBoth(key);
+      return true;
+    } catch (e) {
+      debugPrint('notifications: cancel $key failed: $e');
+      return false;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -472,7 +582,7 @@ class Notifier {
   }
 
   /// One pass at a time per isolate; the isolates themselves are kept apart
-  /// by re-reading the store (prefs.reload) inside each pass.
+  /// by [_Records], which merges into the newest store on every save.
   static Future<void> _queue = Future.value();
   static Future<T> _serial<T>(Future<T> Function() task) {
     final next = _queue.then((_) => task());
@@ -500,12 +610,6 @@ class Notifier {
     }
   }
 
-  static Future<void> _save(SharedPreferences prefs, Map<String, _Record> recs) =>
-      prefs.setString(
-        prefsKey,
-        jsonEncode({for (final e in recs.entries) e.key: [e.value.recordedAt, e.value.fireAt]}),
-      );
-
   static String _leads(List<Duration> leads) {
     String one(Duration d) => d.inMinutes % 60 == 0
         ? '${d.inHours} hour${d.inHours == 1 ? '' : 's'}'
@@ -527,8 +631,10 @@ class NotifySettings {
   static const defaultChannels = {
     NotifyChannel.deadlines,
     NotifyChannel.vod,
+    NotifyChannel.exams,
     NotifyChannel.attendance,
     NotifyChannel.grades,
+    NotifyChannel.announcements,
   };
 
   static String _key(NotifyChannel c) => 'notify.on.${c.name}';
@@ -536,6 +642,7 @@ class NotifySettings {
 
   factory NotifySettings.read(SharedPreferences p) => NotifySettings(
         channels: {
+          // A channel newer than the student's last save follows its default.
           for (final c in NotifyChannel.values)
             if (p.getBool(_key(c)) ?? defaultChannels.contains(c)) c,
         },
@@ -551,6 +658,35 @@ class NotifySettings {
 
   NotifySettings copyWith({Set<NotifyChannel>? channels, bool? quietHours}) =>
       NotifySettings(channels: channels ?? this.channels, quietHours: quietHours ?? this.quietHours);
+}
+
+/// The sent list as one pass sees it. Each save re-reads the store and applies
+/// only what this pass changed, so a pass in the other isolate (the app opened
+/// during the background task) keeps what it wrote.
+class _Records {
+  _Records(this._prefs) : map = Notifier._decode(_prefs) {
+    _base = {...map};
+  }
+
+  final SharedPreferences _prefs;
+  late Map<String, _Record> _base;
+  Map<String, _Record> map;
+
+  Future<void> save() async {
+    await _prefs.reload();
+    final newest = Notifier._decode(_prefs);
+    for (final k in {..._base.keys, ...map.keys}) {
+      final mine = map[k], base = _base[k];
+      if (mine?.recordedAt == base?.recordedAt && mine?.fireAt == base?.fireAt) continue;
+      mine == null ? newest.remove(k) : newest[k] = mine;
+    }
+    await _prefs.setString(
+      Notifier.prefsKey,
+      jsonEncode({for (final e in newest.entries) e.key: [e.value.recordedAt, e.value.fireAt]}),
+    );
+    _base = {...newest};
+    map = newest;
+  }
 }
 
 class _Record {

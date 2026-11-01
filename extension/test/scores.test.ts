@@ -356,7 +356,7 @@ let permission = 'granted';
   runtime: { getURL: (p: string) => `ext://${p}` },
   storage: {
     local: {
-      get: async (k: string | null) => (k == null ? { ...store } : { [k]: store[k] }),
+      get: async (k: string | string[] | null) => (k == null ? { ...store } : Object.fromEntries([k].flat().map((x) => [x, store[x]]))),
       set: async (o: Record<string, unknown>) => void Object.assign(store, JSON.parse(JSON.stringify(o))),
       remove: async (k: string | string[]) => void [k].flat().forEach((x) => delete store[x]),
     },
@@ -370,10 +370,10 @@ let permission = 'granted';
     getPermissionLevel: (cb: (l: string) => void) => cb(permission),
   },
   alarms: { create: async () => {}, clear: async () => {} },
-  windows: { getLastFocused: async () => ({ id: 1 }) },
-  tabs: { create: async (o: { url: string }) => void opened.push(o.url) },
+  windows: { getLastFocused: async () => ({ id: 1 }), update: async () => {} },
+  tabs: { create: async (o: { url: string }) => (opened.push(o.url), { windowId: 1 }) },
 };
-const { forgetSeenGrades, onNotificationClick, postDueReminders } = await import('../src/background/notify.ts');
+const { forgetNotified, onNotificationClick, postDueReminders } = await import('../src/background/notify.ts');
 
 describe('notifier, grades', () => {
   const noon = new Date(2026, 9, 22, 12).getTime();
@@ -496,7 +496,7 @@ describe('notifier, grades', () => {
   test('signing out forgets what was announced', async () => {
     put([withMark('5.00')]);
     await postDueReminders(noon);
-    await forgetSeenGrades();
+    await forgetNotified('eclass');
     assert.equal(seen(), undefined);
   });
 });

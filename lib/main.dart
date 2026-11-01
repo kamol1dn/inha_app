@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'app.dart';
 import 'data/app_data.dart';
 import 'data/services.dart';
+import 'models/models.dart' show Service;
 import 'notifications/background.dart';
 import 'notifications/home_widgets.dart';
 import 'notifications/notifier.dart';
@@ -28,6 +29,7 @@ Future<void> main() async {
   widgetTaps().listen((key) => taps.value = key);
   data.onReminderDataChanged = () => _syncReminders(notifier, data);
   data.onWidgetDataChanged = updateHomeWidgets;
+  data.onSignedOut = (s) => s == Service.eclass ? notifier.forgetEclass() : Future.value();
   await initBackground(backgroundMain);
   await registerPeriodicRefresh();
 
@@ -65,6 +67,8 @@ Future<void> _syncReminders(Notifier notifier, AppData data) =>
           attendance: data.attendance.data?.value,
           lessons: data.lessons.data?.value,
           courseGrades: data.courseGrades.data?.value,
+          exams: data.exams(DateTime.now())?.exams,
+          notices: data.eclassNotifications.data?.value,
         )).then<void>((_) {}, onError: (Object e) => debugPrint('reminders: sync failed: $e'));
 
 /// WorkManager's entry point, in a background isolate of its own.
@@ -79,6 +83,7 @@ void backgroundMain() {
 /// and delivers the notifications.
 Future<RefreshResult> refreshInBackground() async {
   final data = (await AppServices.open()).data;
+  await data.loadExams(rootBundle); // the exam reminders come from the sheets
   await Future.wait([data.refreshTimetable(), data.refreshEclass()]);
   await updateHomeWidgets(); // awaited here: the isolate may end soon after
   return RefreshResult(
@@ -86,7 +91,9 @@ Future<RefreshResult> refreshInBackground() async {
     attendance: data.attendance.data?.value,
     lessons: data.lessons.data?.value,
     courseGrades: data.courseGrades.data?.value,
+    exams: data.exams(DateTime.now())?.exams,
+    notices: data.eclassNotifications.data?.value,
     retry: [data.lessons.error, data.deadlines.error, data.attendance.error, data.courseGrades.error]
-        .any(isNetworkError),
+        .any(isWorthRetrying),
   );
 }

@@ -3,8 +3,8 @@
 // lib/services/mail/ews_soap.dart.
 //
 // Reference: learn.microsoft.com/exchange/client-developer/web-service-reference
-// (FindItem, GetItem, GetFolder, CreateItem, UpdateItem, SendItem, MoveItem,
-// ResolveNames and GetAttachment operations).
+// (FindItem, GetItem, GetFolder, CreateItem, CreateAttachment, UpdateItem,
+// SendItem, MoveItem, ResolveNames and GetAttachment operations).
 //
 // Responses are read with readSoap, a small XML reader of our own, not
 // DOMParser: the service worker has no DOMParser, and linkedom's text/xml
@@ -21,6 +21,7 @@ import {
   type MailFolderCount,
   type MailHeader,
   type MailMessage,
+  type OutgoingAttachment,
   type OutgoingMail,
 } from '../../core/models.ts';
 
@@ -59,13 +60,15 @@ const ewsId = (f: MailFolder): string => mailFolders.find((x) => x.id === f)!.ew
 /**
  * FindItem on a folder: ids plus subject, sender, the To line, received time,
  * read flag, whether it has attachments and (unless withPreview is false) the
- * 256-character preview, newest first.
+ * 256-character preview, newest first. With queryString, only what Exchange's
+ * search finds for it.
  */
 export function findItemsEnvelope({
   folder = 'inbox' as MailFolder,
   limit = 30,
   offset = 0,
   withPreview = true,
+  queryString = '',
   serverVersion = ewsServerVersion,
 } = {}): string {
   const fields = [
@@ -95,7 +98,7 @@ export function findItemsEnvelope({
   </m:SortOrder>
   <m:ParentFolderIds>
     <t:DistinguishedFolderId Id="${ewsId(folder)}"/>
-  </m:ParentFolderIds>
+  </m:ParentFolderIds>${queryString === '' ? '' : `\n  <m:QueryString>${escape(queryString)}</m:QueryString>`}
 </m:FindItem>`,
     serverVersion,
   );
@@ -240,6 +243,27 @@ export function createItemEnvelope(m: OutgoingMail, send: boolean, serverVersion
     ${item}
   </m:Items>
 </m:CreateItem>`,
+    serverVersion,
+  );
+}
+
+/**
+ * CreateAttachment adding one file to a saved message. Exchange moves the
+ * message's change key on: parseCreateAttachment returns the new one.
+ */
+export function createAttachmentEnvelope(parent: { id: string; changeKey: string }, file: OutgoingAttachment, serverVersion = ewsServerVersion): string {
+  return envelope(
+    `
+<m:CreateAttachment>
+  ${itemId(parent.id, parent.changeKey, 'ParentItemId').replace('<t:', '<m:')}
+  <m:Attachments>
+    <t:FileAttachment>
+      <t:Name>${escape(file.name)}</t:Name>
+      <t:ContentType>${escape(file.contentType || 'application/octet-stream')}</t:ContentType>
+      <t:Content>${escape(file.base64)}</t:Content>
+    </t:FileAttachment>
+  </m:Attachments>
+</m:CreateAttachment>`,
     serverVersion,
   );
 }
@@ -473,6 +497,17 @@ export function parseItemId(xml: string, operation: string): { id: string; chang
   const id = responseMessage(xml, operation).find('ItemId');
   const value = id?.attr('Id') ?? '';
   return value === '' ? null : { id: value, changeKey: id!.attr('ChangeKey') ?? '' };
+}
+
+/**
+ * The message an attachment went onto, at its new change key, from a
+ * CreateAttachment response; null when Exchange didn't say. Throws EwsError
+ * when Exchange refused.
+ */
+export function parseCreateAttachment(xml: string): { id: string; changeKey: string } | null {
+  const attachment = responseMessage(xml, 'CreateAttachment').find('AttachmentId');
+  const id = attachment?.attr('RootItemId') ?? '';
+  return id === '' ? null : { id, changeKey: attachment!.attr('RootItemChangeKey') ?? '' };
 }
 
 /** Checks a SendItem response; throws EwsError when Exchange refused. */
@@ -851,7 +886,7 @@ export function findLinks(text: string): FoundLink[] {
       }
       const isMail = url.protocol.toLowerCase() === 'mailto:';
       if (!isMail && url.host === '') continue;
-      const shown = isMail ? decodeURIComponent(url.pathname) : url.hostname;
+      const shown = isMail ? decodedPath(url) : url.hostname;
       const spaced = start > 0 && text[start - 1].trim() !== '';
       out.push({ start, end: start + raw.length, url: inner, label: spaced ? ` ${shown}` : shown });
       continue;
@@ -880,6 +915,15 @@ export function findLinks(text: string): FoundLink[] {
     out.push({ start, end: start + s.length, url, label: s });
   }
   return out;
+}
+
+/** A mailto link's address. A stray % leaves it as written: one odd link must not stop the message rendering. */
+function decodedPath(url: URL): string {
+  try {
+    return decodeURIComponent(url.pathname);
+  } catch {
+    return url.pathname;
+  }
 }
 
 /** 812 B, 47 KB, 2.3 MB, 18 MB. */
@@ -918,11 +962,16 @@ export function replyAllRecipients(m: MailMessage): { to: MailAddress[]; cc: Mai
   return { to: [{ name: m.from, address: m.fromAddress }, ...m.to].filter(keep), cc: m.cc.filter(keep) };
 }
 
+/** The most the composer takes in new files on one message: Exchange's default limit is 35 MB, and base64 adds a third. */
+export const maxAttachmentBytes = 25 * 1024 * 1024;
+
 /** What went wrong sending or saving, in one plain sentence (DESIGN.md 10). */
 export function composeError(e: unknown, sending: boolean): string {
   const name = (e as { name?: string } | null)?.name;
   if (name === 'LoginRequired') return 'Mail sign-in needed.';
-  if (name === 'NetworkError') return "Couldn't reach Mail. Check the connection.";
-  if (/ErrorInvalidRecipients/.test((e as Error | null)?.message ?? '')) return "Mail didn't accept one of the addresses.";
+  if (name === 'NetworkError' && !(e as { status?: number }).status) return "Couldn't reach Mail. Check the connection.";
+  const message = (e as Error | null)?.message ?? '';
+  if (/ErrorInvalidRecipients/.test(message)) return "Mail didn't accept one of the addresses.";
+  if (/ErrorMessageSizeExceeded|ErrorAttachmentSizeLimitExceeded|ErrorRequestEntityTooLarge/.test(message)) return 'Mail refused the attachment: it is too big.';
   return sending ? "Mail didn't send it. Try again." : "Mail didn't save the draft. Try again.";
 }
