@@ -480,7 +480,10 @@ the course in `bodyLarge`, its credits in muted `bodyMedium`, and the letter in 
 - **The calculator is the rows still open:** each has a small number field where the mark would go, out of its range, or as a % for a
   category with nothing posted yet. The total never moves; `With these scores: 48.5 of 100` appears below it, with Clear. What-if scores
   are not saved.
-- **Items that add nothing** (no weight, or 0) sit last under "Not counted in the total", so a mark is never missing and never pretends.
+- **Items that add nothing** (a weight of 0) sit last under "Not counted in the total", so a mark is never missing and never pretends.
+- **The total is eClass's own course total** (its Percentage, or Grade over Range). A course that hides its category weights still has one: `26 of 100`
+  then one sentence saying its marks can't be turned into points, and the marks by category. The contribution column is never added up: on such a course
+  it treats each category as the whole course (157.25).
 - **No weights published, or the grades page closed:** the marks as they are, with one sentence saying why there is no total.
 
 **Settings.**

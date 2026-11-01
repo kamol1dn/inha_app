@@ -185,7 +185,7 @@ void main() {
     test('courseGrades() reads the grades page when the course has one', () async {
       server.pages['/grade/report/user/index.php?id=2626'] = fixture('eclass_grades.html');
       final g = await client.courseGrades(course);
-      expect((g.source, g.total, g.course.id), (GradeSource.gradebook, 28.5, 2626));
+      expect((g.source, g.percent, g.course.id), (GradeSource.gradebook, 28.5, 2626));
       expect(server.log, ['GET /grade/report/user/index.php?id=2626']);
     });
 

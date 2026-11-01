@@ -150,9 +150,7 @@ export interface CourseGrades {
   source: GradeSource;
   items: GradeItem[];
   categories: GradeCategory[];
-  total: number | null; // what the course total's row has in the contribution column; not always out of 100
-  gradeTotal?: number | null; // the same row's Grade column, in its own range
-  gradeTotalMax?: number | null;
+  percent?: number | null; // the course total, %, as eClass works it out
 }
 
 /** The mail folders shown, in the sidebar's order, by EWS distinguished folder id. */

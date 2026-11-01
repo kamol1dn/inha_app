@@ -99,7 +99,7 @@ export class EclassClient {
       this.fetchParsed<GradeItem[]>(`/mod/quiz/index.php?id=${course.id}`, (html) => parseActivityGrades(html, 'quiz'), true),
     ]);
     const items = [...(await Promise.all(assignments.map((a) => this.withAssignMax(a)))), ...quizzes];
-    return { course, source: items.length ? 'activities' : 'none', items, categories: [], total: null };
+    return { course, source: items.length ? 'activities' : 'none', items, categories: [] };
   }
 
   /** The assignment list gives a mark without its maximum; the assignment's own page has both. A page that fails only costs the "/ 100". */

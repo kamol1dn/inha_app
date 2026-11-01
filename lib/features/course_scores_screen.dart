@@ -91,8 +91,12 @@ class _CourseScoresScreenState extends State<CourseScoresScreen> {
                 ? const SkeletonRows(timeColumn: false)
                 : const EmptyNote('eClass has no marks for this course.')
           else if (score != null) ...[
-            _total(context, g, score, muted),
+            _total(context, score, muted),
             ..._counted(context, score, muted),
+            for (final MapEntry(key: category, value: items) in _byCategory(score.unweighted).entries) ...[
+              SectionHeader(category.isEmpty ? 'Other' : category),
+              ..._plainRows(context, items, muted),
+            ],
             if (score.uncounted.isNotEmpty) ...[
               const SectionHeader('Not counted in the total'),
               ..._plainRows(context, score.uncounted, muted),
@@ -117,9 +121,8 @@ class _CourseScoresScreenState extends State<CourseScoresScreen> {
     );
   }
 
-  Widget _total(BuildContext context, CourseGrades g, CourseScore score, TextStyle muted) {
+  Widget _total(BuildContext context, CourseScore score, TextStyle muted) {
     final t = Theme.of(context);
-    final own = eclassTotalLine(g, score);
     final open = score.lines.where((l) => !l.marked && _whatIf.containsKey(l.id));
     return Padding(
       padding: const EdgeInsets.fromLTRB(gutter, 20, gutter, 0),
@@ -132,10 +135,11 @@ class _CourseScoresScreenState extends State<CourseScoresScreen> {
           ),
         ]),
         Text(
-            '${plainNumber(score.markedWorth)} points marked · '
-            '${plainNumber(score.openWorth)} still open · best possible ${plainNumber(score.best)}',
+            score.complete
+                ? '${plainNumber(score.markedWorth)} points marked · '
+                    '${plainNumber(score.openWorth)} still open · best possible ${plainNumber(score.best)}'
+                : "This total is eClass's. It doesn't publish every category's weight, so these marks can't be turned into points.",
             style: muted),
-        if (own != null) Text(own, style: muted),
         if (open.isNotEmpty)
           Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             Expanded(
@@ -180,10 +184,6 @@ class _CourseScoresScreenState extends State<CourseScoresScreen> {
 
   /// A course with no weights to add up: the marks as they are.
   List<Widget> _unweighted(BuildContext context, CourseGrades g, TextStyle muted) {
-    final byCategory = <String, List<GradeItem>>{};
-    for (final i in g.items) {
-      byCategory.putIfAbsent(i.category, () => []).add(i);
-    }
     return [
       Padding(
         padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
@@ -197,16 +197,19 @@ class _CourseScoresScreenState extends State<CourseScoresScreen> {
           style: Theme.of(context).textTheme.bodyLarge,
         ),
       ),
-      if (eclassTotalLine(g, null) case final own?)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, 0),
-          child: Text(own, style: muted),
-        ),
-      for (final MapEntry(key: category, value: items) in byCategory.entries) ...[
+      for (final MapEntry(key: category, value: items) in _byCategory(g.items).entries) ...[
         SectionHeader(category.isEmpty ? 'Other' : category),
         ..._plainRows(context, items, muted),
       ],
     ];
+  }
+
+  Map<String, List<GradeItem>> _byCategory(List<GradeItem> items) {
+    final by = <String, List<GradeItem>>{};
+    for (final i in items) {
+      by.putIfAbsent(i.category, () => []).add(i);
+    }
+    return by;
   }
 
   List<Widget> _plainRows(BuildContext context, List<GradeItem> items, TextStyle muted) => [

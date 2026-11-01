@@ -7,7 +7,7 @@ import { ParseError } from '../src/core/errors.ts';
 import type { HttpRequest, HttpResponse } from '../src/core/http.ts';
 import { isMarked, itemScore, plainNumber, type Course, type CourseGrades, type GradeItem } from '../src/core/models.ts';
 import { gradeCourseId, gradeKey, planNotifications } from '../src/data/rules.ts';
-import { CourseScore, eclassTotalLine, isAttendanceMark, markedLine } from '../src/data/scores.ts';
+import { CourseScore, isAttendanceMark, markedLine } from '../src/data/scores.ts';
 import { EclassClient } from '../src/services/eclass/client.ts';
 import { parseActivityGrades, parseAssignMax, parseGradeBook } from '../src/services/eclass/parsers.ts';
 
@@ -18,19 +18,6 @@ const item = (name: string) => book.items.find((i) => i.name === name)!;
 const row = (over: Partial<GradeItem>): GradeItem => ({
   key: 'g1', name: 'Item', category: '', mark: '-', grade: null, max: null, weight: null, categoryWeight: null, contribution: null, moduleId: null, moduleType: null, ...over,
 });
-
-/** The live page of a course whose category weights all show "-", read back from its one mark: Lab 1 is 10 of 10 and contributes 6.25. */
-const hiddenWeights: CourseGrades = {
-  course: ai,
-  source: 'gradebook',
-  total: 6.25,
-  categories: [{ name: 'Assign', weight: null }, { name: 'Etc.', weight: null }],
-  items: [
-    row({ key: 'g1', name: 'Lab 1', category: 'Assign', mark: '10.00', grade: 10, max: 10, weight: 6.25, contribution: 6.25 }),
-    row({ key: 'g2', name: 'Lab 7', category: 'Assign', mark: '-', max: 100, weight: 62.5, contribution: 0 }),
-    row({ key: 'g3', name: 'ETC', category: 'Etc.', mark: '-', max: 100 }),
-  ],
-};
 
 describe('plainNumber', () => {
   test('reads the way a mark reads best', () => {
@@ -72,9 +59,13 @@ describe('parseGradeBook', () => {
     const names = book.items.map((i) => i.name);
     assert.ok(!names.includes('Assign SUM'));
     assert.ok(!names.includes('Course total'));
-    assert.equal(book.total, 28.5);
-    assert.deepEqual([book.gradeTotal, book.gradeTotalMax], [28.5, 125]);
+    assert.equal(book.percent, 28.5);
     assert.equal(book.source, 'gradebook');
+  });
+
+  test("where a course hides the Percentage column, the total is its Grade over its Range", () => {
+    const hidden = fixture('eclass_grades.html').replace('column-percentage">28.50 %</td>', 'column-percentage"></td>').replace('column-grade">35.63</td>', 'column-grade">0.11</td>').replace('column-range">0–125</td>', 'column-range">0–200</td>');
+    assert.equal(parseGradeBook(hidden, ai)!.percent, 0.055);
   });
 
   test('a page with no table is a closed page; any other page has changed', () => {
@@ -141,7 +132,7 @@ describe('EclassClient.courseGrades', () => {
     const asked: string[] = [];
     const g = await fake({ '/grade/report/user/index.php?id=2626': { body: fixture('eclass_grades.html') } }, asked).courseGrades(ai);
     assert.equal(g.source, 'gradebook');
-    assert.equal(g.total, 28.5);
+    assert.equal(g.percent, 28.5);
     assert.equal(asked.length, 1);
   });
 
@@ -155,7 +146,7 @@ describe('EclassClient.courseGrades', () => {
       },
     }).courseGrades(ai);
     assert.equal(g.source, 'activities');
-    assert.equal(g.total, null);
+    assert.equal(g.percent ?? null, null);
     assert.deepEqual(g.items.map((i) => i.name), ['Assignment 1', 'Assignment 2', 'Quiz 1', 'Quiz 2']);
     assert.equal(itemScore(g.items[0]), '85 / 100');
     assert.equal(CourseScore.of(g), null);
@@ -215,81 +206,92 @@ describe('CourseScore', () => {
     assert.equal(score.withScores({ m7001: 0 }), 28.5); // already marked: not what-if
   });
 
-  test('items with a weight of 0 or none are shown but not counted', () => {
-    assert.deepEqual(score.uncounted.map((i) => i.name), ['[QUIZ] Week 6', 'Attendance book']);
+  test('items with a weight of 0 add nothing; those with none are shown apart', () => {
+    assert.deepEqual(score.uncounted.map((i) => i.name), ['[QUIZ] Week 6']);
+    assert.deepEqual(score.unweighted.map((i) => i.name), ['Attendance book']);
   });
 
-  test('a category weight of "-" is read back from a marked item', () => {
-    const s = CourseScore.of(hiddenWeights)!;
-    assert.deepEqual(Object.fromEntries(s.lines.map((l) => [l.name, l.worth])), { 'Lab 1': 6.25, 'Lab 7': 62.5 });
-    assert.equal(s.accumulated, 6.25);
-    assert.equal(s.uncounted[0].name, 'ETC');
-  });
-
-  // The course total's row, and sometimes the items' column, hold raw marks: 157.25 "of 100".
-  const rawMarks: CourseGrades = {
+  // Live pages. The contribution column adds up 81 + 70 + 6.25 = 157.25 here; eClass's own total is 26 of 100.
+  const hiddenCategories: CourseGrades = {
     course: ai,
     source: 'gradebook',
-    total: 157.25,
-    gradeTotal: 157.25,
-    gradeTotalMax: 300,
-    categories: [],
+    percent: 26,
+    categories: [{ name: 'Midterm', weight: null }, { name: 'Attendance', weight: null }, { name: 'Assign', weight: null }],
     items: [
-      row({ key: 'm1', name: 'Midterm', mark: '82.00', grade: 82, max: 100, weight: 40, categoryWeight: 100, contribution: 32.8 }),
-      row({ key: 'm2', name: 'Project', mark: '75.25', grade: 75.25, max: 100, weight: 30, categoryWeight: 100, contribution: 75.25 }),
-      row({ key: 'm3', name: 'Final', mark: '-', max: 100, weight: 30, categoryWeight: 100, contribution: 0 }),
+      row({ key: 'm1', name: 'Midterm', category: 'Midterm', mark: '81.00', grade: 81, max: 100, weight: 100, contribution: 81 }),
+      row({ key: 'm2', name: 'Attendance', category: 'Attendance', mark: '14.00', grade: 14, max: 20, weight: 100, contribution: 70 }),
+      row({ key: 'm3', name: 'Lab 1', category: 'Assign', mark: '10.00', grade: 10, max: 10, weight: 6.25, contribution: 6.25 }),
     ],
   };
 
-  test('a course total on another scale is not the score: the lines add up, and it never passes 100', () => {
-    const s = CourseScore.of(rawMarks)!;
-    assert.equal(s.lines[1].earned, 22.575); // 75.25% of 30, not the raw 75.25
-    assert.equal(plainNumber(s.accumulated), '55.38');
-    assert.equal(s.outOf, 100);
-    assert.equal(s.line, '55.38 of 100');
-    assert.equal(eclassTotalLine(rawMarks, s), 'Course total on eClass: 157.25 of 300');
+  test("the course total is eClass's, not what its contribution column adds up to", () => {
+    const s = CourseScore.of(hiddenCategories)!;
+    assert.equal(s.line, '26 of 100');
+    assert.deepEqual([s.accumulated, s.outOf], [26, 100]);
   });
 
-  test("eClass's own total is kept where it agrees", () => {
-    assert.equal(CourseScore.of(book)!.accumulated, 28.5);
-    assert.equal(eclassTotalLine(book, CourseScore.of(book)), null);
+  test('marks under a hidden category weight are shown, and make no invented points', () => {
+    const s = CourseScore.of(hiddenCategories)!;
+    assert.deepEqual(s.lines, []);
+    assert.deepEqual(s.unweighted.map((i) => i.name), ['Midterm', 'Attendance', 'Lab 1']);
+    assert.equal(s.complete, false);
   });
 
-  test('weights that add up to more than 100 say so', () => {
-    const over: CourseGrades = {
-      course: ai, source: 'gradebook', total: null, categories: [],
+  test('a column that holds a raw mark does not count for more than its share', () => {
+    const s = CourseScore.of({
+      course: ai, source: 'gradebook', categories: [],
+      items: [
+        row({ key: 'm1', name: 'Project', mark: '75.25', grade: 75.25, max: 100, weight: 30, categoryWeight: 100, contribution: 75.25 }),
+        row({ key: 'm2', name: 'Final', mark: '-', max: 100, weight: 70, categoryWeight: 100, contribution: 0 }),
+      ],
+    })!;
+    assert.equal(s.lines[0].earned, 22.575);
+    assert.equal(s.line, '22.57 of 100');
+    assert.equal(s.complete, true);
+  });
+
+  test('with no total and weights past 100, the score says what it is out of', () => {
+    const s = CourseScore.of({
+      course: ai, source: 'gradebook', categories: [],
       items: [
         row({ key: 'm1', name: 'A', mark: '50.00', grade: 50, max: 100, weight: 100, categoryWeight: 100 }),
         row({ key: 'm2', name: 'B', mark: '-', max: 100, weight: 100, categoryWeight: 100 }),
       ],
-    };
-    const s = CourseScore.of(over)!;
+    })!;
     assert.deepEqual([s.accumulated, s.outOf, s.line, s.of(75)], [50, 200, '50 of 200', '75 of 200']);
-  });
-
-  test('a raw mark does not pass as a category weight', () => {
-    const raw: CourseGrades = {
-      course: ai, source: 'gradebook', total: 50, gradeTotal: 50, gradeTotalMax: 100,
-      categories: [{ name: 'Assign', weight: null }],
-      items: [row({ key: 'm1', name: 'Lab', category: 'Assign', mark: '50.00', grade: 50, max: 100, weight: 50, contribution: 50 })],
-    };
-    assert.equal(CourseScore.of(raw), null);
-    assert.equal(eclassTotalLine(raw, null), 'Course total on eClass: 50 of 100');
   });
 
   test("a mark that is not a number takes eClass's figure, no more than the line is worth", () => {
     const letter = (contribution: number): CourseGrades => ({
-      course: ai, source: 'gradebook', total: null, categories: [],
+      course: ai, source: 'gradebook', categories: [],
       items: [row({ key: 'm1', name: 'A', mark: 'A', max: null, weight: 20, categoryWeight: 100, contribution })],
     });
     assert.equal(CourseScore.of(letter(15))!.accumulated, 15);
     assert.equal(CourseScore.of(letter(95))!.accumulated, 20);
   });
 
+  test('a category holding categories is counted through them, not again', () => {
+    const page = `<html><body id="page-grade-report-user-index"><table class="user-grade"><tbody>
+      <tr><th class="level1 column-itemname">Course</th></tr>
+      <tr><th class="level2 column-itemname">Exams</th></tr>
+      <tr><th class="level3 column-itemname">Midterm</th></tr>
+      <tr><th class="level3 baggt column-itemname">Midterm total</th><td class="column-weight">50.00 %</td></tr>
+      <tr><th class="level3 column-itemname">Final</th></tr>
+      <tr><th class="level3 baggt column-itemname">Final total</th><td class="column-weight">50.00 %</td></tr>
+      <tr><th class="level2 baggt column-itemname">Exams total</th><td class="column-weight">40.00 %</td></tr>
+      <tr><th class="level2 column-itemname">Assign</th></tr>
+      <tr><th class="level2 baggt column-itemname">Assign total</th><td class="column-weight">60.00 %</td></tr>
+      <tr><th class="level1 baggt column-itemname">Course total</th><td class="column-grade">-</td><td class="column-range">0–100</td></tr>
+    </tbody></table></body></html>`;
+    const g = parseGradeBook(page, ai)!;
+    assert.deepEqual(g.categories, [{ name: 'Midterm', weight: 20 }, { name: 'Final', weight: 20 }, { name: 'Assign', weight: 60 }]);
+    assert.deepEqual(CourseScore.of(g)!.lines.map((l) => [l.name, l.worth]), [['Midterm', 20], ['Final', 20], ['Assign', 60]]);
+  });
+
   test('no weights at all, or marks from the activity lists: no score', () => {
-    const noWeights: CourseGrades = { course: ai, source: 'gradebook', total: 0, categories: [{ name: 'Assign', weight: null }], items: [row({ category: 'Assign', max: 10 })] };
+    const noWeights: CourseGrades = { course: ai, source: 'gradebook', categories: [{ name: 'Assign', weight: null }], items: [row({ category: 'Assign', max: 10 })] };
     assert.equal(CourseScore.of(noWeights), null);
-    const activities: CourseGrades = { course: ai, source: 'activities', total: null, categories: [], items: [row({ key: 'm1', category: 'Quizzes', mark: '37.00/100.00', grade: 37, max: 100 })] };
+    const activities: CourseGrades = { course: ai, source: 'activities', categories: [], items: [row({ key: 'm1', category: 'Quizzes', mark: '37.00/100.00', grade: 37, max: 100 })] };
     assert.equal(CourseScore.of(activities), null);
   });
 
@@ -379,10 +381,10 @@ describe('notifier, grades', () => {
   const settings = (notify: object, quietHours = false) => (store.settings = { notify, quietHours });
   const seen = () => store['notify.seenGrades'] as Record<string, Record<string, string>>;
   const withMark = (mark: string): CourseGrades => ({
-    course: ai, source: 'gradebook', total: 5, categories: [],
+    course: ai, source: 'gradebook', percent: 5, categories: [],
     items: [row({ key: 'm1', name: 'Lab', mark, grade: Number(mark) || null, max: 10, weight: 50, categoryWeight: 100, contribution: Number(mark) || null })],
   });
-  const empty: CourseGrades = { course: ai, source: 'none', total: null, categories: [], items: [] };
+  const empty: CourseGrades = { course: ai, source: 'none', categories: [], items: [] };
 
   beforeEach(() => {
     store = {};

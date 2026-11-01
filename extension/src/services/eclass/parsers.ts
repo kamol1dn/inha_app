@@ -293,9 +293,7 @@ export function parseGradeBook(html: string, course: Course): CourseGrades | nul
   const open = new Map<number, GradeCategoryRows>(); // the category being read at each level
   const rows: [Element, GradeCategoryRows | undefined][] = [];
   const categories: GradeCategoryRows[] = [];
-  let total: number | null = null;
-  let gradeTotal: number | null = null;
-  let gradeTotalMax: number | null = null;
+  let percent: number | null = null;
   for (const tr of Array.from(table.querySelectorAll('tbody tr'))) {
     const th = tr.querySelector('th.column-itemname');
     if (th == null) continue;
@@ -306,9 +304,7 @@ export function parseGradeBook(html: string, course: Course): CourseGrades | nul
       rows.push([tr, open.get(level - 1)]);
     } else if (th.classList.contains('baggt') || th.classList.contains('baggb')) {
       if (level === 1) {
-        total = gradeNumber(gradeCell(tr, 'contributiontocoursetotal'));
-        gradeTotal = gradeNumber(gradeCell(tr, 'grade'));
-        gradeTotalMax = rangeMax(gradeCell(tr, 'range'));
+        percent = courseTotalPercent(tr);
       } else {
         const c = open.get(level);
         if (c) c.weight = gradeNumber(gradeCell(tr, 'weight'));
@@ -323,10 +319,9 @@ export function parseGradeBook(html: string, course: Course): CourseGrades | nul
   return {
     course,
     source: 'gradebook',
-    total,
-    gradeTotal,
-    gradeTotalMax,
-    categories: categories.map((c) => ({ name: c.name, weight: c.courseWeight })),
+    percent,
+    // A category holding categories is already counted through them.
+    categories: categories.filter((c) => !categories.some((o) => o.parent === c)).map((c) => ({ name: c.name, weight: c.courseWeight })),
     items: rows.map(([tr, category]) => gradeItem(tr, category)),
   };
 }
@@ -353,6 +348,19 @@ function gradeItem(tr: Element, category: GradeCategoryRows | undefined): GradeI
     moduleId,
     moduleType: mod?.[1] ?? null,
   };
+}
+
+/**
+ * The course total's row, as %. Not its contribution column, which adds up
+ * marks as if every category were worth the whole course: 157.25 on a page whose
+ * total is 26 of 100. Some courses hide the Percentage column; Grade over Range is the same.
+ */
+function courseTotalPercent(tr: Element): number | null {
+  const shown = gradeNumber(gradeCell(tr, 'percentage'));
+  if (shown != null) return shown;
+  const grade = gradeNumber(gradeCell(tr, 'grade'));
+  const max = rangeMax(gradeCell(tr, 'range'));
+  return grade != null && max != null && max > 0 ? (grade / max) * 100 : null;
 }
 
 /** "0–100" → 100; a scale has no number. */

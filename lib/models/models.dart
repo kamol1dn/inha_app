@@ -421,18 +421,14 @@ class CourseGrades {
   final GradeSource source;
   final List<GradeItem> items;
   final List<GradeCategory> categories;
-  final double? total; // what the course total's row has in the contribution column; not always out of 100
-  final double? gradeTotal; // the same row's Grade column, in its own range
-  final double? gradeTotalMax;
+  final double? percent; // the course total, %, as eClass works it out
 
   const CourseGrades({
     required this.course,
     required this.source,
     this.items = const [],
     this.categories = const [],
-    this.total,
-    this.gradeTotal,
-    this.gradeTotalMax,
+    this.percent,
   });
 
   Map<String, dynamic> toJson() => {
@@ -440,18 +436,14 @@ class CourseGrades {
         'source': source.name,
         'items': items.map((e) => e.toJson()).toList(),
         'categories': categories.map((e) => e.toJson()).toList(),
-        'total': total,
-        'gradeTotal': gradeTotal,
-        'gradeTotalMax': gradeTotalMax,
+        'percent': percent,
       };
   factory CourseGrades.fromJson(Map<String, dynamic> j) => CourseGrades(
         course: Course.fromJson(j['course'] as Map<String, dynamic>),
         source: GradeSource.values.byName(j['source'] as String),
         items: (j['items'] as List).map((e) => GradeItem.fromJson(e as Map<String, dynamic>)).toList(),
         categories: (j['categories'] as List).map((e) => GradeCategory.fromJson(e as Map<String, dynamic>)).toList(),
-        total: (j['total'] as num?)?.toDouble(),
-        gradeTotal: (j['gradeTotal'] as num?)?.toDouble(),
-        gradeTotalMax: (j['gradeTotalMax'] as num?)?.toDouble(),
+        percent: (j['percent'] as num?)?.toDouble(),
       );
 }
 

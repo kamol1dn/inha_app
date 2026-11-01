@@ -265,9 +265,7 @@ CourseGrades? parseGradeBook(String html, Course course) {
   final open = <int, _GradeCategoryRows>{}; // the category being read at each level
   final rows = <(Element, _GradeCategoryRows?)>[];
   final categories = <_GradeCategoryRows>[];
-  double? total;
-  double? gradeTotal;
-  double? gradeTotalMax;
+  double? percent;
   for (final tr in table.querySelectorAll('tbody tr')) {
     final th = tr.querySelector('th.column-itemname');
     if (th == null) continue;
@@ -278,9 +276,7 @@ CourseGrades? parseGradeBook(String html, Course course) {
       rows.add((tr, open[level - 1]));
     } else if (th.classes.contains('baggt') || th.classes.contains('baggb')) {
       if (level == 1) {
-        total = _gradeNumber(_gradeCell(tr, 'contributiontocoursetotal'));
-        gradeTotal = _gradeNumber(_gradeCell(tr, 'grade'));
-        gradeTotalMax = _rangeMax(_gradeCell(tr, 'range'));
+        percent = _courseTotalPercent(tr);
       } else {
         open[level]?.weight = _gradeNumber(_gradeCell(tr, 'weight'));
       }
@@ -294,10 +290,12 @@ CourseGrades? parseGradeBook(String html, Course course) {
   return CourseGrades(
     course: course,
     source: GradeSource.gradebook,
-    total: total,
-    gradeTotal: gradeTotal,
-    gradeTotalMax: gradeTotalMax,
-    categories: [for (final c in categories) GradeCategory(c.name, c.courseWeight)],
+    percent: percent,
+    // A category holding categories is already counted through them.
+    categories: [
+      for (final c in categories)
+        if (!categories.any((o) => o.parent == c)) GradeCategory(c.name, c.courseWeight),
+    ],
     items: [
       for (final (tr, category) in rows) _gradeItem(tr, category),
     ],
@@ -325,6 +323,18 @@ GradeItem _gradeItem(Element tr, _GradeCategoryRows? category) {
     moduleId: moduleId,
     moduleType: mod?.group(1),
   );
+}
+
+/// The course total's row, as %. Not its contribution column, which adds up
+/// marks as if every category were worth the whole course: 157.25 on a page
+/// whose total is 26 of 100. Some courses hide the Percentage column; Grade over
+/// Range is the same.
+double? _courseTotalPercent(Element tr) {
+  final shown = _gradeNumber(_gradeCell(tr, 'percentage'));
+  if (shown != null) return shown;
+  final grade = _gradeNumber(_gradeCell(tr, 'grade'));
+  final max = _rangeMax(_gradeCell(tr, 'range'));
+  return grade != null && max != null && max > 0 ? grade / max * 100 : null;
 }
 
 /// "0–100" → 100; a scale has no number.

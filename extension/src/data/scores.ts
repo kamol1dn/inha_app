@@ -46,56 +46,59 @@ export class ScoreLine {
   }
 }
 
-/** A course's score so far. Null from `of` when eClass publishes no weights. */
+/**
+ * A course's score so far: eClass's own course total where it gives one, else
+ * what the lines add up to. Null from `of` when there is neither.
+ *
+ * Only a published weight makes a line. A category weight of "-" can't be read
+ * back from its marks: the contribution column treats such a category as the
+ * whole course, so 81 of 100 "contributes" 81 whatever the category is worth.
+ */
 export class CourseScore {
   readonly lines: ScoreLine[];
   readonly accumulated: number;
-  /** What the score is out of: 100, or what the weights really add up to where a course's add up to more. */
+  /** What the score is out of: 100, or what the weights add up to where a course has no total and its weights pass 100. */
   readonly outOf: number;
-  /** Items with no known weight or a weight of 0: shown, but they add nothing. */
+  /** Items with a weight of 0: shown, but they add nothing. */
   readonly uncounted: GradeItem[];
+  /** Items eClass publishes no weight for: they may count, but by how much isn't known. */
+  readonly unweighted: GradeItem[];
 
-  private constructor(lines: ScoreLine[], accumulated: number, outOf: number, uncounted: GradeItem[]) {
+  private constructor(lines: ScoreLine[], accumulated: number, outOf: number, uncounted: GradeItem[], unweighted: GradeItem[]) {
     this.lines = lines;
     this.accumulated = accumulated;
     this.outOf = outOf;
     this.uncounted = uncounted;
+    this.unweighted = unweighted;
   }
 
   static of(g: CourseGrades): CourseScore | null {
     if (g.source !== 'gradebook') return null;
 
-    // A category weight of "-" can still be read back from a marked item:
-    // contribution = mark / max × item weight × category weight.
-    const inferred = new Map<string, number>();
-    for (const i of g.items) {
-      const { grade, max, weight, contribution: points } = i;
-      if (i.categoryWeight != null || grade == null || max == null || weight == null || points == null) continue;
-      if (grade <= 0 || max <= 0 || weight <= 0 || points <= 0) continue;
-      const read = points / (((grade / max) * weight) / 100);
-      if (read <= 100 + agree && !inferred.has(i.category)) inferred.set(i.category, read); // over 100: a raw mark, not points
-    }
-
     const lines: ScoreLine[] = [];
     const uncounted: GradeItem[] = [];
+    const unweighted: GradeItem[] = [];
     for (const i of g.items) {
-      const categoryWeight = i.categoryWeight ?? inferred.get(i.category) ?? null;
-      const worth = i.weight == null || categoryWeight == null ? 0 : (i.weight * categoryWeight) / 100;
-      if (worth > 0) lines.push(new ScoreLine(i.key, i.name, i.category, worth, i));
-      else uncounted.push(i);
+      if (i.weight === 0) uncounted.push(i);
+      else if (i.weight == null || i.categoryWeight == null) unweighted.push(i);
+      else lines.push(new ScoreLine(i.key, i.name, i.category, (i.weight * i.categoryWeight) / 100, i));
     }
     for (const c of g.categories) {
       const weight = c.weight ?? 0;
       if (weight <= 0 || g.items.some((i) => i.category === c.name)) continue;
       lines.push(new ScoreLine(`category:${c.name}`, c.name, c.name, weight));
     }
-    if (!lines.length) return null;
+    const percent = g.percent ?? null;
+    if (percent == null && !lines.length) return null;
 
-    // The sum of what is shown, not the total row: on some courses that row adds up the raw marks.
-    const sum = lines.reduce((s, l) => s + l.earned, 0);
     const worth = lines.reduce((s, l) => s + l.worth, 0);
-    const total = g.total != null && Math.abs(g.total - sum) <= agree ? g.total : sum;
-    return new CourseScore(lines, total, worth > 100 + agree ? worth : 100, uncounted);
+    const accumulated = percent ?? lines.reduce((s, l) => s + l.earned, 0);
+    return new CourseScore(lines, accumulated, percent == null && worth > 100 + agree ? worth : 100, uncounted, unweighted);
+  }
+
+  /** Whether the weights account for the whole course, so "still open" and "best possible" mean something. */
+  get complete(): boolean {
+    return Math.abs(this.lines.reduce((s, l) => s + l.worth, 0) - this.outOf) <= 0.5;
   }
 
   /** "28.5 of 100". */
@@ -108,7 +111,7 @@ export class CourseScore {
     return `${plainNumber(value)} of ${plainNumber(this.outOf)}`;
   }
 
-  /** The points of the course that have been marked so far. */
+/** The points of the course that have been marked so far. */
   get markedWorth(): number {
     return this.lines.filter((l) => l.marked).reduce((s, l) => s + l.worth, 0);
   }
@@ -133,16 +136,6 @@ export class CourseScore {
     }
     return total;
   }
-}
-
-/**
- * eClass's own course total, in its own range: "Course total on eClass: 157.25 of 300".
- * Null where there is none, or where it says the same as the score already shown.
- */
-export function eclassTotalLine(g: CourseGrades, score: CourseScore | null): string | null {
-  const { gradeTotal: total, gradeTotalMax: max } = g;
-  if (total == null || (score != null && Math.abs(total - score.accumulated) <= agree)) return null;
-  return `Course total on eClass: ${plainNumber(total)}${max == null ? '' : ` of ${plainNumber(max)}`}`;
 }
 
 /** One line for a course's marks, for the rows that lead to them: "2 of 8 marked". */

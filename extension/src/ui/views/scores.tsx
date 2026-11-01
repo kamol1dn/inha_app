@@ -5,7 +5,7 @@
 import { useState } from 'preact/hooks';
 import { isMarked, itemScore, plainNumber, type CourseGrades, type GradeItem } from '../../core/models.ts';
 import type { Snapshot } from '../../core/store.ts';
-import { CourseScore, eclassTotalLine, markedLine, type ScoreLine } from '../../data/scores.ts';
+import { CourseScore, markedLine, type ScoreLine } from '../../data/scores.ts';
 import { courseUrl, gradesUrl } from '../../services/eclass/links.ts';
 import { eclassTarget, ErrorRow, Icon, isStale, Skeleton, Stale } from '../common.tsx';
 
@@ -80,7 +80,7 @@ function LineRow({ line, onScore }: { line: ScoreLine; onScore: (v: number | nul
 }
 
 /** The score first, then the lines by category, in eClass's order, then what adds nothing. */
-function Scored({ g, score }: { g: CourseGrades; score: CourseScore }) {
+function Scored({ score }: { score: CourseScore }) {
   const [whatIf, setWhatIf] = useState<Record<string, number>>({});
   const [round, setRound] = useState(0); // part of each field's key, so Clear empties them all
   const byCategory = new Map<string, ScoreLine[]>();
@@ -92,10 +92,13 @@ function Scored({ g, score }: { g: CourseGrades; score: CourseScore }) {
         <span class="t-hm">{plainNumber(score.accumulated)}</span>
         <span class="t-bm muted tnum">of {plainNumber(score.outOf)} so far</span>
       </div>
-      <p class="t-bm muted tnum" style={{ margin: '2px 0 0' }}>
-        {plainNumber(score.markedWorth)} points marked · {plainNumber(score.openWorth)} still open · best possible {plainNumber(score.best)}
-      </p>
-      {eclassTotalLine(g, score) && <p class="t-bm muted tnum" style={{ margin: '2px 0 0' }}>{eclassTotalLine(g, score)}</p>}
+      {score.complete ? (
+        <p class="t-bm muted tnum" style={{ margin: '2px 0 0' }}>
+          {plainNumber(score.markedWorth)} points marked · {plainNumber(score.openWorth)} still open · best possible {plainNumber(score.best)}
+        </p>
+      ) : (
+        <p class="t-bm muted" style={{ margin: '2px 0 0' }}>{hiddenWeights}</p>
+      )}
       {open && (
         <div class="whatif">
           <span class="t-ts tnum grow">With these scores: {score.of(score.withScores(whatIf))}</span>
@@ -121,6 +124,12 @@ function Scored({ g, score }: { g: CourseGrades; score: CourseScore }) {
           </div>
         </section>
       ))}
+      {[...byCategoryOf(score.unweighted).entries()].map(([category, items]) => (
+        <section class="section" key={`unweighted/${category}`}>
+          <h2>{category || 'Other'}</h2>
+          <PlainRows items={items} />
+        </section>
+      ))}
       {score.uncounted.length > 0 && (
         <section class="section">
           <h2>Not counted in the total</h2>
@@ -131,6 +140,14 @@ function Scored({ g, score }: { g: CourseGrades; score: CourseScore }) {
   );
 }
 
+const hiddenWeights = "This total is eClass's. It doesn't publish every category's weight, so these marks can't be turned into points.";
+
+function byCategoryOf(items: GradeItem[]): Map<string, GradeItem[]> {
+  const by = new Map<string, GradeItem[]>();
+  for (const i of items) by.set(i.category, [...(by.get(i.category) ?? []), i]);
+  return by;
+}
+
 const noScoreReason = {
   gradebook: "eClass doesn't show weights for this course yet, so there is no score to add up.",
   activities: 'This course keeps its grades page closed. These marks come from its assignments and quizzes, without weights to add up.',
@@ -139,13 +156,10 @@ const noScoreReason = {
 
 /** A course with no weights to add up: the marks as they are, and why. */
 function Unweighted({ g }: { g: CourseGrades }) {
-  const byCategory = new Map<string, GradeItem[]>();
-  for (const i of g.items) byCategory.set(i.category, [...(byCategory.get(i.category) ?? []), i]);
   return (
     <>
       <p class="t-bl" style={{ margin: '16px 0 0' }}>{noScoreReason[g.source]}</p>
-      {eclassTotalLine(g, null) && <p class="t-bm muted tnum" style={{ margin: '4px 0 0' }}>{eclassTotalLine(g, null)}</p>}
-      {[...byCategory.entries()].map(([category, items]) => (
+      {[...byCategoryOf(g.items).entries()].map(([category, items]) => (
         <section class="section" key={category}>
           <h2>{category || 'Other'}</h2>
           <PlainRows items={items} />
@@ -169,7 +183,7 @@ export function CourseScores({ snap, now, id }: { snap: Snapshot; now: number; i
     <div style={{ maxWidth: '760px' }}>
       {err && <ErrorRow service="eclass" error={err} />}
       {isStale(snap, 'eclass', cached!.fetchedAt, now) && <Stale at={cached!.fetchedAt} />}
-      {score ? <Scored g={g} score={score} /> : <Unweighted g={g} />}
+      {score ? <Scored score={score} /> : <Unweighted g={g} />}
       <div style={{ marginTop: '8px' }}>
         <a class="btn" style={{ marginLeft: '-12px' }} href={g.source === 'gradebook' ? gradesUrl(id) : courseUrl(id)} target={eclassTarget}>
           <Icon name="open" /> Open in eClass

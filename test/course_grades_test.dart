@@ -25,20 +25,6 @@ final book = parseGradeBook(fixture('eclass_grades.html'), ai)!;
 
 GradeItem item(String name) => book.items.singleWhere((i) => i.name == name);
 
-/// The live page of a course whose category weights all show "-", read back
-/// from its one mark: Lab 1 is 10 of 10 and contributes 6.25.
-const hiddenWeights = CourseGrades(
-  course: ai,
-  source: GradeSource.gradebook,
-  total: 6.25,
-  categories: [GradeCategory('Assign', null), GradeCategory('Etc.', null)],
-  items: [
-    GradeItem(key: 'g1', name: 'Lab 1', category: 'Assign', mark: '10.00', grade: 10, max: 10, weight: 6.25, contribution: 6.25),
-    GradeItem(key: 'g2', name: 'Lab 7', category: 'Assign', mark: '-', max: 100, weight: 62.5, contribution: 0),
-    GradeItem(key: 'g3', name: 'ETC', category: 'Etc.', mark: '-', max: 100),
-  ],
-);
-
 void main() {
   group('parseGradeBook', () {
     test('reads items with their category, weight, range and contribution', () {
@@ -69,9 +55,16 @@ void main() {
           [('Midterm exam', 25), ('Final exam', 25), ('Assign', 20), ('Etc.', 30)]);
       expect(book.items.map((i) => i.name), isNot(contains('Assign SUM')));
       expect(book.items.map((i) => i.name), isNot(contains('Course total')));
-      expect(book.total, 28.5);
-      expect((book.gradeTotal, book.gradeTotalMax), (28.5, 125));
+      expect(book.percent, 28.5);
       expect(book.source, GradeSource.gradebook);
+    });
+
+    test('where a course hides the Percentage column, the total is its Grade over its Range', () {
+      final hidden = fixture('eclass_grades.html')
+          .replaceFirst('column-percentage">28.50 %</td>', 'column-percentage"></td>')
+          .replaceFirst('column-grade">35.63</td>', 'column-grade">0.11</td>')
+          .replaceFirst('column-range">0–125</td>', 'column-range">0–200</td>');
+      expect(parseGradeBook(hidden, ai)!.percent, closeTo(0.055, 1e-9));
     });
 
     test('a page with no table is a closed page; any other page has changed', () {
@@ -83,8 +76,7 @@ void main() {
       final back = CourseGrades.fromJson(book.toJson());
       expect(back.items.map((i) => i.toJson()), book.items.map((i) => i.toJson()));
       expect(back.categories.map((c) => c.toJson()), book.categories.map((c) => c.toJson()));
-      expect((back.total, back.source, back.course.id), (28.5, GradeSource.gradebook, ai.id));
-      expect((back.gradeTotal, back.gradeTotalMax), (28.5, 125));
+      expect((back.percent, back.source, back.course.id), (28.5, GradeSource.gradebook, ai.id));
     });
   });
 
@@ -151,53 +143,51 @@ void main() {
       expect(score.withScores({'m7001': 0}), 28.5); // already marked: not what-if
     });
 
-    test('items with a weight of 0 or none are shown but not counted', () {
-      expect(score.uncounted.map((i) => i.name), ['[QUIZ] Week 6', 'Attendance book']);
+    test('items with a weight of 0 add nothing; those with none are shown apart', () {
+      expect(score.uncounted.map((i) => i.name), ['[QUIZ] Week 6']);
+      expect(score.unweighted.map((i) => i.name), ['Attendance book']);
     });
 
-    test('a category weight of "-" is read back from a marked item', () {
-      final s = CourseScore.of(hiddenWeights)!;
-      expect({for (final l in s.lines) l.name: l.worth}, {'Lab 1': 6.25, 'Lab 7': 62.5});
-      expect(s.accumulated, 6.25);
-      expect(s.uncounted.single.name, 'ETC');
-    });
-
-    // The course total's row, and sometimes the items' column, hold raw marks: 157.25 "of 100".
-    const rawMarks = CourseGrades(course: ai, source: GradeSource.gradebook, total: 157.25, gradeTotal: 157.25, gradeTotalMax: 300, items: [
-      GradeItem(key: 'm1', name: 'Midterm', mark: '82.00', grade: 82, max: 100, weight: 40, categoryWeight: 100, contribution: 32.8),
-      GradeItem(key: 'm2', name: 'Project', mark: '75.25', grade: 75.25, max: 100, weight: 30, categoryWeight: 100, contribution: 75.25),
-      GradeItem(key: 'm3', name: 'Final', mark: '-', max: 100, weight: 30, categoryWeight: 100, contribution: 0),
+    // Live pages. The contribution column adds up 81 + 70 + 6.25 = 157.25 here; eClass's own total is 26 of 100.
+    const hiddenCategories = CourseGrades(course: ai, source: GradeSource.gradebook, percent: 26, categories: [
+      GradeCategory('Midterm', null),
+      GradeCategory('Attendance', null),
+      GradeCategory('Assign', null),
+    ], items: [
+      GradeItem(key: 'm1', name: 'Midterm', category: 'Midterm', mark: '81.00', grade: 81, max: 100, weight: 100, contribution: 81),
+      GradeItem(key: 'm2', name: 'Attendance', category: 'Attendance', mark: '14.00', grade: 14, max: 20, weight: 100, contribution: 70),
+      GradeItem(key: 'm3', name: 'Lab 1', category: 'Assign', mark: '10.00', grade: 10, max: 10, weight: 6.25, contribution: 6.25),
     ]);
 
-    test('a course total on another scale is not the score: the lines add up, and it never passes 100', () {
-      final s = CourseScore.of(rawMarks)!;
-      expect(s.lines[1].earned, 22.575); // 75.25% of 30, not the raw 75.25
-      expect(plainNumber(s.accumulated), '55.38');
-      expect(s.outOf, 100);
-      expect(s.line, '55.38 of 100');
-      expect(eclassTotalLine(rawMarks, s), 'Course total on eClass: 157.25 of 300');
+    test("the course total is eClass's, not what its contribution column adds up to", () {
+      final s = CourseScore.of(hiddenCategories)!;
+      expect(s.line, '26 of 100');
+      expect((s.accumulated, s.outOf), (26, 100));
     });
 
-    test("eClass's own total is kept where it agrees", () {
-      expect(score.accumulated, 28.5);
-      expect(eclassTotalLine(book, score), isNull);
+    test('marks under a hidden category weight are shown, and make no invented points', () {
+      final s = CourseScore.of(hiddenCategories)!;
+      expect(s.lines, isEmpty);
+      expect(s.unweighted.map((i) => i.name), ['Midterm', 'Attendance', 'Lab 1']);
+      expect(s.complete, isFalse);
     });
 
-    test('weights that add up to more than 100 say so', () {
-      const over = CourseGrades(course: ai, source: GradeSource.gradebook, items: [
+    test('a column that holds a raw mark does not count for more than its share', () {
+      final s = CourseScore.of(const CourseGrades(course: ai, source: GradeSource.gradebook, items: [
+        GradeItem(key: 'm1', name: 'Project', mark: '75.25', grade: 75.25, max: 100, weight: 30, categoryWeight: 100, contribution: 75.25),
+        GradeItem(key: 'm2', name: 'Final', mark: '-', max: 100, weight: 70, categoryWeight: 100, contribution: 0),
+      ]))!;
+      expect(s.lines[0].earned, 22.575);
+      expect(s.line, '22.57 of 100');
+      expect(s.complete, isTrue);
+    });
+
+    test('with no total and weights past 100, the score says what it is out of', () {
+      final s = CourseScore.of(const CourseGrades(course: ai, source: GradeSource.gradebook, items: [
         GradeItem(key: 'm1', name: 'A', mark: '50.00', grade: 50, max: 100, weight: 100, categoryWeight: 100),
         GradeItem(key: 'm2', name: 'B', mark: '-', max: 100, weight: 100, categoryWeight: 100),
-      ]);
-      final s = CourseScore.of(over)!;
+      ]))!;
       expect((s.accumulated, s.outOf, s.line, s.ofValue(75)), (50, 200, '50 of 200', '75 of 200'));
-    });
-
-    test('a raw mark does not pass as a category weight', () {
-      const raw = CourseGrades(course: ai, source: GradeSource.gradebook, total: 50, gradeTotal: 50, gradeTotalMax: 100, items: [
-        GradeItem(key: 'm1', name: 'Lab', category: 'Assign', mark: '50.00', grade: 50, max: 100, weight: 50, contribution: 50),
-      ], categories: [GradeCategory('Assign', null)]);
-      expect(CourseScore.of(raw), isNull);
-      expect(eclassTotalLine(raw, null), 'Course total on eClass: 50 of 100');
     });
 
     test("a mark that is not a number takes eClass's figure, no more than the line is worth", () {
@@ -208,8 +198,26 @@ void main() {
       expect(CourseScore.of(letter(95))!.accumulated, 20);
     });
 
+    test('a category holding categories is counted through them, not again', () {
+      const page = '''<body id="page-grade-report-user-index"><table class="user-grade"><tbody>
+        <tr><th class="level1 column-itemname">Course</th></tr>
+        <tr><th class="level2 column-itemname">Exams</th></tr>
+        <tr><th class="level3 column-itemname">Midterm</th></tr>
+        <tr><th class="level3 baggt column-itemname">Midterm total</th><td class="column-weight">50.00 %</td></tr>
+        <tr><th class="level3 column-itemname">Final</th></tr>
+        <tr><th class="level3 baggt column-itemname">Final total</th><td class="column-weight">50.00 %</td></tr>
+        <tr><th class="level2 baggt column-itemname">Exams total</th><td class="column-weight">40.00 %</td></tr>
+        <tr><th class="level2 column-itemname">Assign</th></tr>
+        <tr><th class="level2 baggt column-itemname">Assign total</th><td class="column-weight">60.00 %</td></tr>
+        <tr><th class="level1 baggt column-itemname">Course total</th><td class="column-grade">-</td><td class="column-range">0–100</td></tr>
+      </tbody></table></body>''';
+      final g = parseGradeBook(page, ai)!;
+      expect([for (final c in g.categories) (c.name, c.weight)], [('Midterm', 20), ('Final', 20), ('Assign', 60)]);
+      expect([for (final l in CourseScore.of(g)!.lines) (l.name, l.worth)], [('Midterm', 20), ('Final', 20), ('Assign', 60)]);
+    });
+
     test('no weights at all, or marks from the activity lists: no score', () {
-      const noWeights = CourseGrades(course: ai, source: GradeSource.gradebook, total: 0, items: [
+      const noWeights = CourseGrades(course: ai, source: GradeSource.gradebook, items: [
         GradeItem(key: 'g1', name: 'Lab 1', category: 'Assign', mark: '-', max: 10),
       ], categories: [GradeCategory('Assign', null)]);
       expect(CourseScore.of(noWeights), isNull);
@@ -268,7 +276,7 @@ void main() {
       eclass.courseList = const [ai];
       eclass.gradesById = {ai.id: book};
       await data.refreshEclass();
-      expect(data.gradesOf(ai.id)?.total, 28.5);
+      expect(data.gradesOf(ai.id)?.percent, 28.5);
       expect(data.gradesOf(1), isNull);
       expect(eclass.courseCalls, 1);
       await data.reloadFromCache();

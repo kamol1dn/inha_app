@@ -39,43 +39,43 @@ class ScoreLine {
   }
 }
 
-/// A course's score so far. Null from [of] when eClass publishes no weights.
+/// A course's score so far: eClass's own course total where it gives one, else
+/// what the lines add up to. Null from [of] when there is neither.
+///
+/// Only a published weight makes a line. A category weight of "-" can't be read
+/// back from its marks: the contribution column treats such a category as the
+/// whole course, so 81 of 100 "contributes" 81 whatever the category is worth.
 class CourseScore {
   final List<ScoreLine> lines;
   final double accumulated;
 
-  /// What the score is out of: 100, or what the weights really add up to where
-  /// a course's add up to more.
+  /// What the score is out of: 100, or what the weights add up to where a
+  /// course has no total and its weights pass 100.
   final double outOf;
 
-  /// Items with no known weight or a weight of 0: shown, but they add nothing.
+  /// Items with a weight of 0: shown, but they add nothing.
   final List<GradeItem> uncounted;
 
-  const CourseScore._(this.lines, this.accumulated, this.outOf, this.uncounted);
+  /// Items eClass publishes no weight for: they may count, but by how much
+  /// isn't known.
+  final List<GradeItem> unweighted;
+
+  const CourseScore._(this.lines, this.accumulated, this.outOf, this.uncounted, this.unweighted);
 
   static CourseScore? of(CourseGrades g) {
     if (g.source != GradeSource.gradebook) return null;
 
-    // A category weight of "-" can still be read back from a marked item:
-    // contribution = mark / max × item weight × category weight.
-    final inferred = <String, double>{};
-    for (final i in g.items) {
-      final (grade, max, weight, points) = (i.grade, i.max, i.weight, i.contribution);
-      if (i.categoryWeight != null || grade == null || max == null || weight == null || points == null) continue;
-      if (grade <= 0 || max <= 0 || weight <= 0 || points <= 0) continue;
-      final read = points / (grade / max * weight / 100);
-      if (read <= 100 + _agree) inferred[i.category] ??= read; // over 100: a raw mark, not points
-    }
-
     final lines = <ScoreLine>[];
     final uncounted = <GradeItem>[];
+    final unweighted = <GradeItem>[];
     for (final i in g.items) {
-      final categoryWeight = i.categoryWeight ?? inferred[i.category];
-      final worth = i.weight == null || categoryWeight == null ? 0.0 : i.weight! * categoryWeight / 100;
-      if (worth > 0) {
-        lines.add(ScoreLine(id: i.key, name: i.name, category: i.category, worth: worth, item: i));
-      } else {
+      final (weight, categoryWeight) = (i.weight, i.categoryWeight);
+      if (weight == 0) {
         uncounted.add(i);
+      } else if (weight == null || categoryWeight == null) {
+        unweighted.add(i);
+      } else {
+        lines.add(ScoreLine(id: i.key, name: i.name, category: i.category, worth: weight * categoryWeight / 100, item: i));
       }
     }
     for (final c in g.categories) {
@@ -83,15 +83,17 @@ class CourseScore {
       if (weight <= 0 || g.items.any((i) => i.category == c.name)) continue;
       lines.add(ScoreLine(id: 'category:${c.name}', name: c.name, category: c.name, worth: weight));
     }
-    if (lines.isEmpty) return null;
+    final percent = g.percent;
+    if (percent == null && lines.isEmpty) return null;
 
-    // The sum of what is shown, not the total row: on some courses that row adds up the raw marks.
-    final sum = lines.fold(0.0, (s, l) => s + l.earned);
     final worth = lines.fold(0.0, (s, l) => s + l.worth);
-    final total = g.total;
-    return CourseScore._(lines, total != null && (total - sum).abs() <= _agree ? total : sum,
-        worth > 100 + _agree ? worth : 100, uncounted);
+    return CourseScore._(lines, percent ?? lines.fold(0.0, (s, l) => s + l.earned),
+        percent == null && worth > 100 + _agree ? worth : 100, uncounted, unweighted);
   }
+
+  /// Whether the weights account for the whole course, so "still open" and
+  /// "best possible" mean something.
+  bool get complete => (lines.fold(0.0, (s, l) => s + l.worth) - outOf).abs() <= 0.5;
 
   /// "28.5 of 100".
   String get line => ofValue(accumulated);
@@ -119,16 +121,6 @@ class CourseScore {
     }
     return total;
   }
-}
-
-/// eClass's own course total, in its own range: "Course total on eClass: 157.25
-/// of 300". Null where there is none, or where it says the same as the score
-/// already shown.
-String? eclassTotalLine(CourseGrades g, CourseScore? score) {
-  final total = g.gradeTotal;
-  if (total == null || (score != null && (total - score.accumulated).abs() <= _agree)) return null;
-  final max = g.gradeTotalMax;
-  return 'Course total on eClass: ${plainNumber(total)}${max == null ? '' : ' of ${plainNumber(max)}'}';
 }
 
 /// Attendance marks tick over after every class and the Attendance channel
