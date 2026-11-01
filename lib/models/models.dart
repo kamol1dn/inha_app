@@ -316,6 +316,145 @@ class GradeReport {
       );
 }
 
+/// A number the way a mark reads best: 37, 0.37, 6.25, never 37.00.
+String plainNumber(double v) => v.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+
+/// One marked thing in an eClass course: a row of the course's grades page, or
+/// of its assignment and quiz lists where that page is closed.
+class GradeItem {
+  final String key; // the same on every refresh: "m<module id>" or "g<grade item id>"
+  final String name;
+  final String category; // '' when it sits directly under the course
+  final String mark; // as eClass shows it: "8.50", "A"; '-' or '' while unmarked
+  final double? grade; // the mark as a number, when it is one
+  final double? max;
+  final double? weight; // % of its category ("Calculated weight"); null where eClass shows "-"
+  final double? categoryWeight; // the category's % of the course total; 100 directly under the course
+  final double? contribution; // points in the course total, eClass's "백분 환산 점수"
+  final int? moduleId; // for opening it, when it is an activity
+  final String? moduleType; // "assign", "quiz", ...
+
+  const GradeItem({
+    required this.key,
+    required this.name,
+    this.category = '',
+    this.mark = '',
+    this.grade,
+    this.max,
+    this.weight,
+    this.categoryWeight,
+    this.contribution,
+    this.moduleId,
+    this.moduleType,
+  });
+
+  bool get marked => mark.isNotEmpty && mark != '-';
+
+  /// "8.5 / 10", or the mark alone when it isn't a number or has no maximum.
+  String get score => switch ((grade, max)) {
+        (final g?, final m?) => '${plainNumber(g)} / ${plainNumber(m)}',
+        (final g?, null) => plainNumber(g),
+        _ => mark,
+      };
+
+  GradeItem withMax(double max) => GradeItem(
+      key: key,
+      name: name,
+      category: category,
+      mark: mark,
+      grade: grade,
+      max: max,
+      weight: weight,
+      categoryWeight: categoryWeight,
+      contribution: contribution,
+      moduleId: moduleId,
+      moduleType: moduleType);
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'name': name,
+        'category': category,
+        'mark': mark,
+        'grade': grade,
+        'max': max,
+        'weight': weight,
+        'categoryWeight': categoryWeight,
+        'contribution': contribution,
+        'moduleId': moduleId,
+        'moduleType': moduleType,
+      };
+  factory GradeItem.fromJson(Map<String, dynamic> j) => GradeItem(
+        key: j['key'] as String,
+        name: j['name'] as String,
+        category: (j['category'] as String?) ?? '',
+        mark: (j['mark'] as String?) ?? '',
+        grade: (j['grade'] as num?)?.toDouble(),
+        max: (j['max'] as num?)?.toDouble(),
+        weight: (j['weight'] as num?)?.toDouble(),
+        categoryWeight: (j['categoryWeight'] as num?)?.toDouble(),
+        contribution: (j['contribution'] as num?)?.toDouble(),
+        moduleId: j['moduleId'] as int?,
+        moduleType: j['moduleType'] as String?,
+      );
+}
+
+/// A category of the grades page and its % of the course total. Listed even
+/// with nothing in it yet: a Final exam worth 25% before the final exists.
+class GradeCategory {
+  final String name;
+  final double? weight;
+  const GradeCategory(this.name, this.weight);
+
+  Map<String, dynamic> toJson() => {'name': name, 'weight': weight};
+  factory GradeCategory.fromJson(Map<String, dynamic> j) =>
+      GradeCategory(j['name'] as String, (j['weight'] as num?)?.toDouble());
+}
+
+/// Where a course's marks came from. Professors can close the grades page
+/// ("Can not view grades"), which leaves the assignment and quiz lists; those
+/// have marks but no weights. [none]: neither has anything.
+enum GradeSource { gradebook, activities, none }
+
+/// One course's marks in eClass.
+class CourseGrades {
+  final Course course;
+  final GradeSource source;
+  final List<GradeItem> items;
+  final List<GradeCategory> categories;
+  final double? total; // what the course total's row has in the contribution column; not always out of 100
+  final double? gradeTotal; // the same row's Grade column, in its own range
+  final double? gradeTotalMax;
+
+  const CourseGrades({
+    required this.course,
+    required this.source,
+    this.items = const [],
+    this.categories = const [],
+    this.total,
+    this.gradeTotal,
+    this.gradeTotalMax,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'course': course.toJson(),
+        'source': source.name,
+        'items': items.map((e) => e.toJson()).toList(),
+        'categories': categories.map((e) => e.toJson()).toList(),
+        'total': total,
+        'gradeTotal': gradeTotal,
+        'gradeTotalMax': gradeTotalMax,
+      };
+  factory CourseGrades.fromJson(Map<String, dynamic> j) => CourseGrades(
+        course: Course.fromJson(j['course'] as Map<String, dynamic>),
+        source: GradeSource.values.byName(j['source'] as String),
+        items: (j['items'] as List).map((e) => GradeItem.fromJson(e as Map<String, dynamic>)).toList(),
+        categories: (j['categories'] as List).map((e) => GradeCategory.fromJson(e as Map<String, dynamic>)).toList(),
+        total: (j['total'] as num?)?.toDouble(),
+        gradeTotal: (j['gradeTotal'] as num?)?.toDouble(),
+        gradeTotalMax: (j['gradeTotalMax'] as num?)?.toDouble(),
+      );
+}
+
 /// The mail folders the app shows, in the drawer's order, with their EWS
 /// distinguished folder ids.
 enum MailFolder {

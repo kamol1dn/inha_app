@@ -247,6 +247,170 @@ List<VodProgress> parseVodProgress(String html) {
   return (done: done, at: at);
 }
 
+/// A course's grades page, `GET /grade/report/user/index.php?id=<course>`, or
+/// null when the page has no table.
+///
+/// The column classes hold whatever language the page is in. A row is a
+/// category heading, an item (`th.item`) or a category's total (`th.baggt`),
+/// which comes after the category's items and is the row carrying its weight;
+/// the course's own total is that row at level 1. Nested categories multiply.
+CourseGrades? parseGradeBook(String html, Course course) {
+  final doc = html_parser.parse(html);
+  final table = doc.querySelector('table.user-grade');
+  if (table == null) {
+    if (doc.body?.id == 'page-grade-report-user-index') return null;
+    throw ParseError('eClass grades');
+  }
+
+  final open = <int, _GradeCategoryRows>{}; // the category being read at each level
+  final rows = <(Element, _GradeCategoryRows?)>[];
+  final categories = <_GradeCategoryRows>[];
+  double? total;
+  double? gradeTotal;
+  double? gradeTotalMax;
+  for (final tr in table.querySelectorAll('tbody tr')) {
+    final th = tr.querySelector('th.column-itemname');
+    if (th == null) continue;
+    final level = int.tryParse(RegExp(r'\blevel(\d+)\b').firstMatch(th.className)?.group(1) ?? '');
+    if (level == null) throw ParseError('eClass grades row');
+
+    if (th.classes.contains('item')) {
+      rows.add((tr, open[level - 1]));
+    } else if (th.classes.contains('baggt') || th.classes.contains('baggb')) {
+      if (level == 1) {
+        total = _gradeNumber(_gradeCell(tr, 'contributiontocoursetotal'));
+        gradeTotal = _gradeNumber(_gradeCell(tr, 'grade'));
+        gradeTotalMax = _rangeMax(_gradeCell(tr, 'range'));
+      } else {
+        open[level]?.weight = _gradeNumber(_gradeCell(tr, 'weight'));
+      }
+    } else {
+      final c = _GradeCategoryRows(_text(th), open[level - 1]);
+      open[level] = c;
+      if (level > 1) categories.add(c);
+    }
+  }
+
+  return CourseGrades(
+    course: course,
+    source: GradeSource.gradebook,
+    total: total,
+    gradeTotal: gradeTotal,
+    gradeTotalMax: gradeTotalMax,
+    categories: [for (final c in categories) GradeCategory(c.name, c.courseWeight)],
+    items: [
+      for (final (tr, category) in rows) _gradeItem(tr, category),
+    ],
+  );
+}
+
+GradeItem _gradeItem(Element tr, _GradeCategoryRows? category) {
+  final th = tr.querySelector('th.column-itemname')!;
+  final id = RegExp(r'^row_(\d+)').firstMatch(th.id)?.group(1);
+  final link = th.querySelector('a.gradeitemheader[href]')?.attributes['href'];
+  final mod = link == null ? null : _modulePattern.firstMatch(link);
+  final moduleId = mod == null ? null : int.tryParse(mod.group(2)!);
+  if (id == null && moduleId == null) throw ParseError('eClass grades item');
+  final mark = _gradeCell(tr, 'grade');
+  return GradeItem(
+    key: moduleId != null ? 'm$moduleId' : 'g$id',
+    name: _text(th.querySelector('.gradeitemheader') ?? th),
+    category: category == null || category.parent == null ? '' : category.name,
+    mark: mark,
+    grade: _gradeNumber(mark),
+    max: _rangeMax(_gradeCell(tr, 'range')),
+    weight: _gradeNumber(_gradeCell(tr, 'weight')),
+    categoryWeight: category?.parent == null ? 100 : category!.courseWeight,
+    contribution: _gradeNumber(_gradeCell(tr, 'contributiontocoursetotal')),
+    moduleId: moduleId,
+    moduleType: mod?.group(1),
+  );
+}
+
+/// "0–100" → 100; a scale has no number.
+double? _rangeMax(String s) {
+  final m = RegExp(r'[–-]\s*(\d+(?:\.\d+)?)\s*$').firstMatch(s);
+  return m == null ? null : double.parse(m.group(1)!);
+}
+
+String _gradeCell(Element tr, String column) => _text(tr.querySelector('td.column-$column'));
+
+/// "100.00 %" → 100, "8.50" → 8.5; "-", a letter or a word → null.
+double? _gradeNumber(String s) {
+  final m = RegExp(r'^(-?\d+(?:\.\d+)?)\s*%?$').firstMatch(s.trim());
+  return m == null ? null : double.parse(m.group(1)!);
+}
+
+/// A category while its rows are read. The course itself is the root, with no
+/// parent. Its weight comes from its total row, after its items.
+class _GradeCategoryRows {
+  final String name;
+  final _GradeCategoryRows? parent;
+  double? weight;
+  _GradeCategoryRows(this.name, this.parent);
+
+  /// % of the course total; null when eClass shows "-" here or above.
+  double? get courseWeight {
+    final up = parent;
+    if (up == null) return 100;
+    final w = weight, above = up.courseWeight;
+    return w == null || above == null ? null : w * above / 100;
+  }
+}
+
+/// A course's assignment or quiz list, `GET /mod/<type>/index.php?id=<course>`,
+/// the marks of a course with its grades page closed. Quizzes read
+/// `37.00/100.00`; assignments give the mark alone, or `-`. A course with none
+/// has no table. [type] is `assign` or `quiz`.
+List<GradeItem> parseActivityGrades(String html, String type) {
+  final doc = html_parser.parse(html);
+  final table = doc.querySelector('#region-main table.generaltable');
+  if (table == null) {
+    if (doc.body?.id == 'page-mod-$type-index') return const [];
+    throw ParseError('eClass $type list');
+  }
+  final headers = table.querySelectorAll('thead th').map(_text).toList();
+  final found = headers.indexWhere((h) => h == 'Grade' || h == '성적');
+  final gradeColumn = found >= 0 ? found : headers.length - 1;
+
+  final out = <GradeItem>[];
+  for (final tr in table.querySelectorAll('tbody tr')) {
+    final cells = tr.querySelectorAll('td');
+    final link = tr.querySelector('a[href*="view.php"]');
+    if (link == null || gradeColumn < 0 || cells.length <= gradeColumn) continue; // the spacer between weeks
+    final id = _intParam(link.attributes['href'], 'id');
+    if (id == null) throw ParseError('eClass $type list row');
+    final text = _text(cells[gradeColumn]);
+    final outOf = RegExp(r'^(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)$').firstMatch(text);
+    out.add(GradeItem(
+      key: 'm$id',
+      name: _text(link),
+      category: type == 'assign' ? 'Assignments' : 'Quizzes',
+      mark: text,
+      grade: outOf != null ? double.parse(outOf.group(1)!) : _gradeNumber(text),
+      max: outOf == null ? null : double.parse(outOf.group(2)!),
+      moduleId: id,
+      moduleType: type,
+    ));
+  }
+  return out;
+}
+
+/// The maximum in the Feedback box of `GET /mod/assign/view.php?id=`, whose
+/// Grade row reads `85.00 / 100.00`. Null before there is a mark, or on a
+/// grading scale.
+double? parseAssignMax(String html) {
+  final doc = html_parser.parse(html);
+  if (doc.body?.id != 'page-mod-assign-view') throw ParseError('eClass assignment');
+  for (final row in doc.querySelectorAll('.feedback tr')) {
+    final cells = row.querySelectorAll('td, th');
+    if (cells.length < 2 || !RegExp(r'^(Grade|성적)$').hasMatch(_text(cells.first))) continue;
+    final m = RegExp(r'/\s*(\d+(?:\.\d+)?)\s*$').firstMatch(_text(cells[1]));
+    return m == null ? null : double.parse(m.group(1)!);
+  }
+  return null;
+}
+
 /// The first "2026-10-21 21:14" in [s], in device time (eClass shows times in
 /// the zone of the student's profile, the same as the device).
 DateTime? _parseDateTime(String s) {

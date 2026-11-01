@@ -60,6 +60,24 @@ class Notifier {
   /// `{"<course id>": <allowed absences>}`. Written by Settings (Prefs).
   static const absenceLimitsKey = 'absenceLimits.v1';
 
+  /// shared_preferences key holding the last mark announced for each item,
+  /// `{"<course id>": {"<item key>": "<mark>"}}`. A course not in it has not
+  /// been seen yet, and its marks are recorded without being announced.
+  static const seenGradesKey = 'notify.seenGrades.v1';
+
+  static Map<int, Map<String, String>> _readSeenGrades(SharedPreferences p) {
+    final raw = p.getString(seenGradesKey);
+    if (raw == null) return {};
+    try {
+      return {
+        for (final e in (jsonDecode(raw) as Map<String, dynamic>).entries)
+          ?int.tryParse(e.key): (e.value as Map<String, dynamic>).cast<String, String>(),
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
   static Map<int, int> readAbsenceLimits(SharedPreferences p) {
     final raw = p.getString(absenceLimitsKey);
     if (raw == null) return {};
@@ -96,6 +114,12 @@ class Notifier {
       'attendance',
       'Attendance',
       description: 'A new absence in eClass',
+      importance: Importance.high,
+    ),
+    NotifyChannel.grades: AndroidNotificationChannel(
+      'grades',
+      'Grades',
+      description: 'A new or changed mark in eClass',
       importance: Importance.high,
     ),
     NotifyChannel.classes: AndroidNotificationChannel(
@@ -267,25 +291,30 @@ class Notifier {
   /// Channels the student turned off are not delivered, and their pending
   /// reminders are cancelled. Absences are recorded without a notification
   /// when the Attendance channel is off, and for a course seen for the first
-  /// time (a first install, a new semester): those are not news.
+  /// time (a first install, a new semester): those are not news. The same goes
+  /// for marks, with the Grades channel.
   Future<List<PlannedNotification>> sync({
     List<Deadline>? deadlines,
     List<CourseAttendance>? attendance,
     List<Lesson>? lessons,
+    List<CourseGrades>? courseGrades,
     DateTime? now,
   }) async {
     final at = now ?? _clock();
     final prefs = await _load();
     final settings = NotifySettings.read(prefs);
+    final seenGrades = _readSeenGrades(prefs);
     final plan = planNotifications(
       now: at,
       deadlines: deadlines ?? const [],
       attendance: attendance ?? const [],
       lessons: lessons ?? const [],
+      courseGrades: courseGrades ?? const [],
       sentKeys: await sentKeys(at),
       quietHours: settings.quietHours ? defaultQuietHours : null,
       absenceLimits: readAbsenceLimits(prefs),
       classFree: decodeDays(prefs.getString(classFreeDaysKey)),
+      seenGrades: seenGrades,
     );
 
     final seen = {...?prefs.getStringList(seenCoursesKey)?.map(int.tryParse).whereType<int>()};
@@ -294,7 +323,10 @@ class Notifier {
         if (c.classes.isNotEmpty && !seen.contains(c.course.id)) c.course.id,
     };
     final attendanceOn = settings.channels.contains(NotifyChannel.attendance);
+    final gradesOn = settings.channels.contains(NotifyChannel.grades);
     bool silent(PlannedNotification n) {
+      final graded = gradeCourseId(n.key);
+      if (graded != null) return !gradesOn || !seenGrades.containsKey(graded);
       final course = absenceCourseId(n.key);
       return course != null && (!attendanceOn || firstSeen.contains(course));
     }
@@ -310,12 +342,35 @@ class Notifier {
       cancelMissing: {
         if (deadlines != null) ...[vodKeyPrefix, dueKeyPrefix],
         if (lessons != null) classKeyPrefix,
+        if (courseGrades != null) gradeKeyPrefix,
       },
     );
     if (firstSeen.isNotEmpty) {
       await prefs.setStringList(seenCoursesKey, [for (final id in {...seen, ...firstSeen}) '$id']);
     }
+    if (courseGrades != null) await _advanceSeenGrades(prefs, courseGrades, seenGrades, await sentKeys(at));
     return shown;
+  }
+
+  /// Moves on to the marks that went out or were recorded. A mark that could
+  /// not be delivered, or is waiting out the night, stays new for the next
+  /// pass. Marks stay here when a page stops showing them (a course's grades
+  /// page closing again), so they aren't news when it comes back.
+  Future<void> _advanceSeenGrades(
+    SharedPreferences prefs,
+    List<CourseGrades> courses,
+    Map<int, Map<String, String>> seen,
+    Set<String> sent,
+  ) async {
+    for (final g in courses) {
+      final marks = seen[g.course.id] ??= {};
+      for (final item in g.items) {
+        if (item.marked && sent.contains(gradeKey(g.course.id, item, marks[item.key]))) {
+          marks[item.key] = item.mark;
+        }
+      }
+    }
+    await prefs.setString(seenGradesKey, jsonEncode({for (final e in seen.entries) '${e.key}': e.value}));
   }
 
   /// Shows the items due now, schedules the rest and records every key.
@@ -469,7 +524,12 @@ class NotifySettings {
   final bool quietHours;
   const NotifySettings({required this.channels, this.quietHours = true});
 
-  static const defaultChannels = {NotifyChannel.deadlines, NotifyChannel.vod, NotifyChannel.attendance};
+  static const defaultChannels = {
+    NotifyChannel.deadlines,
+    NotifyChannel.vod,
+    NotifyChannel.attendance,
+    NotifyChannel.grades,
+  };
 
   static String _key(NotifyChannel c) => 'notify.on.${c.name}';
   static const _quietKey = 'notify.quietHours';

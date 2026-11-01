@@ -7,6 +7,7 @@ import '../core/session.dart';
 import '../data/app_data.dart';
 import '../data/services.dart';
 import '../ui/format/format.dart';
+import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
 import 'settings_screen.dart';
 
@@ -128,6 +129,50 @@ bool isOffline(AppData d) => isNetworkError(d.lessons.error) && isNetworkError(d
 DateTime? oldestData(AppData d) =>
     ([d.lessons, d.deadlines, d.attendance].map((s) => s.data?.fetchedAt).whereType<DateTime>().toList()..sort())
         .firstOrNull;
+
+/// What a refresh is doing, under the app bar, while one runs: a bar for how
+/// far it has got and a line naming what it is waiting on, "eClass: marks for
+/// Artificial Intelligence" and "5 of 24" (DESIGN.md 8, Loading).
+class SyncStrip extends StatelessWidget {
+  const SyncStrip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final sync = context.read<AppData>().sync;
+    final style = t.textTheme.bodySmall!.tnum.copyWith(color: t.colorScheme.onSurfaceVariant);
+    return AnimatedSize(
+      alignment: Alignment.topCenter,
+      duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 150),
+      child: ListenableBuilder(
+        listenable: sync,
+        builder: (context, _) {
+          if (!sync.active) return const SizedBox(width: double.infinity);
+          final current = sync.current;
+          final others = current == null ? const <String>[] : sync.others;
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+            LinearProgressIndicator(value: sync.total == 0 ? null : sync.done / sync.total),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 6, gutter, 6),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: Text(current ?? 'Syncing', maxLines: 1, overflow: TextOverflow.ellipsis, style: style)),
+                  if (sync.total > 1) ...[
+                    const SizedBox(width: 12),
+                    Text('${sync.done} of ${sync.total}', style: style),
+                  ],
+                ]),
+                if (others.isNotEmpty)
+                  Text('Also syncing ${others.join(', ')}', maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
+              ]),
+            ),
+            const Divider(height: 1),
+          ]);
+        },
+      ),
+    );
+  }
+}
 
 /// One row at the top of a tab while offline. Renders nothing otherwise.
 class OfflineRow extends StatelessWidget {
@@ -314,7 +359,10 @@ class _HeadingScaffoldState extends State<HeadingScaffold> {
         ),
         actions: widget.actions,
       ),
-      body: NotificationListener<ScrollNotification>(onNotification: _onScroll, child: widget.body(_heading)),
+      body: Column(children: [
+        const SyncStrip(),
+        Expanded(child: NotificationListener<ScrollNotification>(onNotification: _onScroll, child: widget.body(_heading))),
+      ]),
       bottomNavigationBar: widget.bottom,
     );
   }

@@ -9,8 +9,9 @@ grades and university mail.
 | Today | Next class and room, what needs attention in the next 3 days, unread mail | All of the below |
 | Schedule | The week's classes, one day at a time | EduPage timetable |
 | Deadlines | Assignments, quizzes and VOD watch windows, with "Open in eClass" | eClass |
-| Courses | Absences against the limit you set, VOD progress, the INS grade | eClass, INS |
-| Grades | GPA, credits and every course by term | INS |
+| Courses | Absences against the limit you set, VOD progress, your score so far, the INS grade | eClass, INS |
+| Scores | Every mark by category with its weight, the accumulated score, and a what-if calculator; a notification when something is graded | eClass |
+| Grades | GPA, credits and every course by term, this semester's scores | INS, eClass |
 | Mail | Inbox, Drafts, Sent, Deleted, Junk and Notes; read, reply, reply all, forward and write new mail, with names from the university directory | University Exchange mail |
 | Exams | Your midterm or final exams: when, and the rooms each uses until you set yours (on Today, Schedule and course detail too); no classes in exam week | The university's exam timetable PDF, bundled (`docs/EXAMS.md`) |
 

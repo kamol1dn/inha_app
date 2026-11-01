@@ -17,6 +17,7 @@ const _channelText = {
   NotifyChannel.deadlines: ('Deadlines', 'Assignments and quizzes, 24 h and 3 h before they are due'),
   NotifyChannel.vod: ('VOD windows', 'Lecture videos not fully watched, 48 h and 6 h before the window closes'),
   NotifyChannel.attendance: ('Attendance', 'When eClass records a new absence'),
+  NotifyChannel.grades: ('Grades', 'When eClass shows a new or changed mark'),
   NotifyChannel.classes: ('Classes', 'The room, 15 min before each class'),
 };
 
@@ -77,6 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(children: [
+        const SyncStrip(),
         const SectionHeader('Accounts', first: true),
         for (final s in Service.values.where((s) => s.needsLogin))
           ListTile(

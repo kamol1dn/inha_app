@@ -1,0 +1,91 @@
+# Builds the browser extension for Chrome and for Firefox/Zen (extension/README.md). Runs on pushes
+# to main that touch it, on v* tags (which also attach both to the GitHub release, next to the APKs)
+# and by hand.
+name: Browser extension
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths: ['extension/**', 'test/fixtures/**', 'assets/exams/**', 'assets/fonts/**', '.github/workflows/extension.yml']
+  pull_request:
+    paths: ['extension/**', 'test/fixtures/**', 'assets/exams/**', '.github/workflows/extension.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: extension-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # attach the builds to the release on a tag
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Mozilla's add-on signing key (addons.mozilla.org > Developer Hub > API keys); optional.
+      AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+      AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v7
+
+      # Node 24 runs the TypeScript tests directly (type stripping), as on the dev laptop.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      # Production builds (no development reload hook): Chrome, then Firefox and Zen.
+      - run: npm run build
+      - run: npm run build:firefox
+      - run: npm run lint:firefox
+
+      - name: Package
+        id: pkg
+        run: |
+          version=$(node -p "require('./dist/manifest.json').version")
+          suffix="${version}-${GITHUB_REF_NAME//\//-}"
+          chrome="iut-eclass-chrome-${suffix}.zip"
+          firefox="iut-eclass-zen-firefox-${suffix}.xpi"
+          (cd dist && zip -qr "../$chrome" .)
+          (cd dist-firefox && zip -qr "../$firefox" .)
+          echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
+          echo "firefox=$firefox" >> "$GITHUB_OUTPUT"
+
+      # Firefox and Zen install only signed add-ons for good. With the AMO API key in the repository
+      # secrets, Mozilla signs it (unlisted: not published, just signed) and the signed .xpi replaces
+      # the unsigned one; without them the .xpi still loads as a temporary add-on (README).
+      - name: Sign for Firefox and Zen
+        if: startsWith(github.ref, 'refs/tags/v') && env.AMO_JWT_ISSUER != ''
+        run: |
+          npx web-ext sign --source-dir dist-firefox --channel unlisted --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" --artifacts-dir signed
+          mv signed/*.xpi "${{ steps.pkg.outputs.firefox }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: iut-eclass-chrome-${{ github.ref_name }}-${{ github.run_number }}
+          path: extension/dist/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: iut-eclass-zen-firefox-${{ github.ref_name }}-${{ github.run_number }}
+          path: extension/${{ steps.pkg.outputs.firefox }}
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            extension/${{ steps.pkg.outputs.chrome }}
+            extension/${{ steps.pkg.outputs.firefox }}

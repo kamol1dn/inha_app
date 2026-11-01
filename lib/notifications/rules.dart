@@ -13,6 +13,7 @@ library;
 
 import 'package:intl/intl.dart';
 
+import '../data/scores.dart';
 import '../models/models.dart';
 
 // ---------------------------------------------------------------------------
@@ -71,7 +72,8 @@ const vodKeyPrefix = 'vod:';
 const dueKeyPrefix = 'due:';
 const absenceKeyPrefix = 'absent:';
 const classKeyPrefix = 'class:';
-const allKeyPrefixes = {vodKeyPrefix, dueKeyPrefix, absenceKeyPrefix, classKeyPrefix};
+const gradeKeyPrefix = 'grade:';
+const allKeyPrefixes = {vodKeyPrefix, dueKeyPrefix, absenceKeyPrefix, classKeyPrefix, gradeKeyPrefix};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,7 +81,7 @@ const allKeyPrefixes = {vodKeyPrefix, dueKeyPrefix, absenceKeyPrefix, classKeyPr
 
 /// The Android notification channel a notification goes to, each with its
 /// own switch in Settings. Off by default: [classes] (DESIGN.md 11).
-enum NotifyChannel { deadlines, vod, attendance, classes }
+enum NotifyChannel { deadlines, vod, attendance, grades, classes }
 
 /// The nightly quiet hours, as minutes after midnight in device time. The
 /// window may cross midnight (start after end).
@@ -173,15 +175,20 @@ class PlannedNotification {
 /// hour before they start (22:00), else (that time has passed) goes out
 /// [PlannedNotification.quiet]. Every channel is planned whether or not the
 /// student turned it off; the notifier filters.
+///
+/// [seenGrades] holds the last mark announced for each item, by course id and
+/// [GradeItem.key]: a mark goes out when it differs from that one.
 List<PlannedNotification> planNotifications({
   required DateTime now,
   List<Deadline> deadlines = const [],
   List<CourseAttendance> attendance = const [],
   List<Lesson> lessons = const [],
+  List<CourseGrades> courseGrades = const [],
   Set<String> sentKeys = const {},
   QuietHours? quietHours,
   Map<int, int> absenceLimits = const {},
   Set<DateTime> classFree = const {},
+  Map<int, Map<String, String>> seenGrades = const {},
 }) {
   final out = <String, PlannedNotification>{};
   void add(PlannedNotification n) => out.putIfAbsent(n.key, () => n);
@@ -197,6 +204,11 @@ List<PlannedNotification> planNotifications({
     for (final n in _absences(now, course, absenceLimits[course.course.id])) {
       // Nothing closes: an absence can always wait for the morning.
       _quiet([n], DateTime(9999), now, quietHours).forEach(add);
+    }
+  }
+  for (final course in courseGrades) {
+    for (final n in _newMarks(now, course, seenGrades[course.course.id] ?? const {})) {
+      _quiet([n], DateTime(9999), now, quietHours).forEach(add); // a mark can wait for the morning too
     }
   }
   // No classes in an exam week, whatever the timetable says.
@@ -318,6 +330,40 @@ Iterable<PlannedNotification> _absences(DateTime now, CourseAttendance a, int? l
     );
   }
 }
+
+Iterable<PlannedNotification> _newMarks(DateTime now, CourseGrades g, Map<String, String> seen) sync* {
+  final score = CourseScore.of(g);
+  final course = _clean(g.course.name);
+  for (final item in g.items) {
+    if (!item.marked || isAttendanceMark(item)) continue;
+    final was = seen[item.key];
+    if (was == item.mark) continue;
+    final name = _clean(item.name);
+    final before = was == null ? null : double.tryParse(was);
+    yield PlannedNotification(
+      key: gradeKey(g.course.id, item, was),
+      title: was == null ? 'Graded: $name' : 'Grade changed: $name',
+      body: [
+        course,
+        item.score,
+        if (was != null) 'was ${before == null ? was : plainNumber(before)}',
+        if (score != null) '${score.line} so far',
+      ].join(' · '),
+      when: now,
+      channel: NotifyChannel.grades,
+    );
+  }
+}
+
+/// The notification key for [item]'s mark, after [was]. The change is in the
+/// key, so a mark going back to an earlier value is news again.
+String gradeKey(int courseId, GradeItem item, String? was) =>
+    '$gradeKeyPrefix$courseId|${item.key}|${was ?? ''}>${item.mark}';
+
+/// The eClass course id in a grade key, or null for another key.
+int? gradeCourseId(String key) => key.startsWith(gradeKeyPrefix)
+    ? int.tryParse(key.substring(gradeKeyPrefix.length).split('|').first)
+    : null;
 
 PlannedNotification? _classReminder(DateTime now, Lesson l) {
   final today = now.toLocal();

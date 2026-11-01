@@ -16,7 +16,9 @@ import '../services/eclass/eclass_api.dart';
 import '../services/edupage/timetable_api.dart';
 import '../services/ins/ins_api.dart';
 import '../services/mail/mail_api.dart';
+import '../ui/format/format.dart';
 import 'exams.dart';
+import 'sync_progress.dart';
 
 /// The last time a service answered with the saved login: [ok] when it let
 /// the app in, false when it rejected the username or password.
@@ -94,6 +96,9 @@ class Prefs {
     _p.setString(Notifier.absenceLimitsKey, jsonEncode({for (final e in all.entries) '${e.key}': e.value}));
   }
 
+  /// Forgets the marks the notifier has seen, along with the eClass account.
+  void clearSeenGrades() => _p.remove(Notifier.seenGradesKey);
+
   /// The exam rooms the student set once they knew them, by [Exam.keyIn].
   Map<String, String> get examRooms {
     try {
@@ -148,6 +153,9 @@ class AppData extends ChangeNotifier {
   final JsonCache cache;
   final Prefs prefs;
 
+  /// What the refreshes are doing right now (the strip under the app bar).
+  final sync = SyncProgress();
+
   AppData({
     required this.eclass,
     required this.timetable,
@@ -184,6 +192,7 @@ class AppData extends ChangeNotifier {
     deadlines = read(() => deadlines, cache.read('deadlines', _decodeList(Deadline.fromJson)));
     attendance =
         read(() => attendance, cache.read('attendance', _decodeList(CourseAttendance.fromJson)));
+    courseGrades = read(() => courseGrades, cache.read('courseGrades', _decodeList(CourseGrades.fromJson)));
     grades = read(
         () => grades, cache.read('grades', (j) => GradeReport.fromJson(j as Map<String, dynamic>)));
     for (final box in [for (final f in MailFolder.values) (f, _mailbox[f]!)]) {
@@ -194,7 +203,7 @@ class AppData extends ChangeNotifier {
 
   /// Picks up what the background refresh wrote while the app was away.
   Future<void> reloadFromCache() async {
-    if ([lessons, deadlines, attendance, grades, mailUnread, for (final f in _mailbox.values) f.list]
+    if ([lessons, deadlines, attendance, courseGrades, grades, mailUnread, for (final f in _mailbox.values) f.list]
         .any((s) => s.loading)) {
       return;
     }
@@ -206,7 +215,12 @@ class AppData extends ChangeNotifier {
   late Snapshot<List<Lesson>> lessons;
   late Snapshot<List<Deadline>> deadlines;
   late Snapshot<List<CourseAttendance>> attendance;
+  late Snapshot<List<CourseGrades>> courseGrades;
   late Snapshot<GradeReport> grades;
+
+  /// The course's marks in eClass, or null before they have loaded.
+  CourseGrades? gradesOf(int courseId) =>
+      courseGrades.data?.value.where((g) => g.course.id == courseId).firstOrNull;
 
   final _mailbox = {for (final f in MailFolder.values) f: MailboxFolder()};
 
@@ -244,7 +258,8 @@ class AppData extends ChangeNotifier {
     await _run<List<Lesson>>(
       get: () => lessons,
       set: (s) => lessons = s,
-      fetch: () => timetable.lessons(prefs.classGroup, excludeSubjects: prefs.excludedSubjects),
+      fetch: () => sync.step('Timetable', prefs.classGroup,
+          () => timetable.lessons(prefs.classGroup, excludeSubjects: prefs.excludedSubjects)),
       key: 'lessons',
       encode: _encodeList,
       service: Service.edupage,
@@ -252,18 +267,21 @@ class AppData extends ChangeNotifier {
     await onReminderDataChanged?.call();
   }
 
-  /// Deadlines and attendance share one eClass login, so they refresh together.
+  /// Deadlines, attendance and marks share one eClass login, so they refresh together.
   Future<void> refreshEclass() async {
     await _refreshEclassData();
     await onReminderDataChanged?.call();
   }
 
-  Future<void> _refreshEclassData() async {
+  Future<void> _refreshEclassData() => sync.span(() async {
+    // Asked for once, and only by a source that isn't already refreshing.
+    Future<List<Course>>? asked;
+    Future<List<Course>> courses() => asked ??= sync.step('eClass', 'course list', eclass.courses);
     await Future.wait([
       _run<List<Deadline>>(
         get: () => deadlines,
         set: (s) => deadlines = s,
-        fetch: () async => _withSubmissions(await eclass.upcoming()),
+        fetch: () async => _withSubmissions(await sync.step('eClass', 'upcoming deadlines', eclass.upcoming)),
         key: 'deadlines',
         encode: _encodeList,
         service: Service.eclass,
@@ -271,16 +289,23 @@ class AppData extends ChangeNotifier {
       _run<List<CourseAttendance>>(
         get: () => attendance,
         set: (s) => attendance = s,
-        fetch: () async {
-          final courses = await eclass.courses();
-          return Future.wait(courses.map(eclass.attendance));
-        },
+        fetch: () async => Future.wait((await courses())
+            .map((c) => sync.step('eClass', 'attendance for ${c.name}', () => eclass.attendance(c)))),
         key: 'attendance',
         encode: _encodeList,
         service: Service.eclass,
       ),
+      _run<List<CourseGrades>>(
+        get: () => courseGrades,
+        set: (s) => courseGrades = s,
+        fetch: () async => Future.wait((await courses())
+            .map((c) => sync.step('eClass', 'marks for ${c.name}', () => eclass.courseGrades(c)))),
+        key: 'courseGrades',
+        encode: _encodeList,
+        service: Service.eclass,
+      ),
     ]);
-  }
+  });
 
   /// Marks each assignment and quiz handed in or not, from its own page.
   /// A page that fails keeps what the cache knew about that item, so a
@@ -293,7 +318,7 @@ class AppData extends ChangeNotifier {
     return Future.wait(fresh.map((d) async {
       if (d.kind != DeadlineKind.assignment && d.kind != DeadlineKind.quiz) return d;
       try {
-        final s = await eclass.submission(d);
+        final s = await sync.step('eClass', 'checking ${rowTitle(d.title)}', () => eclass.submission(d));
         return s == null ? d : d.withDone(s.done, s.at);
       } catch (e) {
         if (kDebugMode) debugPrint('submission ${d.moduleId} failed: ${_debugDescribe(e)}');
@@ -306,7 +331,7 @@ class AppData extends ChangeNotifier {
   Future<void> refreshGrades() => _run<GradeReport>(
         get: () => grades,
         set: (s) => grades = s,
-        fetch: ins.grades,
+        fetch: () => sync.step('INS', 'grades', ins.grades),
         key: 'grades',
         encode: (v) => v.toJson(),
         service: Service.ins,
@@ -320,7 +345,7 @@ class AppData extends ChangeNotifier {
         _run<int>(
           get: () => mailUnread,
           set: (s) => mailUnread = s,
-          fetch: mail.unreadCount,
+          fetch: () => sync.step('Mail', 'unread count', mail.unreadCount),
           key: 'mailUnread',
           encode: (v) => v,
           service: Service.mail,
@@ -334,7 +359,7 @@ class AppData extends ChangeNotifier {
       get: () => box.list,
       set: (s) => box.list = s,
       fetch: () async {
-        final page = await mail.folder(f, limit: mailPageSize);
+        final page = await sync.step('Mail', f.label, () => mail.folder(f, limit: mailPageSize));
         box.hasMore = page.length >= mailPageSize;
         box.moreError = null;
         return page;
@@ -349,7 +374,7 @@ class AppData extends ChangeNotifier {
   /// already show what went wrong.
   Future<void> refreshMailCounts() async {
     try {
-      mailCounts = await mail.folderCounts();
+      mailCounts = await sync.step('Mail', 'folder counts', mail.folderCounts);
       notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('mail counts failed: ${_debugDescribe(e)}');
@@ -399,6 +424,8 @@ class AppData extends ChangeNotifier {
       case Service.eclass:
         deadlines = const Snapshot();
         attendance = const Snapshot();
+        courseGrades = const Snapshot();
+        prefs.clearSeenGrades();
       case Service.ins:
         grades = const Snapshot();
       case Service.mail:
@@ -412,7 +439,7 @@ class AppData extends ChangeNotifier {
   }
 
   static final _cacheKeys = {
-    Service.eclass: ['deadlines', 'attendance'],
+    Service.eclass: ['deadlines', 'attendance', 'courseGrades'],
     Service.ins: ['grades'],
     Service.mail: ['mailUnread', for (final f in MailFolder.values) _mailKey(f)],
     Service.edupage: ['lessons'],

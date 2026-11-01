@@ -7,6 +7,9 @@ final Uri eclassBase = Uri.parse('https://eclass.inha.ac.kr');
 /// A course's main page.
 Uri eclassCourseUrl(int courseId) => eclassBase.replace(path: '/course/view.php', query: 'id=$courseId');
 
+/// A course's grades page.
+Uri eclassGradesUrl(int courseId) => eclassBase.replace(path: '/grade/report/user/index.php', query: 'id=$courseId');
+
 /// The activity behind a calendar event (`/mod/<type>/view.php?id=<moduleId>`),
 /// or null for a course-level event that has none. Cached events from before
 /// the module type was stored fall back on their kind.

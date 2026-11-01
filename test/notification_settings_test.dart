@@ -178,6 +178,74 @@ void main() {
       expect(plugin.shown, isEmpty);
     });
 
+    CourseGrades marks(String mark) => CourseGrades(course: ai, source: GradeSource.gradebook, items: [
+          GradeItem(key: 'm1', name: 'Homework 1', mark: mark, grade: double.tryParse(mark), max: 10),
+        ]);
+
+    test('first sync of a course: existing marks are recorded, a later one is announced once', () async {
+      await notifier.sync(courseGrades: [marks('7.00')], now: now);
+      expect(plugin.shown, isEmpty);
+
+      await notifier.sync(courseGrades: [marks('8.00')], now: now);
+      expect(plugin.shown.map((s) => s.title), ['Grade changed: Homework 1']);
+      await notifier.sync(courseGrades: [marks('8.00')], now: now);
+      expect(plugin.shown, hasLength(1));
+
+      await notifier.sync(courseGrades: [marks('7.00')], now: now); // back again is news too
+      expect(plugin.shown, hasLength(2));
+    });
+
+    test('a course with a closed grades page is a baseline of nothing: its first mark is news', () async {
+      await notifier.sync(courseGrades: [const CourseGrades(course: ai, source: GradeSource.none)], now: now);
+      await notifier.sync(courseGrades: [marks('7.00')], now: now);
+      expect(plugin.shown.map((s) => s.title), ['Graded: Homework 1']);
+    });
+
+    test('a mark stays seen after its key has expired, so it is never announced again', () async {
+      await notifier.sync(courseGrades: [marks('7.00')], now: now);
+      final later = now.add(sentKeyRetention + const Duration(days: 1));
+      await notifier.sync(deadlines: const [], now: later); // the sent list forgets old keys
+      await notifier.sync(courseGrades: [marks('7.00')], now: later);
+      expect(plugin.shown, isEmpty);
+    });
+
+    test('a mark that could not be shown stays new until it can be', () async {
+      await notifier.sync(courseGrades: [marks('-')], now: now);
+      plugin.android.enabled = false;
+      await notifier.sync(courseGrades: [marks('7.00')], now: now);
+      plugin.android.enabled = true;
+      await notifier.sync(courseGrades: [marks('7.00')], now: now);
+      expect(plugin.shown.map((s) => s.title), ['Graded: Homework 1']);
+    });
+
+    test('Grades off: new marks are recorded, so turning it on later is no flood', () async {
+      await notifier.sync(courseGrades: [marks('-')], now: now);
+      await notifier.saveSettings(const NotifySettings(channels: {NotifyChannel.deadlines}));
+      await notifier.sync(courseGrades: [marks('7.00')], now: now);
+      await notifier.saveSettings(const NotifySettings(channels: {NotifyChannel.grades}));
+      await notifier.sync(courseGrades: [marks('7.00')], now: now);
+      expect(plugin.shown, isEmpty);
+    });
+
+    test('a mark waiting out the night is replaced if it changes, and announced in the morning', () async {
+      final night = DateTime(2026, 10, 22, 23, 30);
+      final morning = Notifier(plugin: plugin, clock: () => night);
+      await morning.sync(courseGrades: [marks('-')], now: night);
+      await morning.sync(courseGrades: [marks('7.00')], now: night);
+      expect(plugin.shown, isEmpty);
+      expect(plugin.scheduled, hasLength(1));
+      final first = plugin.scheduled.keys.single;
+
+      await morning.sync(courseGrades: [marks('8.00')], now: night);
+      expect(plugin.cancelled, contains(first));
+
+      // The alarm has fired by the next pass: not announced a second time.
+      final after = DateTime(2026, 10, 23, 9);
+      final shownBefore = plugin.shown.length;
+      await Notifier(plugin: plugin, clock: () => after).sync(courseGrades: [marks('8.00')], now: after);
+      expect(plugin.shown, hasLength(shownBefore));
+    });
+
     test('a channel turned off is not delivered and its scheduled reminders are cancelled', () async {
       final lab = assignment(DateTime(2026, 10, 25, 23, 55));
       await notifier.sync(deadlines: [lab], now: now);
@@ -205,7 +273,7 @@ void main() {
 
     test('defaults follow DESIGN.md 11: everything but Classes, quiet hours on', () async {
       final s = await notifier.settings();
-      expect(s.channels, {NotifyChannel.deadlines, NotifyChannel.vod, NotifyChannel.attendance});
+      expect(s.channels, {NotifyChannel.deadlines, NotifyChannel.vod, NotifyChannel.attendance, NotifyChannel.grades});
       expect(s.quietHours, isTrue);
       final lesson = Lesson(weekday: now.weekday, start: '14:00', end: '15:30', subject: 'AI');
       await notifier.sync(lessons: [lesson], now: now);

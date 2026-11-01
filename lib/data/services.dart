@@ -25,14 +25,18 @@ class AppServices {
     final sessions = Sessions();
     await sessions.init();
     final credentials = CredentialStore();
+    final eclass = EclassClient(sessions, credentials);
+    final ins = InsClient(sessions, credentials);
     final data = AppData(
-      eclass: EclassClient(sessions, credentials),
+      eclass: eclass,
       timetable: EdupageClient(sessions.client(Service.edupage)),
-      ins: InsClient(sessions, credentials),
+      ins: ins,
       mail: EwsClient(sessions.client(Service.mail), credentials),
       cache: await JsonCache.open(),
       prefs: Prefs(await SharedPreferences.getInstance()),
     );
+    eclass.loginStep = (login) => data.sync.step('eClass', 'signing in', login);
+    ins.loginStep = (login) => data.sync.step('INS', 'signing in', login);
     return AppServices(data, sessions, credentials);
   }
 }

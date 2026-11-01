@@ -64,6 +64,7 @@ Future<void> _syncReminders(Notifier notifier, AppData data) =>
           deadlines: data.deadlines.data?.value,
           attendance: data.attendance.data?.value,
           lessons: data.lessons.data?.value,
+          courseGrades: data.courseGrades.data?.value,
         )).then<void>((_) {}, onError: (Object e) => debugPrint('reminders: sync failed: $e'));
 
 /// WorkManager's entry point, in a background isolate of its own.
@@ -84,6 +85,8 @@ Future<RefreshResult> refreshInBackground() async {
     deadlines: data.deadlines.data?.value,
     attendance: data.attendance.data?.value,
     lessons: data.lessons.data?.value,
-    retry: [data.lessons.error, data.deadlines.error, data.attendance.error].any(isNetworkError),
+    courseGrades: data.courseGrades.data?.value,
+    retry: [data.lessons.error, data.deadlines.error, data.attendance.error, data.courseGrades.error]
+        .any(isNetworkError),
   );
 }

@@ -1,0 +1,232 @@
+/* eClass's own pages in the paper look. The structure stays eClass's
+   (header, left menu, content, side blocks); only how it looks changes.
+   Everything is scoped to html.iut, which the content script sets only while
+   "New look on eClass" is on, so turning it off restores eClass exactly. */
+
+/* ---- Paper ---- */
+html.iut, html.iut body, html.iut #page-container, html.iut #page-content, html.iut #page-content-wrap { background: var(--surface) !important; }
+html.iut #page-mask { background: var(--surface) !important; }
+html.iut #page { background: var(--low) !important; } /* the left menu's column */
+
+/* ---- The page's frame stays put: the header and both menus, while the content scrolls.
+   Everything inside #page is floated, so it and #page-mask collapse without flow-root:
+   the menu's column stopped where its links did, and nothing could stick for long. ---- */
+html.iut { scroll-padding-top: 76px; } /* a link to a section lands under the header, not behind it */
+html.iut #page, html.iut #page-mask { display: flow-root; }
+html.iut #page-header { position: sticky; top: 0; z-index: 1020; }
+/* eClass's Headroom plugin slides the header out on scroll ("animated slideUp"), which left the menus hanging under a gap. */
+html.iut #page-header .headroom { animation: none !important; transform: none !important; }
+html.iut #page-lnb { position: sticky; top: 68px; z-index: 3; min-height: calc(100vh - 68px); }
+/* Inside a course the folded menu keeps its popovers, which a scrolling box would clip. */
+html.iut body:not(.r1024, .page-xs) #page-lnb { max-height: calc(100vh - 68px); overflow-y: auto; scrollbar-width: thin; }
+html.iut #page-submenu { position: sticky; top: 68px; z-index: 2; min-height: calc(100vh - 68px); background: var(--low); border-right: 1px solid var(--rule); }
+html.iut #coursemos-course-menu { max-height: calc(100vh - 68px); overflow-y: auto; scrollbar-width: thin; }
+html.iut body { color: var(--on-surface) !important; font-family: var(--sans) !important; }
+html.iut body, html.iut p, html.iut li, html.iut td, html.iut th, html.iut label, html.iut input, html.iut select, html.iut textarea, html.iut button, html.iut .btn { font-family: var(--sans) !important; }
+html.iut a { color: var(--primary); }
+
+/* eClass's dark address footer: gone. */
+html.iut #page-footer { display: none !important; }
+
+/* ---- Header: paper with one ink rule, eClass's items kept ---- */
+html.iut #page-header .navbar { background: var(--surface) !important; border: 0 !important; border-bottom: 1px solid var(--on-surface) !important; box-shadow: none !important; }
+html.iut #page-header .navbar-brand { background: transparent !important; padding: 0 0 0 20px !important; height: 67px !important; }
+html.iut #page-header .navbar-brand a.logo { background: none !important; width: auto !important; height: 67px !important; display: flex !important; align-items: center; gap: 10px; white-space: nowrap; text-decoration: none !important; }
+html.iut #page-header .navbar-brand a.logo::before { content: 'IUT'; font: 600 26px/30px var(--serif); color: var(--on-surface); }
+html.iut #page-header .navbar-brand a.logo::after { content: 'eClass · Inha University in Tashkent'; font: 400 13px/18px var(--sans); color: var(--muted); }
+html.iut #page-header .coursename h1, html.iut #page-header .coursename h1 a { color: var(--muted) !important; font: italic 400 18px/24px var(--serif) !important; text-decoration: none !important; }
+html.iut #page-header .navbar-brand { width: auto !important; overflow: visible !important; }
+html.iut #page-header .coursename { position: absolute !important; top: 0; left: 96px; right: 560px; height: 67px; overflow: hidden; margin: 0 !important; padding: 0 !important; }
+html.iut #page-header .coursename h1 { line-height: 67px !important; margin: 0 !important; padding: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Inside a course the header names the course; the brand keeps to "IUT". */
+html.iut #page-header:has(.coursename h1 a) .navbar-brand a.logo::after { content: none; }
+html.iut #page-header .user_department { color: var(--muted) !important; }
+html.iut #page-header .usermenu .icon { filter: invert(1) brightness(0.35); } /* eClass's white sprites, in ink */
+html.iut #page-header .usermenu .badge { background: var(--inverse) !important; color: var(--on-inverse) !important; font: 500 11px/16px var(--sans) !important; }
+html.iut #page-header .usermenu > ul > li > a:hover { background: var(--low) !important; }
+html.iut #page-header .btn-person { background: transparent !important; border: 1px solid var(--outline) !important; color: var(--on-surface) !important; border-radius: 8px !important; }
+html.iut #page-header .btn-person:hover { background: var(--low) !important; }
+html.iut #page-header .usermenu img { border-radius: 50%; }
+
+/* ---- Left menu: a quiet paper column ---- */
+html.iut #page-lnb { background: var(--low) !important; border-right: 1px solid var(--rule); }
+/* eClass draws the menu in white (text and sprite icons); inverted, it reads as ink on paper. */
+html.iut #page-lnb .left-menu-link { filter: invert(1) brightness(0.3); background-color: transparent !important; }
+html.iut #page-lnb h5 { font-family: var(--sans) !important; font-weight: 600 !important; }
+html.iut #page-lnb .left-menus > li > ul { background: transparent !important; }
+html.iut #page-lnb .left-menus > li > ul a { color: var(--muted) !important; font: 400 13px/18px var(--sans) !important; }
+html.iut #page-lnb .left-menus > li > ul a:hover { color: var(--on-surface) !important; background: var(--high) !important; }
+html.iut #page-lnb .left-menus > li > ul > li.active { background: transparent !important; }
+html.iut #page-lnb .left-menus > li > ul > li.active > a { color: var(--primary) !important; font-weight: 600 !important; background: var(--high) !important; }
+html.iut #page-lnb .itl_info { color: var(--muted) !important; }
+html.iut #page-lnb .itl_info * { color: var(--muted) !important; }
+
+/* ---- Headings in Fraunces ---- */
+html.iut h1, html.iut h2, html.iut h3, html.iut h4, html.iut .sectionname, html.iut .course-title h3, html.iut #mycourse-type .text {
+  font-family: var(--serif) !important; color: var(--on-surface) !important; letter-spacing: 0 !important;
+}
+html.iut #region-main h2 { font-weight: 600 !important; }
+
+/* ---- The course list: rows on paper with rules, no boxes ---- */
+html.iut .course_lists, html.iut .my-course-lists { border: 0 !important; background: transparent !important; box-shadow: none !important; }
+html.iut .my-course-lists > li { border: 0 !important; border-bottom: 1px solid var(--rule) !important; background: transparent !important; }
+html.iut .my-course-lists > li:hover { background: var(--low) !important; }
+/* (Course pages reuse the .course_box name for their sections: everything here is scoped to the dashboard list.) */
+html.iut .my-course-lists .course_box { border: 0 !important; background: transparent !important; box-shadow: none !important; display: flex !important; align-items: center; }
+html.iut .my-course-lists .course_box > a.course_link { flex: 1; min-width: 0; }
+html.iut .my-course-lists .course_box .course-title h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.iut .my-course-lists .course-title h3 { font: 600 17px/22px var(--serif) !important; color: var(--on-surface) !important; }
+html.iut .my-course-lists .prof { color: var(--muted) !important; font: 400 13px/18px var(--sans) !important; }
+html.iut .label-course { background: transparent !important; border: 1px solid var(--rule) !important; color: var(--muted) !important; border-radius: 4px !important; font: 500 10px/14px var(--sans) !important; }
+html.iut .my-course-lists .course-image img { border-radius: 50%; filter: grayscale(.2); }
+html.iut #mycourse-type { background: transparent !important; border: 0 !important; color: var(--on-surface) !important; font-size: 22px !important; padding-left: 0 !important; }
+
+/* ---- The front page's announcement tabs: gone (each course's board still has them). ---- */
+html.iut .site_notices { display: none !important; }
+
+/* ---- Tabs ---- */
+html.iut .nav-tabs { border-bottom: 1px solid var(--rule) !important; }
+html.iut .nav-tabs > li > a { font-family: var(--serif) !important; color: var(--muted) !important; border: 0 !important; background: transparent !important; }
+html.iut .nav-tabs > li.active > a { color: var(--on-surface) !important; border-bottom: 2px solid var(--on-surface) !important; }
+
+/* ---- Side blocks: a column of sections with rules ---- */
+html.iut #page-blocks { background: var(--surface) !important; border-left: 1px solid var(--rule) !important; }
+html.iut #page-blocks .block { background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--rule) !important; box-shadow: none !important; border-radius: 0 !important; }
+html.iut #page-blocks .block .header { background: transparent !important; border: 0 !important; }
+html.iut #page-blocks .block .header h2 { font: 600 17px/22px var(--serif) !important; color: var(--on-surface) !important; }
+html.iut #page-blocks .block .content, html.iut #page-blocks .block .content * { color: var(--on-surface); }
+html.iut #page-blocks .block .content a { color: var(--primary) !important; }
+html.iut #page-blocks .block-hider-hide, html.iut #page-blocks .block-hider-show { filter: grayscale(1) opacity(.6); }
+/* eClass's "Upcoming event" block repeats our "Due soon" (with less in it). */
+html.iut.iut-has-due #page-blocks .block-upcomming { display: none !important; }
+
+/* ---- Inside courses and activities ---- */
+/* The course banner: paper with the course's people, not a dark pattern. */
+html.iut .course-header { background: var(--surface) !important; border-bottom: 1px solid var(--rule) !important; min-height: 0 !important; height: auto !important; }
+html.iut .course-header .professor-info { padding: 16px 32px !important; height: auto !important; }
+html.iut .course-header .professor-info .container-fluid { height: auto !important; padding: 0 !important; }
+html.iut .course-header .professor-info img { width: 48px !important; height: 48px !important; }
+html.iut .course-header h1, html.iut .course-header h2, html.iut .course-header h3 { font-size: 19px !important; line-height: 24px !important; margin: 0 !important; }
+
+/* A course's page: each part (summary, this week, the weeks) is a section with its label above, not a column beside. */
+html.iut .course-content .course_box { display: block !important; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 0 0 8px !important; }
+html.iut .course-content .course_box > h2.main { float: none !important; width: auto !important; height: auto !important; background: transparent !important; border: 0 !important; padding: 16px 0 4px !important; margin: 0 !important; font: 600 19px/24px var(--serif) !important; text-align: left !important; }
+html.iut .course-content .course_box > ul.weeks { float: none !important; width: auto !important; margin: 0 !important; padding: 0 !important; }
+html.iut .course-content li.section { padding: 8px 0 16px !important; margin: 0 !important; }
+html.iut .course-content li.section .content { margin: 0 !important; padding: 0 !important; }
+html.iut .course-content .sectionname, html.iut .course-content h3.sectionname { padding: 0 !important; margin: 8px 0 !important; }
+html.iut .course-header, html.iut .course-header * { color: var(--on-surface) !important; }
+html.iut .course-header a { color: var(--primary) !important; }
+html.iut #page-submenu, html.iut .coursemos-course-menu { background: var(--low) !important; }
+/* The course's own menu (Course Home, Activities): sections on the menu's paper, not white panels. */
+html.iut #coursemos-course-menu .block, html.iut #coursemos-course-menu .block .header, html.iut #coursemos-course-menu .block .content { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+html.iut #coursemos-course-menu .course-menus > li { border-bottom: 1px solid var(--rule) !important; }
+html.iut #coursemos-course-menu li, html.iut #coursemos-course-menu li.expand { background: transparent !important; }
+html.iut #coursemos-course-menu .block .header, html.iut #coursemos-course-menu .block .header * { font-family: var(--serif) !important; color: var(--on-surface) !important; }
+html.iut #coursemos-course-menu a { color: var(--muted) !important; }
+html.iut #coursemos-course-menu a:hover, html.iut #coursemos-course-menu .active > a, html.iut #coursemos-course-menu a.active { color: var(--primary) !important; }
+
+html.iut .card, html.iut .box, html.iut .generalbox, html.iut .panel, html.iut .well { background: transparent !important; box-shadow: none !important; border-radius: 0 !important; }
+html.iut .course-content .section, html.iut .course-content li.section { border: 0 !important; border-top: 1px solid var(--rule) !important; background: transparent !important; }
+html.iut .course-content .activityinstance .instancename { color: var(--on-surface) !important; font: 500 15px/22px var(--sans) !important; }
+html.iut .course-content .activityinstance a:hover .instancename { color: var(--primary) !important; }
+/* eClass's row hover is a grey for white paper (#f0f2f2, #f6f6f6 on the first section): in the dark it left light text on near-white. */
+html.iut .course-content li.activity:hover { background-color: var(--low) !important; border-color: var(--rule) !important; }
+html.iut table.generaltable, html.iut table.table { background: transparent !important; }
+html.iut table.generaltable th, html.iut table.table th { background: transparent !important; color: var(--muted) !important; border-bottom: 1px solid var(--on-surface) !important; }
+html.iut table.generaltable td, html.iut table.table td { background: transparent !important; border-color: var(--rule) !important; }
+html.iut table.generaltable tbody th, html.iut table.table tbody th { border-bottom-color: var(--rule) !important; } /* the ink rule is for the head alone: the grade table's rows are th too */
+
+/* ---- Calendar: eClass's events as quiet tags ---- */
+html.iut .calendar_event_course, html.iut .calendar_event_user, html.iut .calendar_event_site, html.iut .calendar_event_group {
+  background: var(--high) !important; border: 0 !important; border-left: 2px solid var(--primary) !important; border-radius: 0 !important; color: var(--on-surface) !important;
+}
+html.iut .calendarmonth td, html.iut .calendarmonth th { border-color: var(--rule) !important; background: transparent !important; }
+html.iut .calendarmonth .today { background: var(--primary-container) !important; }
+
+/* ---- Buttons and fields ---- */
+html.iut .btn, html.iut input[type="submit"], html.iut input[type="button"] { border-radius: 8px !important; box-shadow: none !important; background-image: none !important; font-weight: 600 !important; }
+html.iut .btn-primary, html.iut input[type="submit"].btn-primary { background: var(--primary) !important; border-color: var(--primary) !important; color: var(--on-primary) !important; }
+html.iut .btn-default, html.iut .btn-secondary { background: transparent !important; border: 1px solid var(--outline) !important; color: var(--primary) !important; }
+html.iut input[type="text"], html.iut input[type="password"], html.iut input[type="search"], html.iut select, html.iut textarea, html.iut .form-control {
+  border-radius: 8px !important; border: 1px solid var(--outline) !important; background: var(--lowest) !important; color: var(--on-surface) !important; box-shadow: none !important;
+}
+html.iut .popover { border-radius: 8px !important; border: 1px solid var(--rule) !important; box-shadow: none !important; }
+
+/* ---- The extension's views (content/view.tsx) in eClass's content area ---- */
+html.iut-view #region-main > :not(#iut-view) { display: none !important; }
+html.iut-view #page-blocks { display: none !important; }
+html.iut-view #page-content, html.iut-view #region-main { width: auto !important; max-width: none !important; float: none !important; margin-right: 0 !important; }
+
+/* ---- Dark: what eClass hard-codes for a white page. The tokens above reach
+   the rest; html.iut-dark is set by the content script (eclass.tsx). ---- */
+/* The sprites and the menu's text are white by nature: no inverting into ink. */
+html.iut-dark #page-lnb .left-menu-link, html.iut-dark #page-header .usermenu .icon { filter: none; }
+/* Icons drawn in dark grey for white paper. Activity icons keep their colors. */
+html.iut-dark #page img.icon:not(.activityicon) { filter: invert(1) hue-rotate(180deg); }
+
+/* Greys and blues meant for white: text takes the page's ink, links the accent. */
+html.iut-dark #page :is(div, p, span, b, strong, em, i, u, small, li, dt, dd, td, th, label, legend, h5, h6, pre, font, section):not(.badge, .label, .label-course, .btn, .progress-bar, .text-danger, .text-success, .text-warning, .text-info, .text-primary) { color: inherit; }
+html.iut-dark #page a:not([class*="btn"]):not(.left-menu-link) { color: var(--primary); }
+html.iut-dark #page * { border-color: var(--rule); box-shadow: none; }
+html.iut-dark #page hr { background: var(--rule); }
+html.iut-dark .page-content-navigation a { color: var(--primary) !important; }
+html.iut-dark #page-lnb .itl_info { background: var(--high) !important; }
+
+/* What a professor pasted: inline colors chosen against white paper. */
+html.iut-dark #region-main [style*="color"]:not(.progress-bar) { color: inherit !important; }
+html.iut-dark #region-main [style*="background"]:not(.progress-bar) { background-color: transparent !important; }
+html.iut-dark #region-main [bgcolor] { background-color: transparent !important; }
+
+/* White panels. */
+html.iut-dark :is(.ubboard_container, .ubboard_comment_form, .fcontainer, a.fheader, .fp-navbar, .fp-content, .filemanager, .filemanager-toolbar, .filepicker-filelist, .fm-empty-container, .dndupload-message, .event, .list-group-item, .well, .breadcrumb, .tab-content, .panel-heading, .panel-body, .input-group-addon, .editor_atto_toolbar, .editor_atto_content_wrap, pre, code) {
+  background-color: var(--low) !important; color: var(--on-surface) !important;
+}
+html.iut-dark :is(.dropdown-menu, .modal-content, .moodle-dialogue-wrap, .moodle-dialogue-hd, .moodle-dialogue-bd, .moodle-dialogue-ft, .popover, .popover-title, .popover-content) {
+  background-color: var(--bright) !important; color: var(--on-surface) !important; border-color: var(--rule) !important;
+}
+/* Popups hang off body, outside #page, so the rules above don't reach what's inside them. */
+html.iut-dark :is(.popover, .modal, .moodle-dialogue-base) :is(div, ul, li, p, span, h4, h5, td, th, label):not(.popover-content, .modal-content, .moodle-dialogue-wrap, .moodle-dialogue-hd, .moodle-dialogue-bd, .moodle-dialogue-ft, .badge, .label, .btn) { background-color: transparent !important; color: inherit !important; border-color: var(--rule); }
+html.iut-dark :is(.popover, .modal, .moodle-dialogue-base) a:not([class*="btn"]) { color: var(--primary) !important; }
+html.iut-dark .popover a.dropdown-toggle { background-color: var(--low) !important; color: var(--on-surface) !important; }
+html.iut-dark .popover.bottom > .arrow::after { border-bottom-color: var(--bright) !important; }
+html.iut-dark .dropdown-menu > li > a { color: var(--on-surface) !important; }
+html.iut-dark .dropdown-menu > li > a:hover, html.iut-dark .dropdown-menu > li > a:focus, html.iut-dark .list-group-item:hover { background-color: var(--highest) !important; }
+
+/* Tables: no white stripes, a quiet hover, status cells in the status colors. */
+html.iut-dark table, html.iut-dark thead, html.iut-dark tbody, html.iut-dark tr, html.iut-dark td, html.iut-dark th { background-color: transparent !important; }
+html.iut-dark tbody > tr:hover > :is(td, th) { background-color: var(--low) !important; }
+html.iut-dark :is(td, th, tr).success { background-color: var(--ok-c) !important; }
+html.iut-dark :is(td, th, tr).warning { background-color: var(--warning-c) !important; }
+html.iut-dark :is(td, th, tr).danger { background-color: var(--danger-c) !important; }
+html.iut-dark :is(td, th, tr).info, html.iut-dark :is(td, th, tr).active { background-color: var(--info-c) !important; }
+
+/* The other hovers eClass draws for white paper. */
+html.iut-dark :is(.nav > li > a, .pager li > a, #course-category-listings li > div, #page-local-ubdlearning-index #main-table > li.tbody):is(:hover, :focus) { background-color: var(--low) !important; color: var(--on-surface) !important; }
+html.iut-dark .assignfeedback_editpdf_menu li:hover, html.iut-dark .assignfeedback_editpdf_menu li a:hover { background: var(--highest) !important; }
+html.iut-dark .datepicker { background-color: var(--bright) !important; color: var(--on-surface) !important; }
+html.iut-dark .datepicker table tr td:is(.day, .range):hover, html.iut-dark .datepicker table tr td span:hover, html.iut-dark .datepicker :is(.datepicker-switch, .prev, .next):hover, html.iut-dark .datepicker tfoot tr th:hover { background: var(--highest) !important; }
+
+/* Paging. */
+html.iut-dark .pagination > li > :is(a, span), html.iut-dark .pagination :is(a.next, a.prev) { background-color: var(--low) !important; color: var(--primary) !important; }
+html.iut-dark .pagination > li > :is(a, span):hover { background-color: var(--highest) !important; }
+html.iut-dark .pagination > .active > :is(a, span) { background-color: var(--primary) !important; color: var(--on-primary) !important; }
+
+/* Buttons that aren't the primary one. */
+html.iut-dark :is(.btn, input[type="submit"], input[type="button"], input[type="reset"], button):not(.btn-primary, .btn-danger, .btn-success) { background-color: var(--low) !important; color: var(--on-surface) !important; border: 1px solid var(--outline) !important; }
+html.iut-dark :is(.btn, input[type="submit"], input[type="button"], input[type="reset"], button):not(.btn-primary, .btn-danger, .btn-success):hover { background-color: var(--highest) !important; }
+
+/* Messages, in the status colors. */
+html.iut-dark .alert-success, html.iut-dark .list-group-item-success { background-color: var(--ok-c) !important; color: var(--ok) !important; border-color: transparent !important; }
+html.iut-dark .alert-warning, html.iut-dark .alert-block, html.iut-dark .list-group-item-warning { background-color: var(--warning-c) !important; color: var(--warning) !important; border-color: transparent !important; }
+html.iut-dark .alert-danger, html.iut-dark .alert-error, html.iut-dark .list-group-item-danger { background-color: var(--danger-c) !important; color: var(--danger) !important; border-color: transparent !important; }
+html.iut-dark .alert-info, html.iut-dark .list-group-item-info { background-color: var(--info-c) !important; color: var(--info) !important; border-color: transparent !important; }
+html.iut-dark .alert :is(p, span, div, strong, b, li) { color: inherit !important; }
+html.iut-dark .text-success { color: var(--ok) !important; }
+html.iut-dark .text-warning { color: var(--warning) !important; }
+html.iut-dark .text-danger { color: var(--danger) !important; }
+html.iut-dark .text-info, html.iut-dark .text-primary { color: var(--info) !important; }
+
+/* Hidden until the content script has decided, so the old look never flashes. */
+html.iut-wait { background: var(--surface) !important; }
+html.iut-wait body { visibility: hidden !important; }

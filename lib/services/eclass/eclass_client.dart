@@ -21,6 +21,9 @@ class EclassClient implements EclassApi {
   final Sessions _sessions;
   final CredentialStore _credentials;
 
+  /// Wraps a login that is about to run, so the app can say so.
+  Future<void> Function(Future<void> Function() login)? loginStep;
+
   /// The login in progress, shared so parallel fetches that all find the
   /// session expired trigger one login, not several.
   Future<void>? _loggingIn;
@@ -66,6 +69,44 @@ class EclassClient implements EclassApi {
     return (await _fetchList(path, (html) => [parse(html)])).single;
   }
 
+  @override
+  Future<CourseGrades> courseGrades(Course course) async {
+    final book = await _fetchList<CourseGrades>(
+      '/grade/report/user/index.php?id=${course.id}',
+      (html) => [?parseGradeBook(html, course)],
+      optional: true,
+    );
+    if (book.isNotEmpty) return book.single;
+
+    // A closed grades page answers 404 "Can not view grades".
+    final assignments = _fetchList<GradeItem>(
+        '/mod/assign/index.php?id=${course.id}', (html) => parseActivityGrades(html, 'assign'),
+        optional: true);
+    final quizzes = _fetchList<GradeItem>(
+        '/mod/quiz/index.php?id=${course.id}', (html) => parseActivityGrades(html, 'quiz'),
+        optional: true);
+    await Future.wait([assignments, quizzes]);
+    final items = [...await Future.wait((await assignments).map(_withAssignMax)), ...await quizzes];
+    return CourseGrades(
+        course: course, source: items.isEmpty ? GradeSource.none : GradeSource.activities, items: items);
+  }
+
+  /// The assignment list gives a mark without its maximum; the assignment's
+  /// own page has both. A page that fails only costs the "/ 100".
+  Future<GradeItem> _withAssignMax(GradeItem item) async {
+    final id = item.moduleId;
+    if (!item.marked || item.max != null || id == null) return item;
+    try {
+      final max = await _fetchList<double>(
+          '/mod/assign/view.php?id=$id', (html) => [?parseAssignMax(html)]);
+      return max.isEmpty ? item : item.withMax(max.single);
+    } on DioException {
+      return item;
+    } on ParseError {
+      return item;
+    }
+  }
+
   /// GETs [path] and parses it, logging in and retrying once if the session
   /// had expired. With [optional], a 404 or a redirect to some other page
   /// (the course does not have this page) gives an empty list.
@@ -98,7 +139,7 @@ class EclassClient implements EclassApi {
       );
 
   Future<void> _login() =>
-      _loggingIn ??= _postLogin().whenComplete(() => _loggingIn = null);
+      _loggingIn ??= (loginStep?.call(_postLogin) ?? _postLogin()).whenComplete(() => _loggingIn = null);
 
   Future<void> _postLogin() async {
     final creds = await _credentials.read(Service.eclass);

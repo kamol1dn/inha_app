@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import 'data/app_data.dart';
 import 'notifications/notifier.dart';
 import 'notifications/routes.dart';
+import 'features/common.dart';
 import 'features/compose_screen.dart';
+import 'features/course_scores_screen.dart';
 import 'features/details.dart';
 import 'features/courses_screen.dart';
 import 'features/deadlines_screen.dart';
@@ -188,13 +190,18 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final data = context.read<AppData>();
     Navigator.of(context).popUntil((r) => r.isFirst);
     switch (notificationTarget(key,
-        deadlines: data.deadlines.data?.value ?? const [], attendance: data.attendance.data?.value ?? const [])) {
+        deadlines: data.deadlines.data?.value ?? const [],
+        attendance: data.attendance.data?.value ?? const [],
+        courseGrades: data.courseGrades.data?.value ?? const [])) {
       case DeadlineTarget(:final deadline):
         setState(() => _tab = 2);
         showDeadlineSheet(context, deadline);
       case CourseTarget(:final course):
         setState(() => _tab = 3);
         openCourse(context, course);
+      case ScoresTarget(:final course):
+        setState(() => _tab = 3);
+        openScores(context, course);
       case ScheduleTarget(:final weekday):
         setState(() => _tab = 1);
         _timetable.currentState?.showWeekday(weekday);
@@ -269,28 +276,28 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             if (_tab == 3)
               TextButton(onPressed: () => _push(const GradesScreen()), child: const Text('Grades')),
           ],
-          bottom: _anyLoading(data) || (_tab == 4 && data.mailbox(_folder).list.loading)
-              ? const PreferredSize(
-                  preferredSize: Size.fromHeight(2),
-                  child: LinearProgressIndicator())
-              : null,
         ),
-        body: IndexedStack(
-          index: _tab,
-          children: [
-            TodayScreen(
-              onOpenTab: (i) => setState(() => _tab = i),
-              onOpenSchedule: (weekday) {
-                setState(() => _tab = 1);
-                _timetable.currentState?.showWeekday(weekday);
-              },
+        body: Column(children: [
+          const SyncStrip(),
+          Expanded(
+            child: IndexedStack(
+              index: _tab,
+              children: [
+                TodayScreen(
+                  onOpenTab: (i) => setState(() => _tab = i),
+                  onOpenSchedule: (weekday) {
+                    setState(() => _tab = 1);
+                    _timetable.currentState?.showWeekday(weekday);
+                  },
+                ),
+                TimetableScreen(key: _timetable),
+                const DeadlinesScreen(),
+                const CoursesScreen(),
+                MailScreen(folder: _folder),
+              ],
             ),
-            TimetableScreen(key: _timetable),
-            const DeadlinesScreen(),
-            const CoursesScreen(),
-            MailScreen(folder: _folder),
-          ],
-        ),
+          ),
+        ]),
         // The Mail tab's folders, behind the menu button where Back would be.
         drawer: _tab == 4
             ? MailDrawer(
@@ -340,8 +347,4 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       ),
     );
   }
-
-  static bool _anyLoading(AppData d) =>
-      d.lessons.loading || d.deadlines.loading || d.attendance.loading || d.inbox.loading ||
-      d.mailUnread.loading;
 }

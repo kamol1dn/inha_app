@@ -442,7 +442,8 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
     scrolled under it, the name fades in there (section 12).
   - The absence count in `headlineMedium` (`6 of 8`) with the large tally, a `StatusLine` for what is left, and the classes held so
     far. Then "Open in eClass" and "Set absence limit" / "Change limit" as text buttons.
-  - The course's deadlines, then the INS grade: both short, so they come before the long lists.
+  - The course's deadlines, its eClass score (a row leading to Scores), then the INS grade: all short, so they come before the long
+    lists.
   - VOD lectures, each with `Week 7 · 38 / 75 min` and a 4dp bar in `onSurface` on `outlineVariant`.
   - A ruled list of the eClass attendance sessions held so far, newest first: date plus Present, Absent, Late or Other, each as icon
     and word. eClass also lists the semester's future sessions; they are not shown.
@@ -466,9 +467,21 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
   the line. A reply shows its recipients and `RE:` subject as fixed lines, since Exchange sets them, and says the original is quoted
   under what you write. Send is the app bar's icon; leaving with anything written asks "Keep this as a draft?" (Discard, Save draft).
 
-**Grades.** The GPA first, as a plain line: `3.87` in `headlineMedium` with `GPA of 4.5 · 98 credits · year 3` beside it. Then each term,
-newest first, under a `titleMedium` header: ruled rows with the course in `bodyLarge`, its credits in muted `bodyMedium`, and the letter
-in `titleMedium` on the right ("Not graded" in muted `bodyMedium`). The letter is the answer, so it is the Fraunces part.
+**Grades.** The GPA first, as a plain line: `3.87` in `headlineMedium` with `GPA of 4.5 · 98 credits · year 3` beside it. Then "Scores
+this semester", a ruled row per course leading to its Scores. Then each term, newest first, under a `titleMedium` header: ruled rows with
+the course in `bodyLarge`, its credits in muted `bodyMedium`, and the letter in `titleMedium` on the right ("Not graded" in muted
+`bodyMedium`). The letter is the answer, so it is the Fraunces part.
+
+**Scores** (one course's marks from eClass; "grade" stays the INS letter).
+- **The total first,** like the GPA: `28.5` in `headlineMedium` with `of 100 so far` beside it, then what is marked, what is still open and
+  the best still possible, in muted `bodyMedium`.
+- **Each category** under a `titleMedium` header with what it is worth, `Assign · 20 points`. A marked row has its mark in `titleMedium`
+  on the right and `8.5 of 10 points` below its name.
+- **The calculator is the rows still open:** each has a small number field where the mark would go, out of its range, or as a % for a
+  category with nothing posted yet. The total never moves; `With these scores: 48.5 of 100` appears below it, with Clear. What-if scores
+  are not saved.
+- **Items that add nothing** (no weight, or 0) sit last under "Not counted in the total", so a mark is never missing and never pretends.
+- **No weights published, or the grades page closed:** the marks as they are, with one sentence saying why there is no total.
 
 **Settings.**
 - **Sections:** Accounts, Notifications, Courses, Timetable, Appearance, About (the open-source licences, the fonts' OFL included),
@@ -494,7 +507,9 @@ in `titleMedium` on the right ("Not graded" in muted `bodyMedium`). The letter i
 
 **Loading.**
 - **Cache first.** Never replace visible data with a loader.
-- **Background refresh:** a 2dp `LinearProgressIndicator` in `primary` under the app bar rule, and `Updating…` in the footer.
+- **Background refresh:** a strip under the app bar for as long as it runs: a 2dp `LinearProgressIndicator` in `primary` for how far it has
+  got, and a muted `bodySmall` line for what it is waiting on and the count, `eClass: marks for Artificial Intelligence` and `5 of 24`, with
+  `Also syncing Mail, INS` when other services are at it too. `Updating…` in the footer.
 - **First run with no cache:** a static skeleton that mirrors the real rows (`surfaceContainerHighest` blocks, radius 4, no shimmer):
   the rail's time column and two lines of text per row.
 - **Spinners:** never a full-screen `CircularProgressIndicator`. A small spinner is allowed only inside a button whose action is running.
@@ -564,6 +579,7 @@ success, re-engagement, greetings, errors that recover on their own, or anything
 | Deadlines | DEFAULT | 24 h and 3 h before a deadline that isn't submitted | On |
 | VOD windows | DEFAULT | 48 h and 6 h before a window closes while the VOD isn't fully watched | On |
 | Attendance | DEFAULT | A new absence is recorded | On |
+| Grades | DEFAULT | A new or changed mark appears in eClass | On |
 | Classes | LOW | 15 min before each class, with the room in the title | Off |
 
 - **Wording:** title at most 30 characters, body at most 40. The most important fact goes first and the course name goes in the body.

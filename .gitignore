@@ -49,3 +49,10 @@ app.*.map.json
 
 # Real pages with personal data; only anonymized copies in test/fixtures/ are committed
 test/fixtures/private/
+
+# Browser extension: dependencies and build output
+/extension/node_modules/
+/extension/dist/
+/extension/*.zip
+/extension/dist-firefox/
+/extension/web-ext-artifacts/

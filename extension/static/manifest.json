@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "IUT for eClass",
+  "short_name": "IUT",
+  "version": "0.1.0",
+  "description": "A new eClass for Inha University in Tashkent, with your timetable, INS grades and university mail built in.",
+  "icons": {
+    "192": "icons/icon.png"
+  },
+  "action": {
+    "default_title": "IUT",
+    "default_popup": "pages/app.html?frame=popup#/today"
+  },
+  "options_page": "pages/app.html#/settings",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://eclass.inha.ac.kr/*",
+    "https://ins.inha.uz/*",
+    "https://mail.inha.uz/*",
+    "https://iut.edupage.org/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://eclass.inha.ac.kr/*"
+      ],
+      "js": [
+        "content/eclass.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://ins.inha.uz/*"
+      ],
+      "js": [
+        "content/ins.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "fonts/*",
+        "icons/*"
+      ],
+      "matches": [
+        "https://eclass.inha.ac.kr/*"
+      ]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

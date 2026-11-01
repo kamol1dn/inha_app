@@ -12,6 +12,7 @@ import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
 import 'absence_widgets.dart';
 import 'common.dart';
+import 'course_scores_screen.dart';
 import 'exam_rows.dart';
 import 'rail_rows.dart';
 
@@ -122,6 +123,10 @@ class CourseDetailScreen extends StatelessWidget {
             for (final d in due) DueRow(d, attendance: att, now: now, line: false, showDay: true),
           ],
           ..._exam(context, data.exams(now), c.course, now),
+          if (data.gradesOf(c.course.id) case final g?) ...[
+            SectionHeader('Scores', source: data.courseGrades),
+            ScoresRow(g),
+          ],
           SectionHeader('Grade', source: data.grades, staleAfter: const Duration(hours: 24)),
           Padding(
             padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 8),

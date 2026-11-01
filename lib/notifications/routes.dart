@@ -21,6 +21,12 @@ class CourseTarget extends NotificationTarget {
   const CourseTarget(this.course);
 }
 
+/// A new mark: the course's scores, over the Courses tab.
+class ScoresTarget extends NotificationTarget {
+  final Course course;
+  const ScoresTarget(this.course);
+}
+
 /// A class reminder: Schedule on that weekday.
 class ScheduleTarget extends NotificationTarget {
   final int weekday;
@@ -41,7 +47,14 @@ NotificationTarget? notificationTarget(
   String key, {
   List<Deadline> deadlines = const [],
   List<CourseAttendance> attendance = const [],
+  List<CourseGrades> courseGrades = const [],
 }) {
+  if (gradeCourseId(key) case final courseId?) {
+    for (final g in courseGrades) {
+      if (g.course.id == courseId) return ScoresTarget(g.course);
+    }
+    return const TabTarget(3);
+  }
   if (key.startsWith(vodKeyPrefix) || key.startsWith(dueKeyPrefix)) {
     for (final d in deadlines) {
       if (key.startsWith('${reminderStem(d)}|')) return DeadlineTarget(d);

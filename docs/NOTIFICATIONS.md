@@ -18,6 +18,7 @@ Tests: `flutter test test/notification_rules_test.dart test/notification_setting
 | Unwatched VOD (no progress data counts as unwatched) | 48 h and 6 h before the watch window closes | VOD windows (high) | Yes |
 | Assignment, quiz, other eClass event | 24 h and 3 h before the deadline | Deadlines (high) | Yes |
 | New absence (dated within the last 21 days) | Once, right away | Attendance (high) | Yes |
+| New or changed mark in eClass (not attendance marks) | Once, right away | Grades (high) | Yes |
 | Lesson today | 15 min before it starts | Classes (default) | No (DESIGN.md 11) |
 
 Thresholds are constants at the top of `rules.dart`.
@@ -33,13 +34,21 @@ that are announced. Seen course ids are kept under `notify.seenCourses.v1`. This
 notification permission has not been granted yet. (Milestone 1 posted one notification per absence of the
 last 21 days on a first install.)
 
+**Marks** work the same way, but compare against the last mark announced for each item (`notify.seenGrades.v1`)
+rather than a date, so one is never announced twice however long ago it was. A course seen for the first time is
+a baseline, unless it has nothing to show yet: a mark appearing on a page that was closed until then is news. A
+mark that could not be delivered, or is waiting for 07:30, stays new until it has gone out. "Attendance book" and
+anything else with attendance in its name or category is shown but never announced: it changes after every class,
+and absences have their own channel. Signing out of eClass forgets the seen marks.
+
 **Quiet hours, 23:00 to 07:30** (on by default). A reminder that falls inside them waits until 07:30 if the
 item is still open at least an hour after that. Otherwise it goes out at 22:00 the evening before, and if
 that has passed too (the item was found during the night), it is posted without sound or vibration. A new
-absence found at night waits for 07:30.
+absence or mark found at night waits for 07:30.
 
 **Tapping** a notification opens its item on top of the tab that owns it: a deadline or VOD opens its sheet
-over Deadlines, an absence opens the course, a class reminder opens Schedule on that day. An item that is
+over Deadlines, an absence opens the course, a mark opens the course's scores, a class reminder opens Schedule
+on that day. An item that is
 gone opens its tab. While the app runs the tap arrives through `onDidReceiveNotificationResponse`; a tap
 that starts the app is read from `getNotificationAppLaunchDetails`.
 

@@ -26,7 +26,14 @@ class FakeEclass implements EclassApi {
   }
 
   @override
-  Future<List<Course>> courses() async => error == null ? courseList : throw error!;
+  Future<List<Course>> courses() async {
+    courseCalls++;
+    return error == null ? courseList : throw error!;
+  }
+
+  int courseCalls = 0;
+
+  @override
   @override
   Future<List<Deadline>> upcoming() async => error == null ? deadlines : throw error!;
   @override
@@ -46,6 +53,12 @@ class FakeEclass implements EclassApi {
     if (failing.contains(id)) throw Exception('eClass did not answer');
     return submissions[id] ?? (done: false, at: null);
   }
+
+  Map<int, CourseGrades> gradesById = const {};
+
+  @override
+  Future<CourseGrades> courseGrades(Course course) async =>
+      gradesById[course.id] ?? CourseGrades(course: course, source: GradeSource.none);
 }
 
 class FakeTimetable implements TimetableApi {

@@ -20,4 +20,8 @@ abstract class EclassApi {
   /// Whether an assignment was handed in or a quiz attempted, from the
   /// item's own page. Null for items that have no such page.
   Future<({bool done, DateTime? at})?> submission(Deadline d);
+
+  /// The course's marks: its grades page, or its assignment and quiz lists
+  /// where that page is closed.
+  Future<CourseGrades> courseGrades(Course course);
 }

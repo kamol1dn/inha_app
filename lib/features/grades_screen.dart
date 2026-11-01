@@ -6,9 +6,11 @@ import '../data/app_data.dart';
 import '../models/models.dart';
 import '../ui/theme/app_text.dart';
 import 'common.dart';
+import 'course_scores_screen.dart';
 
-/// INS grades: the GPA as a plain line, then courses by term, newest first.
-/// The letter is the answer, so it is the Fraunces part (DESIGN.md 8).
+/// INS grades: the GPA as a plain line, then this semester's eClass scores,
+/// then courses by term, newest first. The letter is the answer, so it is the
+/// Fraunces part (DESIGN.md 8).
 class GradesScreen extends StatelessWidget {
   const GradesScreen({super.key});
 
@@ -18,6 +20,7 @@ class GradesScreen extends StatelessWidget {
     final t = Theme.of(context);
     final muted = t.textTheme.bodyMedium!.tnum.copyWith(color: t.colorScheme.onSurfaceVariant);
     final report = data.grades.data?.value;
+    final scores = data.courseGrades.data?.value ?? const <CourseGrades>[];
     final byTerm = <int, List<GradeRecord>>{};
     for (final r in report?.records ?? const <GradeRecord>[]) {
       byTerm.putIfAbsent(r.termKey, () => []).add(r);
@@ -26,8 +29,9 @@ class GradesScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Grades')),
       body: RefreshIndicator(
-        onRefresh: data.refreshGrades,
+        onRefresh: () => Future.wait([data.refreshGrades(), data.refreshEclass()]),
         child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+          const SyncStrip(),
           if (report == null && data.grades.error is LoginRequired)
             EmptyNote('Sign in to INS to see grades.', action: 'Sign in', onAction: () => openSettings(context))
           else if (report == null && data.grades.error == null)
@@ -47,6 +51,13 @@ class GradesScreen extends StatelessWidget {
                 ),
               ]),
             ),
+          if (scores.isNotEmpty) ...[
+            SectionHeader('Scores this semester', source: data.courseGrades),
+            for (final (i, g) in scores.indexed) ...[
+              if (i > 0) const Rule(),
+              ScoresRow(g, showCourse: true),
+            ],
+          ],
           for (final term in terms) ...[
             // INS labels the term in progress "Course registration"; nothing in it is graded yet.
             SectionHeader(byTerm[term]!.every((r) => !r.graded) ? 'This semester' : byTerm[term]!.first.term,

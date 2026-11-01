@@ -43,6 +43,9 @@ class InsClient implements InsApi {
   final CredentialStore _credentials;
   Future<void>? _loginInFlight;
 
+  /// Wraps a login that is about to run, so the app can say so.
+  Future<void> Function(Future<void> Function() login)? loginStep;
+
   Uri get _startUri => base.resolve('Start.aspx');
   Uri get _framesetUri => base.resolve('FRAMESET.htm');
   Uri get _leftUri => base.resolve('left.aspx');
@@ -78,7 +81,7 @@ class InsClient implements InsApi {
 
   /// One login at a time; concurrent callers share it.
   Future<void> _login() =>
-      _loginInFlight ??= _doLogin().whenComplete(() => _loginInFlight = null);
+      _loginInFlight ??= (loginStep?.call(_doLogin) ?? _doLogin()).whenComplete(() => _loginInFlight = null);
 
   Future<void> _doLogin() async {
     final creds = await _credentials.read(Service.ins);
