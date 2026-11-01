@@ -30,6 +30,15 @@ void main() {
       expect(data.prefs.accountCheck(Service.eclass)!.ok, isFalse);
     });
 
+    test('refused with nothing to show, the tabs say so rather than load for ever', () async {
+      final (data, eclass, _, _, _) = await makeAppData();
+      await data.forget(Service.eclass);
+      eclass.loginError = LoginRequired(Service.eclass, 'eClass rejected the saved login');
+      await data.testLogin(Service.eclass);
+      expect(data.deadlines.error, isA<LoginRequired>());
+      expect(data.eclassNotifications.error, isA<LoginRequired>());
+    });
+
     test('a network failure says nothing about the login', () async {
       final (data, _, _, ins, _) = await makeAppData();
       ins.loginError = offline;

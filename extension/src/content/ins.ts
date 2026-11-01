@@ -55,7 +55,9 @@ function offer() {
 
 async function start() {
   if (await call('insSyncAllowed')) {
+    // Without the address, the student picked this tab and its read failed: a reload can only ask again.
     if (location.hash.includes('iut-sync')) await sync();
+    else offer();
     return;
   }
   if ((await readState()).ins?.error?.certificate) offer();

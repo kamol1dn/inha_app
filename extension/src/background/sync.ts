@@ -9,7 +9,7 @@ import { serviceLabel, type Course, type CourseAttendance, type Deadline, type S
 import { missingHosts } from '../core/permissions.ts';
 import { clearCache, readCache, readSettings, readState, writeCache, writeState, type CacheKey, type CacheShape } from '../core/store.ts';
 import { clearLoginRejected, loginRejected, markLoginRejected, readLogin } from '../core/vault.ts';
-import { EclassClient, mergeUpcoming } from '../services/eclass/client.ts';
+import { EclassClient, withKnownUpcoming } from '../services/eclass/client.ts';
 import { EdupageClient } from '../services/edupage/client.ts';
 import { InsClient } from '../services/ins/client.ts';
 import { defaultEndpoint, EwsClient } from '../services/mail/ews.ts';
@@ -123,6 +123,16 @@ export async function startOver(service: Service): Promise<void> {
 function keepAlive(): () => void {
   const timer = setInterval(() => void chrome.runtime.getPlatformInfo?.().catch(() => {}), 20_000);
   return () => clearInterval(timer);
+}
+
+/** Runs work the worker has to live through, such as an attachment on a slow link. */
+export async function keptAlive<T>(work: () => Promise<T>): Promise<T> {
+  const stopKeepingAlive = keepAlive();
+  try {
+    return await work();
+  } finally {
+    stopKeepingAlive();
+  }
 }
 
 /**
@@ -243,8 +253,7 @@ const fetchers: Record<Service, (run: Run) => Promise<void>> = {
       const known = (await readCache('deadlines'))?.value ?? [];
       const found = await eclass.allUpcoming(courses ?? []);
       // A page that failed keeps what it last showed, until it answers again.
-      const merged = found.failed ? mergeUpcoming([found.deadlines, known.filter((d) => d.end > Date.now())]) : found.deadlines;
-      await run.write('deadlines', await withSubmissions(merged));
+      await run.write('deadlines', await withSubmissions(withKnownUpcoming(found, known, courses, Date.now())));
       failed ??= found.failed;
     } catch (e) {
       if (e instanceof LoginRequired || e instanceof Overtaken) throw e;

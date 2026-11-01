@@ -103,11 +103,13 @@ class _CourseScoresScreenState extends State<CourseScoresScreen> {
                 child: Text(widget.name, key: heading, style: t.textTheme.headlineSmall),
               ),
               SourceError(data.courseGrades, 'eClass', onRetry: data.refreshEclass),
-              if (g == null)
-                data.courseGrades.data == null && data.courseGrades.error == null
-                    ? const SkeletonRows(timeColumn: false)
-                    : const EmptyNote('eClass has no marks for this course.')
-              else if (score != null) ...[
+              // With no answer from eClass the row above says why: nothing is known about its marks.
+              if (g == null) ...[
+                if (data.courseGrades.data != null)
+                  const EmptyNote('eClass has no marks for this course.')
+                else if (data.courseGrades.error == null)
+                  const SkeletonRows(timeColumn: false),
+              ] else if (score != null) ...[
                 _total(context, score, muted),
                 ..._counted(context, score, muted),
                 for (final MapEntry(key: category, value: items) in _byCategory(score.unweighted).entries) ...[
@@ -321,6 +323,7 @@ class _LineRow extends StatelessWidget {
             child: Semantics(
               label: 'What-if score for ${rowTitle(line.name)}',
               child: TextField(
+                key: ValueKey(line.id),
                 controller: field,
                 textAlign: TextAlign.end,
                 style: Theme.of(context).textTheme.bodyLarge?.tnum,

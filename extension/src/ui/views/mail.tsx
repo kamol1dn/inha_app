@@ -33,6 +33,7 @@ function actionError(e: unknown, fallback: string): string {
  * answer for another folder or an older search can't replace what is on show.
  */
 function useFolder(snap: Snapshot, folder: MailFolder, query: string) {
+  const account = snap.logins.mail ?? null;
   const cached = folder === 'inbox' && !query ? snap.cache.inbox?.value : undefined;
   const [list, setList] = useState<MailHeader[] | null>(cached ?? null);
   const [error, setError] = useState<unknown>(null);
@@ -41,6 +42,7 @@ function useFolder(snap: Snapshot, folder: MailFolder, query: string) {
   const asked = useRef(0);
   const showing = useRef({ folder, query });
   showing.current = { folder, query };
+  const listedFor = useRef(account);
 
   const load = async (offset: number) => {
     const mine = ++asked.current;
@@ -64,11 +66,19 @@ function useFolder(snap: Snapshot, folder: MailFolder, query: string) {
   };
 
   useEffect(() => {
-    setList(cached ?? null);
+    // Signed out or another account: none of this is theirs, not even the cache, which goes a moment after the login.
+    const sameAccount = listedFor.current === account;
+    listedFor.current = account;
+    setList(sameAccount ? (cached ?? null) : null);
     setError(null);
     setMore(true);
-    void load(0);
-  }, [folder, query]);
+    if (account) {
+      void load(0);
+    } else {
+      asked.current++; // an answer still on its way no longer counts
+      setLoading(false);
+    }
+  }, [folder, query, account]);
 
   // The worker refreshed the inbox: take its first page.
   useEffect(() => {
@@ -169,6 +179,7 @@ function Reader({ id, folder, onCompose, onMoved, onRead }: { id: string; folder
       </div>
     );
   const can = replyChoices(m, folder);
+  const restoreTo: MailFolder = m.isDraft ? 'drafts' : 'inbox';
 
   return (
     <article class="reader">
@@ -190,7 +201,7 @@ function Reader({ id, folder, onCompose, onMoved, onRead }: { id: string; folder
           </>
         )}
         {folder === 'deleted' ? (
-          <button class="btn quiet" disabled={busy} onClick={() => move('inbox')}><Icon name="inbox" /> Move to Inbox</button>
+          <button class="btn quiet" disabled={busy} onClick={() => move(restoreTo)}><Icon name={m.isDraft ? 'edit' : 'inbox'} /> Move to {folderLabel(restoreTo)}</button>
         ) : (
           <button class="btn quiet" disabled={busy} onClick={() => move('deleted')}><Icon name="delete" /> Delete</button>
         )}
@@ -227,7 +238,7 @@ function RecipientInput({ label, value, onInput }: { label: string; value: strin
   const focused = useRef(false);
   const last = value.split(/[,;]/).pop()!.trim();
   useEffect(() => {
-    if (last.length < 2 || last.includes('@')) {
+    if (last.length < 3 || last.includes('@')) {
       setHits([]);
       return;
     }
@@ -305,7 +316,7 @@ interface ComposerHandle {
   save: () => Promise<boolean>;
 }
 
-function Compose({ start, handle, onDone, onClose, onSaveFailed }: { start: Draft; handle: { current: ComposerHandle | null }; onDone: (sent: boolean) => void; onClose: () => void; onSaveFailed: () => void }) {
+function Compose({ start, handle, onDone, onClose, onToTab, onSaveFailed }: { start: Draft; handle: { current: ComposerHandle | null }; onDone: (sent: boolean) => void; onClose: () => void; onToTab: () => void; onSaveFailed: () => void }) {
   const [d, setD] = useState(start);
   const [files, setFiles] = useState<File[]>([]);
   const [showCc, setShowCc] = useState(!!(start.cc || start.bcc));
@@ -380,7 +391,7 @@ function Compose({ start, handle, onDone, onClose, onSaveFailed }: { start: Draf
                 <RecipientInput label="Bcc" value={d.bcc} onInput={set('bcc')} />
               </>
             ) : (
-              <button class="btn quiet" style={{ marginLeft: '52px' }} onClick={() => setShowCc(true)}>Cc and Bcc</button>
+              <button class="btn quiet" style={{ marginLeft: '52px' }} onClick={() => setShowCc(true)}>Cc, Bcc</button>
             )}
           </>
         )}
@@ -392,9 +403,6 @@ function Compose({ start, handle, onDone, onClose, onSaveFailed }: { start: Draf
         ) : (
           <FixedLine label="Subject" text={d.subject} />
         )}
-        <textarea value={d.body} aria-label="Message" placeholder="Write your message" onInput={(e) => set('body')((e.target as HTMLTextAreaElement).value)} />
-        {d.kind === 'forward' && <p class="t-bm muted">The original message and its attachments go below what you write.</p>}
-        {fixed && <p class="t-bm muted">The message you are replying to is quoted below what you write.</p>}
         {onDraft.length + files.length > 0 && (
           <div class="files rows">
             {onDraft.map((a) => (
@@ -416,13 +424,16 @@ function Compose({ start, handle, onDone, onClose, onSaveFailed }: { start: Draf
             ))}
           </div>
         )}
+        <textarea value={d.body} aria-label="Message" placeholder="Write your message" onInput={(e) => set('body')((e.target as HTMLTextAreaElement).value)} />
+        {d.kind === 'forward' && <p class="t-bm muted">The original message and its attachments go below what you write.</p>}
+        {fixed && <p class="t-bm muted">The message you are replying to is quoted below what you write.</p>}
         {error && <div class="trouble"><StatusLine status="danger">{error}</StatusLine></div>}
         <div class="send-row">
           <button class="btn filled" onClick={() => send(true)}>{busy === 'sending' ? 'Sending…' : 'Send'}</button>
           <button class="btn" onClick={() => send(false)}>{busy === 'saving' ? 'Saving…' : 'Save draft'}</button>
-          {/* A file dialog takes the focus, which closes the toolbar popup and what is written in it. */}
+          {/* A file dialog takes the focus, which closes the toolbar popup and what is written in it. So does the tab, so that way out asks first. */}
           {frame === 'popup' ? (
-            <a class="btn quiet" href={chrome.runtime.getURL('pages/app.html#/mail')} target="_blank">Open Mail in a tab to attach files</a>
+            <button class="btn quiet" onClick={onToTab}>Open Mail in a tab to attach files</button>
           ) : (
             <>
               <button class="btn quiet" onClick={() => picker.current?.click()}><Icon name="attach" /> Attach file</button>
@@ -492,11 +503,33 @@ export function Mail({ snap, now, route }: { snap: Snapshot; now: number; route:
   const [toast, setToast] = useState<Toast | null>(null);
   const [asking, setAsking] = useState<{ then: () => void } | null>(null); // leaving unsaved writing: keep it or not
   const composer = useRef<ComposerHandle | null>(null);
-  const sentDraft = useRef<string | null>(null); // its route is still on show until the hash change is heard
+  const leftBehind = useRef<string | null>(null); // a sent draft or another account's message: its route is still on show until the hash change is heard
   const counts = snap.cache.mailCounts?.value ?? {};
   const mailErr = snap.state.mail?.error;
 
+  const account = snap.logins.mail ?? null;
+  const readingFor = useRef(account);
+  if (readingFor.current !== account) {
+    readingFor.current = account;
+    leftBehind.current = openId;
+  }
+  if (openId !== leftBehind.current) leftBehind.current = null;
+
   useEffect(() => setSearched({ folder, query: '' }), [folder]);
+
+  // Signed out, or another account now: what was open or being written goes, in every open tab.
+  const settled = useRef(false);
+  useEffect(() => {
+    if (!settled.current) {
+      settled.current = true;
+      return;
+    }
+    closeComposer();
+    setAsking(null);
+    setToast(null);
+    setSearched({ folder, query: '' });
+    if (openId) go(`mail/${folder}`);
+  }, [account]);
 
   useEffect(() => {
     if (!toast) return;
@@ -548,9 +581,7 @@ export function Mail({ snap, now, route }: { snap: Snapshot; now: number; route:
     };
   }, []);
 
-  if (!snap.logins.mail && !list) {
-    return mailErr ? <ErrorRow service="mail" error={mailErr} /> : <ErrorRow service="mail" error={{ name: 'LoginRequired', message: '' }} />;
-  }
+  if (!account) return <ErrorRow service="mail" error={{ name: 'LoginRequired', message: '' }} />;
 
   const open = (id: string) => leave(() => go(`mail/${folder}/${encodeURIComponent(id)}`));
   const markLocal = (id: string, unread: boolean) => setList((l) => l?.map((m) => (m.id === id ? { ...m, unread } : m)) ?? l);
@@ -583,7 +614,7 @@ export function Mail({ snap, now, route }: { snap: Snapshot; now: number; route:
         {folder === 'inbox' && !query && snap.cache.inbox && isStale(snap, 'mail', snap.cache.inbox.fetchedAt, now) && (
           <div style={{ padding: '8px 16px' }}><Stale at={snap.cache.inbox.fetchedAt} /></div>
         )}
-        {error != null && !list ? (
+        {error != null && !list?.length ? (
           <div style={{ padding: '16px' }}>
             <StatusLine status="danger">{describeError(error, 'mail')}</StatusLine>
             <button class="btn" onClick={reload}>Try again</button>
@@ -609,10 +640,14 @@ export function Mail({ snap, now, route }: { snap: Snapshot; now: number; route:
                 </div>
               </button>
             ))}
-            {more && (
+            {(more || error != null) && (
               <div style={{ padding: '8px 16px' }}>
                 {error != null && <div class="trouble"><StatusLine status="danger">{describeError(error, 'mail')}</StatusLine></div>}
-                <button class="btn" disabled={loading} onClick={loadMore}>{loading ? 'Loading…' : 'Older messages'}</button>
+                {more ? (
+                  <button class="btn" disabled={loading} onClick={loadMore}>{loading ? 'Loading…' : 'Older messages'}</button>
+                ) : (
+                  <button class="btn" disabled={loading} onClick={reload}>Try again</button>
+                )}
               </div>
             )}
           </div>
@@ -625,6 +660,11 @@ export function Mail({ snap, now, route }: { snap: Snapshot; now: number; route:
           start={compose}
           handle={composer}
           onClose={() => leave(() => {})}
+          onToTab={() => {
+            // Anything written is on its way to Drafts, or let go, by the time the tab opens.
+            const to = composer.current?.dirty() ? 'drafts' : folder;
+            leave(() => void chrome.tabs.create({ url: chrome.runtime.getURL(`pages/app.html#/mail/${to}`) }));
+          }}
           onSaveFailed={() => {
             if (folder === 'drafts') reload();
           }}
@@ -633,13 +673,13 @@ export function Mail({ snap, now, route }: { snap: Snapshot; now: number; route:
             setToast({ text: sent ? 'Sent' : 'Saved to Drafts' });
             // A sent draft has left Drafts: its id no longer opens anything.
             if (sent && compose.kind === 'draft') {
-              sentDraft.current = compose.ref?.id ?? null;
+              leftBehind.current = compose.ref?.id ?? null;
               go(`mail/${folder}`);
             }
             if (folder === 'drafts' || folder === 'sent') reload();
           }}
         />
-      ) : openId && openId !== sentDraft.current ? (
+      ) : openId && openId !== leftBehind.current ? (
         <Reader
           key={openId}
           id={openId}
@@ -647,13 +687,12 @@ export function Mail({ snap, now, route }: { snap: Snapshot; now: number; route:
           onRead={(read) => markLocal(openId, !read)}
           onCompose={(kind, m) => setCompose(draftFor(kind, m))}
           onMoved={(to, newId) => {
-            const gone = list?.find((m) => m.id === openId);
             setList((l) => l?.filter((m) => m.id !== openId) ?? l);
             go(`mail/${folder}`);
             setToast({
-              text: to === 'deleted' ? 'Deleted' : to === 'junk' ? 'Moved to Junk' : 'Moved to Inbox',
+              text: to === 'deleted' ? 'Deleted' : `Moved to ${folderLabel(to)}`,
               undo:
-                newId && gone
+                newId
                   ? async () => {
                       try {
                         await call('mailMove', newId, folder);

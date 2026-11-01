@@ -114,14 +114,18 @@ class FakeTimetable implements TimetableApi {
 
 class FakeIns implements InsApi {
   Object? loginError;
+  GradeReport report = const GradeReport(gpa: 0, creditsEarned: 0, yearOfStudy: 1, records: []);
+
+  /// Thrown by a grades fetch when set.
+  Object? error;
+
   @override
   Future<void> ensureLoggedIn() async {
     if (loginError != null) throw loginError!;
   }
 
   @override
-  Future<GradeReport> grades() async =>
-      const GradeReport(gpa: 0, creditsEarned: 0, yearOfStudy: 1, records: []);
+  Future<GradeReport> grades() async => error == null ? report : throw error!;
 }
 
 class FakeMail implements MailApi {

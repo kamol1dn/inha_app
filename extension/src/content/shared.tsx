@@ -27,6 +27,7 @@ export function setPartsTheme(theme: Theme): void {
  * A shadow root on a new element placed by `place`, with the theme and the
  * parts' CSS, and the element to render into (not the shadow root itself, so
  * Preact never touches the style sheet). Replaces one with the same id.
+ * Closed: what a part shows, such as a mail's subject, is no business of the page's scripts.
  */
 export function shadowHost(id: string, place: (el: HTMLElement) => void, css = shadowCss): HTMLElement {
   const old = document.getElementById(id);
@@ -37,7 +38,7 @@ export function shadowHost(id: string, place: (el: HTMLElement) => void, css = s
   themeHost(host);
   hosts.add(host);
   place(host);
-  const shadow = host.attachShadow({ mode: 'open' });
+  const shadow = host.attachShadow({ mode: 'closed' });
   const mountPoint = document.createElement('div');
   mountPoint.style.display = 'contents';
   shadow.append(Object.assign(document.createElement('style'), { textContent: `${themeCss}
@@ -83,16 +84,6 @@ export const StatusLine = ({ status, children }: { status: Status; children: Com
   <div class={`status ${status}`} role={status === 'danger' ? 'alert' : undefined}><Icon name={status} /><span>{children}</span></div>
 );
 
-/** Absences as tally marks: used ones in the status color, the remainder faint. */
-export function Tally({ used, limit, status }: { used: number; limit: number | null; status: string | null }) {
-  const total = limit == null ? used : Math.max(used, limit);
-  const marks = [];
-  for (let i = 0; i < total; i++) {
-    if (i > 0 && i % 5 === 0) marks.push(<i key={`g${i}`} class="gap" />);
-    marks.push(<i key={i} class={i < used ? '' : 'faint'} />);
-  }
-  return <span class={`tally ${status ? `fg-${status}` : ''}`} aria-hidden="true">{marks}</span>;
-}
+export { Tally } from '../ui/tally.tsx';
 
-/** The eClass address of one of the extension's views ('mail/inbox', 'grades', ...): a page of the front page. */
-export const viewUrl = (route: string) => `/#/${route}`;
+export { viewUrl } from './pages.ts';

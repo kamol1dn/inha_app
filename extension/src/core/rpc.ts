@@ -41,8 +41,6 @@ export interface Api {
 
   /** From eClass's login page: signs the browser in with the saved login. False when none is saved. */
   eclassAutoLogin(): boolean;
-  /** From eClass's login form, when the student ticks "Remember in IUT". */
-  eclassRemember(username: string, password: string): void;
   /** From an eClass page: the student clicked Log out, so nothing signs the browser back in until they sign in again. */
   eclassLoggedOut(): void;
 

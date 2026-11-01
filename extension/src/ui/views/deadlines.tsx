@@ -4,8 +4,7 @@
 import type { DeadlineKind } from '../../core/models.ts';
 import { defaultDeadlineKinds, writeSettings, type Snapshot } from '../../core/store.ts';
 import { dayHeader } from '../../data/format.ts';
-import { isDue } from '../../data/status.ts';
-import { isStale, OfflineRow, Skeleton, SourceError, Stale, StatusLine } from '../common.tsx';
+import { isStale, NoData, OfflineRow, SourceError, Stale, StatusLine } from '../common.tsx';
 import { deadlineCourses, deadlineSections } from '../derive.ts';
 import { DeadlineRow } from '../rows.tsx';
 
@@ -24,7 +23,6 @@ export function Deadlines({ snap, now }: { snap: Snapshot; now: number }) {
   const on = settings.deadlineKinds;
   const all = snap.cache.deadlines?.value;
   const att = snap.cache.attendance?.value ?? [];
-  const err = snap.state.eclass?.error;
   const { overdue, days, filtered } = deadlineSections(all ?? [], att, now, settings);
   const row = (d: (typeof overdue)[number]) => <DeadlineRow key={`${d.moduleId}${d.title}${d.end}`} d={d} att={att} now={now} dismissed={settings.dismissed} />;
 
@@ -54,9 +52,9 @@ export function Deadlines({ snap, now }: { snap: Snapshot; now: number }) {
       </label>
       {snap.cache.deadlines && isStale(snap, 'eclass', snap.cache.deadlines.fetchedAt, now) && <Stale at={snap.cache.deadlines.fetchedAt} />}
       <OfflineRow snap={snap} />
-      <SourceError snap={snap} service="eclass" at={snap.cache.deadlines?.fetchedAt} />
+      {all && <SourceError snap={snap} service="eclass" at={snap.cache.deadlines!.fetchedAt} />}
       {!all ? (
-        !err && <Skeleton lines={6} />
+        <NoData snap={snap} service="eclass" />
       ) : !overdue.length && !days.length ? (
         filtered ? (
           <>
@@ -64,7 +62,7 @@ export function Deadlines({ snap, now }: { snap: Snapshot; now: number }) {
             <button class="btn" style={{ marginLeft: '-12px' }} onClick={clearFilters}>Clear filters</button>
           </>
         ) : (
-          <p class="empty">{all.some(isDue) ? 'Nothing due in eClass.' : 'No deadlines in eClass.'}</p>
+          <p class="empty">No upcoming deadlines in eClass.</p>
         )
       ) : (
         <>

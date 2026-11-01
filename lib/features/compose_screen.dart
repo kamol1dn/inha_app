@@ -591,7 +591,8 @@ class _Line extends StatelessWidget {
               child: Row(children: [
                 SizedBox(
                   width: _labelWidth(context),
-                  child: Text(label, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                  child: Text(label,
+                      softWrap: false, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
                 ),
                 Expanded(child: child),
               ]),

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inha_app/core/session.dart';
+import 'package:inha_app/models/models.dart';
 import 'package:inha_app/services/ins/ins_parsers.dart';
 
 String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
@@ -220,6 +221,19 @@ void main() {
       expect(r.records.map((e) => e.code), ['X1', 'X2']);
       expect(r.records[0].term, '20241'); // no DISPLAY_YEARTERM -> YEARTERM
       expect(r.records[1].letter, '-'); // empty MARKS -> not graded
+    });
+
+    test("INS's required-credit totals are read when present, and survive the cache", () {
+      final report = parseGradesBytes(fixtureBytes('ins_grades.xml'));
+      expect(report.majorRequired, 9);
+      expect(report.generalRequired, 8);
+      final again = GradeReport.fromJson(jsonDecode(jsonEncode(report.toJson())) as Map<String, dynamic>);
+      expect(again.majorRequired, 9);
+      expect(again.generalRequired, 8);
+
+      final none = parseGrades('<root><MAIN><GRADE>1</GRADE><COM_PYUNG>0</COM_PYUNG></MAIN></root>');
+      expect(none.majorRequired, isNull);
+      expect(none.generalRequired, isNull);
     });
 
     test('non-XML responses are a ParseError', () {

@@ -12,8 +12,9 @@ import { fontFaces } from '../ui/fonts.ts';
 import themeCss from '../ui/theme.css';
 import { darkRulesOf } from './darkrules.ts';
 import moodleCss from './moodle.css';
+import { isSignInPage, SIGN_IN_TRY } from './pages.ts';
 import { decorate } from './parts.tsx';
-import { mountViews } from './view.tsx';
+import { hideMessageId, mountViews } from './view.tsx';
 import { setPartsTheme, shadowHost } from './shared.tsx';
 import { signInPage } from './signin.tsx';
 import { documentTokens, isDark, type Theme } from './theme.ts';
@@ -22,6 +23,7 @@ declare const __DEV__: boolean;
 
 const root = document.documentElement;
 root.classList.add('iut-wait');
+hideMessageId();
 
 // Settings arrive a moment after the first paint can: the theme last used here keeps that moment from flashing white.
 const REMEMBERED_THEME = 'iut.theme';
@@ -123,10 +125,14 @@ void (async () => {
   addEventListener('load', paintDark, { once: true }); // the sheets eClass adds late
   whenParsed(() => {
     paintDark();
-    const isLogin =path.startsWith('/login/index.php') || (document.body.id === 'page-login-index' && !!document.querySelector('form[action*="/login/index.php"] input[name="password"]'));
-    if (isLogin) {
+    if (isSignInPage(path, document)) {
       void signInPage().finally(() => root.classList.remove('iut-wait'));
       return;
+    }
+    try {
+      sessionStorage.removeItem(SIGN_IN_TRY); // got past the sign-in page
+    } catch {
+      // Blocked site data: only the check for a sign-in that doesn't reach this tab is affected.
     }
     try {
       decorate(path);

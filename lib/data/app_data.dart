@@ -127,6 +127,30 @@ class Prefs {
     _p.remove(Notifier.seenCoursesKey);
     _p.remove(Notifier.noticesSeenKey);
     _p.remove('deadlines.dismissed');
+    _p.remove(_vodPositionsKey);
+  }
+
+  static const _vodPositionsKey = 'vod.positions.v1';
+
+  /// Where the student last was in each VOD, in seconds, by module id. This
+  /// phone's own note, for "Continue from"; eClass's record is kept by its player.
+  Map<int, int> get vodPositions {
+    try {
+      return {
+        for (final e in (jsonDecode(_p.getString(_vodPositionsKey) ?? '{}') as Map<String, dynamic>).entries)
+          int.parse(e.key): (e.value as num).toInt(),
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  int? vodPosition(int moduleId) => vodPositions[moduleId];
+
+  void setVodPosition(int moduleId, int? seconds) {
+    final all = vodPositions;
+    seconds == null ? all.remove(moduleId) : all[moduleId] = seconds;
+    _p.setString(_vodPositionsKey, jsonEncode({for (final e in all.entries) '${e.key}': e.value}));
   }
 
   /// The exam rooms the student set once they knew them, by [Exam.keyIn].
@@ -434,6 +458,68 @@ class AppData extends ChangeNotifier {
     ]);
   });
 
+  /// The saved eClass session, logged in again if it has lapsed, for a WebView
+  /// to borrow. A refused login comes back as [LoginRequired].
+  Future<void> ensureEclassSession() async {
+    try {
+      await sync.step('eClass', 'session', eclass.ensureLoggedIn);
+    } on LoginRequired {
+      _check(Service.eclass, ok: false);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// One course's attendance and VOD rows, after watching one of its videos: a
+  /// few pages rather than all of eClass. An edit to the list, so it keeps its
+  /// fetch time, and a failure stays beside the old rows. The notification first
+  /// is for the row's "Continue from", which the player has just saved.
+  Future<void> refreshCourseAttendance(int? courseId) async {
+    notifyListeners();
+    // A refresh still running may have read this course before the student left:
+    // what it brings would overwrite the new percentage, so it lands first.
+    await _attendanceIdle();
+    final course = attendance.data?.value.where((a) => a.course.id == courseId).firstOrNull?.course;
+    if (course == null) return;
+    final generation = _generation[Service.eclass];
+    try {
+      final fresh = await sync.step('eClass', 'attendance for ${course.name}', () => eclass.attendance(course));
+      if (generation != _generation[Service.eclass] || !await _signedIn(Service.eclass)) return;
+      final list = attendance.data;
+      if (generation != _generation[Service.eclass] || list == null) return;
+      final written = await cache.write(
+          'attendance', [for (final a in list.value) a.course.id == course.id ? fresh : a], _encodeList,
+          at: list.fetchedAt);
+      if (generation != _generation[Service.eclass]) {
+        await cache.remove('attendance');
+        return;
+      }
+      attendance = Snapshot(data: written, error: attendance.error, loading: attendance.loading);
+      _check(Service.eclass, ok: true);
+      unawaited(onWidgetDataChanged?.call());
+    } catch (e) {
+      if (generation != _generation[Service.eclass]) return;
+      if (kDebugMode) debugPrint('attendance ${course.id} failed: ${_debugDescribe(e)}');
+      attendance = Snapshot(data: attendance.data, error: e, loading: attendance.loading);
+      if (e is LoginRequired) _check(Service.eclass, ok: false);
+    }
+    notifyListeners();
+    await onReminderDataChanged?.call();
+  }
+
+  Future<void> _attendanceIdle() {
+    if (!attendance.loading) return Future.value();
+    final idle = Completer<void>();
+    void check() {
+      if (attendance.loading) return;
+      removeListener(check);
+      idle.complete();
+    }
+
+    addListener(check);
+    return idle.future;
+  }
+
   /// One fetch per course, all at once. A course that fails keeps [fallback],
   /// and [gaps] hears which did; one bad page doesn't hold back the others. Only
   /// a refused login, or every course failing, fails the whole list.
@@ -660,6 +746,7 @@ class AppData extends ChangeNotifier {
     } catch (e) {
       if (generation != _generation[s]) return e;
       if (e is LoginRequired) _check(s, ok: false);
+      _tellEmpty(s, e);
       notifyListeners();
       return e;
     }
@@ -673,6 +760,29 @@ class AppData extends ChangeNotifier {
       Service.edupage => Future.value(),
     });
     return null;
+  }
+
+  /// A source with nothing to show and no refresh coming says why: without this,
+  /// a login refused right after another account's data went would leave the
+  /// tabs on their loading skeletons.
+  void _tellEmpty(Service s, Object e) {
+    Snapshot<T> told<T>(Snapshot<T> x) => x.data == null && !x.loading ? Snapshot(error: e) : x;
+    switch (s) {
+      case Service.eclass:
+        deadlines = told(deadlines);
+        attendance = told(attendance);
+        courseGrades = told(courseGrades);
+        eclassNotifications = told(eclassNotifications);
+      case Service.ins:
+        grades = told(grades);
+      case Service.mail:
+        for (final box in _mailbox.values) {
+          box.list = told(box.list);
+        }
+        mailUnread = told(mailUnread);
+      case Service.edupage:
+        lessons = told(lessons);
+    }
   }
 
   /// Which of a service's fetches still count: a fetch that started under an

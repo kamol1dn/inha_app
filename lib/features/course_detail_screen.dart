@@ -19,6 +19,78 @@ import 'common.dart';
 import 'course_scores_screen.dart';
 import 'exam_rows.dart';
 import 'rail_rows.dart';
+import 'vod_player_screen.dart';
+
+/// One VOD: how much is watched, where the student left it on this phone, and the
+/// way in, which depends on its watch window and on whether eClass named its module
+/// (DESIGN.md 8, VOD player).
+class _VodRow extends StatelessWidget {
+  final VodProgress v;
+  final Course course;
+  final DateTime now;
+  const _VodRow(this.v, {required this.course, required this.now});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final muted = t.textTheme.bodyMedium!.tnum.copyWith(color: t.colorScheme.onSurfaceVariant);
+    final id = v.moduleId;
+    final offer = vodOffer(moduleId: id, opens: v.opens, closes: v.closes, done: v.done, now: now);
+    final place = offer == VodOffer.watch ? context.read<AppData>().prefs.vodPosition(id!) : null;
+    final note = switch (offer) {
+      VodOffer.closed when !v.done => 'Closed ${dayDateTime(v.closes!, now: now)}',
+      VodOffer.notOpen => 'Opens ${dayDateTime(v.opens!, now: now)}',
+      _ when place != null => 'Continue from ${playPosition(place)}',
+      _ => null,
+    };
+    Widget watch(String label) => TextButton(
+          onPressed: () => watchVod(context,
+              moduleId: id!, title: v.title, courseId: course.id, resume: offer == VodOffer.watch),
+          child: Text(label),
+        );
+    Widget browser(Uri url) => TextButton(onPressed: () => openUrl(context, url), child: const Text('Open in eClass'));
+    final action = switch (offer) {
+      VodOffer.watch => watch('Watch'),
+      VodOffer.watchAgain => watch('Watch again'),
+      VodOffer.browser => browser(eclassCourseUrl(course.id)),
+      VodOffer.closed when id != null => browser(eclassVodUrl(id)),
+      _ => null,
+    };
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(left: gutter, right: 8),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(v.title, style: t.textTheme.titleSmall),
+                  Text(
+                      'Week ${v.week} · ${(v.length.inMinutes * v.percent / 100).floor()} / ${v.length.inMinutes} min'
+                      '${v.done ? ' · watched' : ''}',
+                      style: muted),
+                  if (note != null) Text(note, style: muted),
+                ]),
+              ),
+            ),
+            ?action,
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, 6, gutter, 0),
+          child: LinearProgressIndicator(
+            value: (v.percent / 100).clamp(0, 1),
+            minHeight: 4,
+            color: t.colorScheme.onSurface,
+            backgroundColor: t.colorScheme.outlineVariant,
+          ),
+        ),
+      ]),
+    );
+  }
+}
 
 /// One course: absences, what is due, the INS grade, VOD progress and every
 /// attendance session (DESIGN.md 8, Courses). Reads live data, so it updates
@@ -162,24 +234,7 @@ class CourseDetailScreen extends StatelessWidget {
           ..._timetable(context, data, c.course, now),
           if (c.vods.isNotEmpty) ...[
             SectionHeader('VOD lectures', source: data.attendance),
-            for (final v in c.vods)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 8),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(v.title, style: t.textTheme.titleSmall),
-                  Text(
-                      'Week ${v.week} · ${(v.length.inMinutes * v.percent / 100).floor()} / ${v.length.inMinutes} min'
-                      '${v.done ? ' · watched' : ''}',
-                      style: muted),
-                  const SizedBox(height: 6),
-                  LinearProgressIndicator(
-                    value: (v.percent / 100).clamp(0, 1),
-                    minHeight: 4,
-                    color: t.colorScheme.onSurface,
-                    backgroundColor: t.colorScheme.outlineVariant,
-                  ),
-                ]),
-              ),
+            for (final v in c.vods) _VodRow(v, course: c.course, now: now),
           ],
           if (held.isNotEmpty) ...[
             SectionHeader('Classes so far', source: data.attendance),

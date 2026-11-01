@@ -2,13 +2,15 @@
 // the class group, notifications and how eClass looks.
 
 import { useEffect, useState } from 'preact/hooks';
-import { describeError } from '../../core/errors.ts';
+import { reloadEclass } from '../../content/framed.ts';
+import { describeError, type ErrorInfo } from '../../core/errors.ts';
 import { serviceLabel, type Service } from '../../core/models.ts';
 import { missingHosts, requestHosts } from '../../core/permissions.ts';
 import { call } from '../../core/rpc.ts';
 import { writeSettings, type NotifyChannel, type Snapshot } from '../../core/store.ts';
 import { pastWhen } from '../../data/format.ts';
-import { StatusLine } from '../common.tsx';
+import type { Status } from '../../data/status.ts';
+import { Dialog, frame, StatusLine } from '../common.tsx';
 
 const accounts: { service: Service; title: string; what: string; user: string }[] = [
   { service: 'eclass', title: 'eClass', what: 'Deadlines, attendance, VOD progress and marks. Also signs you in to eClass with one click.', user: 'Student ID' },
@@ -16,30 +18,57 @@ const accounts: { service: Service; title: string; what: string; user: string }[
   { service: 'ins', title: 'INS', what: 'Grades and GPA (ins.inha.uz).', user: 'Student ID' },
 ];
 
+const signOutWord: Partial<Record<Service, string>> = {
+  eclass: 'This removes the saved login and the eClass session in this browser, your deadlines, attendance and marks kept here, and the reminders planned from them.',
+  mail: 'This removes the saved login and the mail kept in this browser.',
+  ins: 'This removes the saved login and the grades kept in this browser.',
+};
+
+/** What saving a login came to. Only a refused one isn't kept; the others are saved, untested. */
+function saveResult(err: ErrorInfo | null, a: (typeof accounts)[number]): { status: Status; text: string } {
+  if (!err) return { status: 'ok', text: 'Signed in. Loading your data.' };
+  if (err.name === 'LoginRequired') return { status: 'danger', text: `${a.title} rejected this username or password.` };
+  const said = describeError(err, a.service);
+  if (err.name === 'LoginUntested') return { status: 'warning', text: said };
+  return { status: 'warning', text: `Saved, but not tested. ${said}` };
+}
+
 function Account({ snap, a, prefill }: { snap: Snapshot; a: (typeof accounts)[number]; prefill: { user: string; pass: string } }) {
   const saved = snap.logins[a.service];
   const [user, setUser] = useState(saved ?? '');
   const [pass, setPass] = useState('');
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<{ status: Status; text: string } | null>(null);
   const [certificate, setCertificate] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   useEffect(() => {
     if (!saved && prefill.user) setUser(prefill.user);
     if (!saved && prefill.pass) setPass(prefill.pass);
   }, [prefill.user, prefill.pass]);
 
+  // A success has said its piece once the row above can show the login's state.
+  useEffect(() => {
+    if (result?.status !== 'ok') return;
+    const t = setTimeout(() => setResult(null), 6000);
+    return () => clearTimeout(t);
+  }, [result]);
+
   const state = snap.state[a.service];
+  // Only a refusal says anything about the password: after eClass's own Log out the login was never tried.
+  const rejected = !!state?.error?.rejected || snap.rejectedLogins.includes(a.service);
+  const signedOut = !rejected && state?.error?.name === 'LoginRequired';
   const save = async (e: Event) => {
     e.preventDefault();
     setBusy(true);
     setResult(null);
     try {
       const err = await call('saveLogin', a.service, user.trim(), pass);
-      setResult(err ? describeError(err, a.service) : 'ok');
+      setResult(saveResult(err, a));
       setCertificate(!!err?.certificate);
-      if (!err) setPass('');
+      // Only a refused one isn't kept: then what was typed is still there to correct.
+      if (err?.name !== 'LoginRequired') setPass('');
     } catch (err) {
-      setResult(describeError(err, a.service));
+      setResult({ status: 'danger', text: describeError(err, a.service) });
     } finally {
       setBusy(false);
     }
@@ -49,14 +78,16 @@ function Account({ snap, a, prefill }: { snap: Snapshot; a: (typeof accounts)[nu
     <div class="login-block">
       <h3>{a.title}</h3>
       <p class="t-bm muted" style={{ margin: '2px 0 0' }}>{a.what}</p>
-      {saved && !result && (
+      {saved && (
         <div style={{ margin: '8px 0', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {state?.error?.name === 'LoginRequired' ? (
+          {rejected ? (
             <StatusLine status="danger">Sign-in failed for {saved}. Enter the password again.</StatusLine>
+          ) : signedOut ? (
+            <StatusLine status="info">Saved for {saved} · signed out of {a.title}</StatusLine>
           ) : (
             <StatusLine status="ok">Saved for {saved}{state?.at ? ` · checked ${pastWhen(state.at)}` : ''}</StatusLine>
           )}
-          <button class="btn quiet" onClick={() => call('clearLogin', a.service)}>Sign out</button>
+          <button class="btn danger" onClick={() => setLeaving(true)}>Sign out</button>
         </div>
       )}
       <form class="login-grid" onSubmit={save}>
@@ -70,9 +101,63 @@ function Account({ snap, a, prefill }: { snap: Snapshot; a: (typeof accounts)[nu
         </div>
         <button class="btn filled" disabled={busy || !user || !pass}>{busy ? 'Checking…' : saved ? 'Update' : 'Save'}</button>
       </form>
-      {result === 'ok' && <StatusLine status="ok">Signed in. Loading your data.</StatusLine>}
-      {result && result !== 'ok' && <StatusLine status="danger">{result}</StatusLine>}
+      {result && <StatusLine status={result.status}>{result.text}</StatusLine>}
       {certificate && <button class="btn" type="button" onClick={() => call('insOpenForSync')}>Open INS</button>}
+      {leaving && (
+        <Dialog title={`Sign out of ${a.title}?`} onClose={() => setLeaving(false)}>
+          <p class="t-bm" style={{ margin: 0 }}>{signOutWord[a.service]}</p>
+          <div class="actions">
+            <button class="btn" onClick={() => setLeaving(false)}>Cancel</button>
+            <button
+              class="btn danger"
+              onClick={() => {
+                setLeaving(false);
+                setResult(null);
+                setPass('');
+                void call('clearLogin', a.service);
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+/** Subjects EduPage lists for the group that the student doesn't take. Offered: what the timetable shows now, plus what is already hidden. */
+function HiddenSubjects({ snap }: { snap: Snapshot }) {
+  const hidden = snap.settings.excludedSubjects;
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const subjects = [...new Set([...(snap.cache.lessons?.value ?? []).map((l) => l.subject), ...hidden])].sort();
+  const save = async () => {
+    await writeSettings({ excludedSubjects: picked! });
+    setPicked(null);
+    void call('sync', 'edupage', true);
+  };
+  return (
+    <div class="row" style={{ alignItems: 'center', minHeight: '48px' }}>
+      <div class="main">
+        <span class="t-bl">Hidden subjects</span>
+        <span class="t-bm muted">{hidden.length ? hidden.join(', ') : subjects.length ? 'None' : "The timetable hasn't loaded yet."}</span>
+      </div>
+      <button class="btn" disabled={!subjects.length} onClick={() => setPicked(hidden)}>Choose subjects</button>
+      {picked && (
+        <Dialog title="Hidden subjects" onClose={() => setPicked(null)}>
+          <p class="t-bm muted" style={{ margin: '0 0 8px' }}>Ones EduPage lists for your group that you don't take. Ticked ones leave your timetable.</p>
+          {subjects.map((s) => (
+            <label class="check" key={s}>
+              <input type="checkbox" checked={picked.includes(s)} onChange={(e) => setPicked((e.target as HTMLInputElement).checked ? [...picked, s] : picked.filter((x) => x !== s))} />
+              <span class="t-bl">{s}</span>
+            </label>
+          ))}
+          <div class="actions">
+            <button class="btn" onClick={() => setPicked(null)}>Cancel</button>
+            <button class="btn" onClick={save}>Save</button>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -109,6 +194,14 @@ function SiteAccess() {
   );
 }
 
+/** Absence limits' subtitle: how many of the courses with attendance have one. */
+function limitsLine(snap: Snapshot): string {
+  const tracked = (snap.cache.attendance?.value ?? []).filter((c) => c.classes.length);
+  const set = tracked.filter((c) => snap.settings.absenceLimits[c.course.id] != null).length;
+  if (!tracked.length) return 'For courses with attendance in eClass';
+  return set === 0 ? 'Not set' : `${set} of ${tracked.length} courses set`;
+}
+
 export function Settings({ snap, welcome }: { snap: Snapshot; welcome: boolean }) {
   const { settings } = snap;
   // The timetable sync keeps the list; asked for only when it hasn't run yet.
@@ -116,9 +209,15 @@ export function Settings({ snap, welcome }: { snap: Snapshot; welcome: boolean }
   const [groupError, setGroupError] = useState('');
   const groups = snap.cache.classGroups?.value ?? fetched;
   const [same, setSame] = useState({ user: '', pass: '' });
+  const loadGroups = () => {
+    setGroupError('');
+    call('classGroups').then(setFetched, (e) => setGroupError(describeError(e, 'edupage')));
+  };
   useEffect(() => {
-    if (!snap.cache.classGroups) call('classGroups').then(setFetched, (e) => setGroupError(describeError(e, 'edupage')));
+    if (!snap.cache.classGroups) loadGroups();
   }, []);
+  // One no longer on the timetable stays on show, so the picker doesn't quietly read "Choose".
+  const groupOptions = groups ? (settings.classGroup && !groups.includes(settings.classGroup) ? [settings.classGroup, ...groups] : groups) : settings.classGroup ? [settings.classGroup] : [];
   const toggle = (k: NotifyChannel) => (e: Event) => writeSettings({ notify: { ...settings.notify, [k]: (e.target as HTMLInputElement).checked } });
 
   return (
@@ -143,20 +242,15 @@ export function Settings({ snap, welcome }: { snap: Snapshot; welcome: boolean }
             await writeSettings({ classGroup: (e.target as HTMLSelectElement).value });
             void call('sync', 'edupage', true);
           }} aria-label="Class group">
-            <option value="">{groups ? 'Choose your group' : 'Loading groups…'}</option>
-            {(groups ?? (settings.classGroup ? [settings.classGroup] : [])).map((g) => (
+            <option value="">{groups ? 'Choose your group' : groupError ? 'Groups not loaded' : 'Loading groups…'}</option>
+            {groupOptions.map((g) => (
               <option key={g}>{g}</option>
             ))}
           </select>
-          {groupError && !groups && <StatusLine status="danger">{groupError}</StatusLine>}
+          {groupError && !groups && <button class="btn" onClick={loadGroups}>Retry</button>}
         </div>
-        <div class="field" style={{ maxWidth: '520px' }}>
-          <label for="dropped">Subjects you dropped (EduPage still lists them), separated by commas</label>
-          <input id="dropped" class="input" value={settings.excludedSubjects.join(', ')} onChange={async (e) => {
-            await writeSettings({ excludedSubjects: (e.target as HTMLInputElement).value.split(',').map((s) => s.trim()).filter(Boolean) });
-            void call('sync', 'edupage', true);
-          }} />
-        </div>
+        {groupError && !groups && <StatusLine status="danger">{groupError}</StatusLine>}
+        <HiddenSubjects snap={snap} />
       </section>
 
       <section class="section">
@@ -199,14 +293,34 @@ export function Settings({ snap, welcome }: { snap: Snapshot; welcome: boolean }
         </label>
       </section>
 
+      {!welcome && (
+        <section class="section">
+          <h2>Courses</h2>
+          <a class="row" href="#/courses/limits" style={{ minHeight: '48px' }}>
+            <div class="main">
+              <span class="t-bl">Absence limits</span>
+              <span class="t-bm muted">{limitsLine(snap)}</span>
+            </div>
+          </a>
+        </section>
+      )}
+
       <section class="section">
         <h2>eClass</h2>
         <label class="check">
-          <input type="checkbox" checked={settings.takeover} onChange={(e) => writeSettings({ takeover: (e.target as HTMLInputElement).checked })} />
+          <input
+            type="checkbox"
+            checked={settings.takeover}
+            onChange={async (e) => {
+              await writeSettings({ takeover: (e.target as HTMLInputElement).checked });
+              // Inside eClass the page around this has to change too.
+              if (frame === 'inline') reloadEclass();
+            }}
+          />
           <span>
             <span class="t-bl">New look on eClass</span>
             <br />
-            <span class="t-bm muted">Off shows eClass exactly as it is</span>
+            <span class="t-bm muted">{frame === 'inline' ? 'Off shows eClass exactly as it is' : 'Off shows eClass exactly as it is. Tabs already open change when reloaded.'}</span>
           </span>
         </label>
         <div class="field" style={{ maxWidth: '240px' }}>
@@ -248,6 +362,14 @@ export function Settings({ snap, welcome }: { snap: Snapshot; welcome: boolean }
               );
             })}
           </div>
+        </section>
+      )}
+
+      {!welcome && (
+        <section class="section">
+          <h2>About</h2>
+          <p class="t-bm tnum" style={{ margin: 0 }}>Version {chrome.runtime.getManifest().version}</p>
+          <p class="t-bm muted" style={{ margin: '4px 0 0' }}>The fonts, Fraunces and Public Sans, come with the extension under the SIL Open Font License.</p>
         </section>
       )}
 

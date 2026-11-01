@@ -20,7 +20,7 @@ Tests: `flutter test test/notification_rules_test.dart test/notification_setting
 | New absence (dated within the last 21 days) | Once, right away | Attendance (high) | Yes |
 | New or changed mark in eClass (not attendance marks) | Once, right away | Grades (high) | Yes |
 | Lesson today | 15 min before it starts | Classes (default) | No (DESIGN.md 11) |
-| One of the student's exams (`AppData.exams`) | The evening before at 20:00, and 1 h before, with the room | Exams (high) | Yes |
+| One of the student's exams (`AppData.exams`) | The evening before at 20:00, and 1 h before, with the room: `Exam at 14:00: Database`, `Thu 29 Oct, 14:00 · Room not set: B209 or B210` | Exams (high) | Yes |
 | New unread item in eClass's bell menu (dated within the last 21 days) | Once, right away | eClass notifications (default) | Yes |
 
 Thresholds are constants at the top of `rules.dart`.
@@ -56,7 +56,8 @@ unread item is announced once, or recorded silently while the channel is off.
 **Signing out of eClass** removes everything that came from it, shown or scheduled, whether or not notifications are allowed
 (`Notifier.forgetEclass`, through `AppData.onSignedOut`), and forgets the marks and courses seen and the deadlines marked done, so
 another account starts from its own baseline. A refresh still running when the student signs out drops its result
-(`AppData.forget`), and one in the background isolate looks for a saved login before writing.
+(`AppData.forget`), and one in the background isolate looks for a saved login before writing. Saving another student's ID in the
+login sheet does all of this too, before the new login is tried.
 
 **Quiet hours, 23:00 to 07:30** (on by default). A reminder that falls inside them waits until 07:30 if the
 item is still open at least an hour after that. Otherwise it goes out at 22:00 the evening before, and if
@@ -65,7 +66,7 @@ absence or mark found at night waits for 07:30.
 
 **Tapping** a notification opens its item on top of the tab that owns it: a deadline or VOD opens its sheet
 over Deadlines, an absence opens the course, a mark opens the course's scores, a class reminder opens Schedule
-on that day, an exam reminder opens Exams, a bell-menu item opens Today. An item that is
+on that day, an exam reminder opens Exams, a bell-menu item opens From eClass (every item with its text) over Today. An item that is
 gone opens its tab. While the app runs the tap arrives through `onDidReceiveNotificationResponse`; a tap
 that starts the app is read from `getNotificationAppLaunchDetails`.
 
@@ -83,7 +84,7 @@ A reminder already in the tray is withdrawn on the next pass once its item is fi
 
 - It posts what is due on each pass and sets one alarm for the next reminder, so nothing is scheduled ahead. A reminder in the tray is withdrawn on the next pass once its item is finished or marked done.
 - New mail (`notify.seenMail`) is an extra channel, as is a new unread item in eClass's bell menu (`notify.seenNotices`). The first look only learns what is there. In quiet hours an item stays unseen, and the first look after 07:30 announces it. One that can't be posted is tried again.
-- Clicking opens the view inside eClass, or the extension's own page with New look off, and brings the window forward. A bell-menu item opens its eClass link when it has one, else Today.
+- Clicking opens the view inside eClass, or the extension's own page with New look off, and brings the window forward. A bell-menu item opens its eClass link when it has one, else Today; in the app it opens From eClass, where its row has the link.
 - Passes run one at a time, and the course baseline and the sent keys are saved together, so overlapping passes can't announce old absences.
 - Signing out of eClass forgets the seen courses, marks and bell-menu items, the sent keys of that account and what was marked done.
 

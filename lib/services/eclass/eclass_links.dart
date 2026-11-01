@@ -13,6 +13,13 @@ Uri eclassGradesUrl(int courseId) => eclassBase.replace(path: '/grade/report/use
 /// A VOD, by [VodProgress.moduleId].
 Uri eclassVodUrl(int moduleId) => eclassBase.replace(path: '/mod/vod/view.php', query: 'id=$moduleId');
 
+/// A bell-menu item's link, only when it stays on eClass: the link comes from a
+/// message's content.
+Uri? eclassNoticeUrl(EclassNotification n) {
+  final url = n.url;
+  return url != null && url.startsWith('$eclassBase/') ? Uri.tryParse(url) : null;
+}
+
 /// A marked item's activity, or null for one that isn't an activity.
 Uri? eclassGradeItemUrl(GradeItem i) {
   final (id, type) = (i.moduleId, i.moduleType);

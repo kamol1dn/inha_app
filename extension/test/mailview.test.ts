@@ -291,6 +291,19 @@ test('F59: Deleted offers Move to Inbox instead of Delete', async () => {
   assert.match(root.textContent!, /Moved to Inbox/);
 });
 
+test('a deleted draft goes back to Drafts, as DESIGN.md 8 and the app have it', async () => {
+  answer = worker(message({ isDraft: true, to: [{ name: '', address: 'a@b.uz' }] }));
+  await show('#/mail/deleted/m1');
+  assert.equal(button('Move to Inbox'), null);
+  const moved = worker(message({ isDraft: true }));
+  answer = (rpc) => (rpc === 'mailMove' ? 'new-id' : moved(rpc));
+  await click('Move to Drafts');
+  assert.deepEqual(sent('mailMove')[0].args, ['m1', 'drafts']);
+  assert.match(root.textContent!, /Moved to Drafts/);
+  await click('Undo');
+  assert.deepEqual(sent('mailMove')[1].args, ['new-id', 'deleted']);
+});
+
 test('F60: a failed move says so, stays, and the buttons wait while it runs', async () => {
   await show('#/mail/inbox/m1');
   let refuse!: (e: Error) => void;
@@ -369,6 +382,50 @@ test('F60: Undo that fails says so', async () => {
   assert.match(root.textContent!, /Couldn't move it back to Inbox\./);
 });
 
+test('F60: a message that is not on the page of the list still gets Undo', async () => {
+  answer = (rpc) => {
+    if (rpc === 'mailFolder') return [header('m2')];
+    return rpc === 'mailMove' ? 'new-id' : worker()(rpc);
+  };
+  await show('#/mail/inbox/m1');
+  await click('Delete');
+  assert.ok(button('Undo'));
+});
+
+test('F60: a refresh failing under a short list says so, with a way to try again', async () => {
+  await show('#/mail/inbox/m1');
+  answer = (rpc) => (rpc === 'mailMove' ? 'new-id' : worker()(rpc));
+  await click('Delete');
+  answer = (rpc) => {
+    if (rpc === 'mailFolder') throw Object.assign(new Error('x'), { name: 'NetworkError' });
+    return 'new-id';
+  };
+  await click('Undo');
+  assert.match(root.textContent!, /Couldn't reach Mail/);
+  assert.equal(button('Older messages'), null);
+  assert.equal(root.querySelectorAll('.row').length, 1);
+  answer = worker();
+  await click('Try again');
+  assert.doesNotMatch(root.textContent!, /Couldn't reach Mail/);
+  assert.equal(root.querySelectorAll('.row').length, 2);
+});
+
+test('F60: an empty list that failed to refresh says that, not that the folder is empty', async () => {
+  answer = (rpc) => (rpc === 'mailFolder' ? [] : null);
+  await show('#/mail/sent');
+  assert.match(root.textContent!, /Nothing in Sent\./);
+  await click('New');
+  typeIn('To', 'a@b.uz');
+  await settle();
+  answer = (rpc) => {
+    if (rpc === 'mailFolder') throw Object.assign(new Error('x'), { name: 'NetworkError' });
+    return null;
+  };
+  await click('Send');
+  assert.doesNotMatch(root.textContent!, /Nothing in Sent\./);
+  assert.ok(button('Try again'));
+});
+
 // ---- List ----
 
 test('F58: a slow answer for the folder left behind is ignored', async () => {
@@ -397,6 +454,66 @@ test('F58: a reload from an older screen loads the folder on show', async () => 
   await click('Undo');
   assert.deepEqual(sent('mailMove')[0].args, ['new-id', 'inbox']);
   assert.deepEqual(sent('mailFolder').at(-1)!.args, ['sent', 0]);
+});
+
+// ---- Signing out in another tab ----
+
+/** Mail drawn with a snapshot the test changes, as a new one arriving from storage would. */
+function account(logins: { mail?: string }, route = ['mail', 'inbox', 'm1']) {
+  view.render(view.h(view.Mail, { snap: { ...snap, logins }, now: 0, route }), root);
+  return settle();
+}
+
+test('signing out empties an open Mail: the list, the message and what was being written', async () => {
+  hash = '#/mail/inbox/m1';
+  await account({ mail: 'u' });
+  assert.match(root.textContent!, /Subject m2/);
+  assert.match(root.textContent!, /Hello/);
+  await click('Forward');
+  typeIn('Message', 'Half a thought');
+  await settle();
+
+  await account({});
+  assert.doesNotMatch(root.textContent!, /Subject|Hello|Half a thought/);
+  assert.ok(root.querySelector('.error-row a'), 'the Sign in row');
+  assert.match(root.textContent!, /Sign in/);
+  assert.equal(hash, '#/mail/inbox');
+  let warned = false;
+  fire('beforeunload', { preventDefault: () => (warned = true) });
+  assert.equal(warned, false, 'nothing is left to ask about');
+});
+
+test('an answer on its way when the login goes never lands', async () => {
+  let reply!: (v: MailHeader[]) => void;
+  answer = (rpc) => (rpc === 'mailFolder' ? new Promise((yes) => (reply = yes)) : null);
+  await account({ mail: 'u' }, ['mail', 'inbox']);
+  await account({}, ['mail', 'inbox']);
+  reply([header('late')]);
+  await settle();
+  assert.doesNotMatch(root.textContent!, /late/);
+  await account({ mail: 'u' }, ['mail', 'inbox']);
+  assert.doesNotMatch(root.textContent!, /Subject late/);
+});
+
+test('another account: its own list, and the last one\'s message is not asked for', async () => {
+  hash = '#/mail/inbox/m1';
+  await account({ mail: 'u' });
+  asked.length = 0;
+  answer = (rpc) => (rpc === 'mailFolder' ? [header('theirs')] : worker()(rpc));
+  await account({ mail: 'other' });
+  assert.match(root.textContent!, /Subject theirs/);
+  assert.doesNotMatch(root.textContent!, /Subject m2|Hello/);
+  assert.equal(sent('mailMessage').length, 0);
+  assert.equal(hash, '#/mail/inbox');
+});
+
+test('the message left open when signing out opens again afterwards', async () => {
+  hash = '#/mail/inbox/m1';
+  await account({ mail: 'u' });
+  await account({});
+  await account({ mail: 'u' }, ['mail', 'inbox']);
+  await account({ mail: 'u' });
+  assert.match(root.textContent!, /Hello/);
 });
 
 // ---- Search ----
@@ -479,7 +596,7 @@ test('F51: a reply shows fixed lines, with nothing to edit and no Cc and Bcc', a
   assert.equal(input('To'), null);
   assert.equal(input('Cc'), null);
   assert.equal(input('Subject'), null);
-  assert.equal(button('Cc and Bcc'), null);
+  assert.equal(button('Cc, Bcc'), null);
   const lines = [...root.querySelectorAll('.compose .line .fixed')].map((e) => e.textContent);
   assert.deepEqual(lines, ['Prof Example', 'Bob', 'RE: Lab 5']);
   typeIn('Message', 'Thanks');
@@ -713,6 +830,19 @@ test('F74: an answer to what is no longer typed is ignored', async () => {
   assert.equal(root.querySelector('.suggest'), null);
 });
 
+test('suggestions start at three letters', async () => {
+  await show('#/mail/inbox');
+  await click('New');
+  input('To')!.dispatchEvent(new window.Event('focus'));
+  answer = (rpc) => (rpc === 'mailLookup' ? [] : worker()(rpc));
+  typeIn('To', 'sa');
+  await settle(300);
+  assert.equal(sent('mailLookup').length, 0);
+  typeIn('To', 'sar');
+  await settle(300);
+  assert.deepEqual(sent('mailLookup').map((a) => a.args[0]), ['sar']);
+});
+
 // ---- Files ----
 
 function pick(files: unknown[]) {
@@ -730,6 +860,8 @@ test('F166: picked files show as rows, can be removed, and go out as base64', as
   await settle();
   const rows = [...root.querySelectorAll('.compose .file')].map((r) => r.textContent);
   assert.deepEqual(rows, ['a.txt5 B', 'b.bin2 B']);
+  const parts = [...root.querySelector('.compose fieldset')!.children];
+  assert.ok(parts.findIndex((e) => e.classList.contains('files')) < parts.findIndex((e) => e.tagName === 'TEXTAREA'), 'the rows sit above the text');
   await click('Remove b.bin');
   assert.equal(root.querySelectorAll('.compose .file').length, 1);
   await click('Send');
@@ -787,4 +919,40 @@ test('F166: a failed send with files keeps the composer and refreshes Drafts', a
   assert.match(root.textContent!, /Mail didn't send it\. Try again\. A copy may be in Drafts\./);
   assert.ok(input('Message'));
   assert.deepEqual(sent('mailFolder')[0].args, ['drafts', 0]);
+});
+
+// ---- The toolbar popup ----
+
+test('F52 and F166: the popup attaches in a tab, and going there with something written asks first', async () => {
+  const opened: string[] = [];
+  (g.chrome as { tabs?: unknown }).tabs = { create: async ({ url }: { url: string }) => void opened.push(url) };
+  // Where the view is shown is settled as the module loads, so it takes a copy of its own.
+  const place = g.location as { search: string };
+  place.search = '?frame=popup';
+  const popup = (await import(`data:text/javascript;base64,${Buffer.from(`${bundle.outputFiles[0].text}\n// popup`).toString('base64')}`)) as View;
+  place.search = '';
+  const App = () => popup.h(popup.Mail, { snap, now: 0, route: popup.useRoute() });
+  hash = '#/mail/inbox';
+  popup.render(popup.h(App), root);
+  await settle();
+
+  const toTab = 'Open Mail in a tab to attach files';
+  await click('New');
+  assert.equal(input('Attach file'), null);
+  await click(toTab);
+  assert.equal(root.querySelector('.dialog'), null);
+  assert.equal(input('Message'), null);
+  assert.deepEqual(opened, ['ext://pages/app.html#/mail/inbox']);
+
+  await click('New');
+  typeIn('Message', 'Half a thought');
+  await settle();
+  await click(toTab);
+  assert.ok(root.querySelector('.dialog'));
+  assert.equal(opened.length, 1);
+  await inDialog('Save draft');
+  assert.equal(sent('mailSaveDraft').length, 1);
+  assert.equal(opened[1], 'ext://pages/app.html#/mail/drafts');
+
+  popup.render(null, root);
 });

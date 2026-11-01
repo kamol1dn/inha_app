@@ -34,6 +34,7 @@ release build). What is left from it:
   this term; the parser follows Moodle's markup and was checked on a finished quiz).
 - **Attachments** open in an app on the phone and can be added when writing, and mail can be
   searched. All three are tested only against fakes; they haven't run against the live server.
+- **The VOD player** (`lib/features/vod_player_screen.dart`) has run only against a stand-in WebView, and its APK builds: nothing has played on a phone yet. To check there: that a video plays, its fullscreen, and that the percentage moves after Back.
 - **Waiting on the student:** installing the phone APK (sent as
   `app-arm64-v8a-release.apk`) and signing in on the phone; real absence limits per course
   (Settings > Absence limits); choosing a Phase B direction.

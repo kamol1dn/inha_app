@@ -15,6 +15,7 @@ import {
   edupage,
   forgetEclassOwner,
   ins,
+  keptAlive,
   mail,
   mailPageSize,
   refresh,
@@ -151,11 +152,11 @@ serve(
       mailChanged();
     },
     async mailSend(_, m) {
-      await mail.send(m);
+      await keptAlive(() => mail.send(m));
       mailChanged();
     },
     async mailSaveDraft(_, m) {
-      await mail.saveDraft(m);
+      await keptAlive(() => mail.saveDraft(m));
     },
     async mailMove(_, id, to) {
       const moved = await mail.move(id, to);
@@ -163,7 +164,7 @@ serve(
       return moved;
     },
     mailLookup: (_, q) => mail.lookup(q),
-    mailAttachment: (_, id) => mail.attachment(id),
+    mailAttachment: (_, id) => keptAlive(() => mail.attachment(id)),
 
     async eclassAutoLogin() {
       if (!(await readLogin('eclass'))) return false;
@@ -173,13 +174,6 @@ serve(
       await eclass.ensureLoggedIn();
       void refresh('eclass');
       return true;
-    },
-
-    async eclassRemember(sender, username, password) {
-      if (!fromHost(sender, 'eclass.inha.ac.kr')) throw new Error('Not from eClass');
-      await saveLogin('eclass', { username, password });
-      eclass.forgetRejected();
-      await setEclassStop(null);
     },
 
     async eclassLoggedOut(sender) {
@@ -193,7 +187,7 @@ serve(
     async insAdoptTab(sender) {
       const tab = sender.tab?.id;
       if (!fromHost(sender, 'ins.inha.uz') || tab == null) throw new Error('Not from INS');
-      await chrome.storage.session.set({ [INS_ADOPTED_TABS]: [...(await insTabs(INS_ADOPTED_TABS)), tab] });
+      await chrome.storage.session.set({ [INS_ADOPTED_TABS]: [...new Set([...(await insTabs(INS_ADOPTED_TABS)), tab])] });
     },
 
     async insLogin(sender) {

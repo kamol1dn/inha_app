@@ -11,6 +11,7 @@ import '../ui/theme/status_colors.dart';
 import 'common.dart';
 import 'course_detail_screen.dart';
 import 'deadline_tile.dart';
+import 'vod_player_screen.dart';
 
 const _kindNames = {
   DeadlineKind.assignment: 'Assignment',
@@ -50,6 +51,12 @@ class _DeadlineSheet extends StatelessWidget {
     final item = eclassItemUrl(d);
     final link = item ?? (course == null ? null : eclassCourseUrl(course.id));
     final start = d.start;
+    final moduleId = vod?.moduleId ?? d.moduleId;
+    final offer = d.kind != DeadlineKind.vod
+        ? null
+        : vodOffer(moduleId: moduleId, opens: start ?? vod?.opens, closes: d.end, done: vod?.done == true, now: now);
+    final watchable = offer == VodOffer.watch || offer == VodOffer.watchAgain;
+    final place = offer == VodOffer.watch ? data.prefs.vodPosition(moduleId!) : null;
 
     final when = d.kind == DeadlineKind.vod && start != null
         ? 'Watch from ${dayDateTime(start)} to ${dayDateTime(d.end)}'
@@ -120,10 +127,39 @@ class _DeadlineSheet extends StatelessWidget {
             const SizedBox(height: 12),
             Text('No watch progress in eClass for this video yet.', style: muted),
           ],
+          if (place != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Continue from ${playPosition(place)}', style: muted?.tnum),
+            ),
           if (d.dismissed && d.kind != DeadlineKind.assignment && d.kind != DeadlineKind.quiz && vod?.done != true)
             StatusLine(Status.ok, doneText(d), padding: const EdgeInsets.only(top: 12)),
           const SizedBox(height: 24),
-          if (link != null)
+          if (watchable)
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  watchVod(context,
+                      moduleId: moduleId!,
+                      title: rowTitle(d.title),
+                      courseId: course?.id ?? d.courseId,
+                      resume: offer == VodOffer.watch);
+                },
+                child: Text(offer == VodOffer.watch ? 'Watch' : 'Watch again'),
+              ),
+            ),
+          // One filled button to a sheet: beside Watch, this one is a text button.
+          if (link != null && watchable)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: TextButton(onPressed: () => openUrl(context, link), child: const Text('Open in eClass')),
+              ),
+            )
+          else if (link != null)
             SizedBox(
               width: double.infinity,
               child: FilledButton(

@@ -6,8 +6,10 @@ import { useState } from 'preact/hooks';
 import { isMarked, itemScore, plainNumber, type CourseGrades, type GradeItem } from '../../core/models.ts';
 import type { Snapshot } from '../../core/store.ts';
 import { CourseScore, markedLine, type ScoreLine } from '../../data/scores.ts';
-import { courseUrl, gradesUrl } from '../../services/eclass/links.ts';
-import { eclassTarget, ErrorRow, Icon, isStale, Skeleton, Stale } from '../common.tsx';
+import { rowTitle } from '../../data/format.ts';
+import { courseUrl, gradeItemUrl, gradesUrl } from '../../services/eclass/links.ts';
+import { eclassTarget, ErrorRow, Icon, isStale, NoData, Stale, StatusLine } from '../common.tsx';
+import { readWhatIf } from '../derive.ts';
 
 /** A course's accumulated score and how much is marked, leading to its scores. */
 export function ScoresRow({ g, showCourse = false }: { g: CourseGrades; showCourse?: boolean }) {
@@ -23,6 +25,13 @@ export function ScoresRow({ g, showCourse = false }: { g: CourseGrades; showCour
   );
 }
 
+/** An item's name, tidied as on Deadlines. An activity's opens it in eClass, where the professor's feedback is; the what-if field stays outside the link. */
+function ItemName({ item }: { item: GradeItem }) {
+  const url = gradeItemUrl(item);
+  const name = rowTitle(item.name);
+  return url ? <a class="t-bl" href={url} target={eclassTarget}>{name}</a> : <span class="t-bl">{name}</span>;
+}
+
 const Mark = ({ item }: { item: GradeItem }) =>
   isMarked(item) ? <span class="t-tm tnum grade-mark">{itemScore(item)}</span> : <span class="t-bm muted">Not marked</span>;
 
@@ -32,7 +41,7 @@ function PlainRows({ items }: { items: GradeItem[] }) {
     <div class="rows">
       {items.map((i) => (
         <div key={i.key} class="row" style={{ alignItems: 'center' }}>
-          <div class="main"><span class="t-bl">{i.name}</span></div>
+          <div class="main"><ItemName item={i} /></div>
           <Mark item={i} />
         </div>
       ))}
@@ -41,36 +50,40 @@ function PlainRows({ items }: { items: GradeItem[] }) {
 }
 
 function LineRow({ line, onScore }: { line: ScoreLine; onScore: (v: number | null) => void }) {
+  // The field is left to itself, so a redraw can't wipe what is being typed.
+  const [bad, setBad] = useState(false);
   const worth = plainNumber(line.worth);
   if (line.item && line.marked) {
     return (
       <div class="row" style={{ alignItems: 'center' }}>
         <div class="main">
-          <span class="t-bl">{line.name}</span>
+          <ItemName item={line.item} />
           <span class="t-bm muted tnum">{plainNumber(line.earned)} of {worth} points</span>
         </div>
         <Mark item={line.item} />
       </div>
     );
   }
-  const name = line.item ? line.name : 'Nothing posted yet';
   return (
     <div class="row" style={{ alignItems: 'center' }}>
       <div class="main">
-        <span class="t-bl">{name}</span>
+        {line.item ? <ItemName item={line.item} /> : <span class="t-bl">Nothing posted yet</span>}
         <span class="t-bm muted tnum">{worth} points</span>
+        {bad && <StatusLine status="warning">Out of {plainNumber(line.max)}. This one isn't counted.</StatusLine>}
       </div>
       <span class="score-open">
         <input
           class="input score-field"
           inputMode="decimal"
           placeholder="–"
-          aria-label={`What-if score for ${line.name}`}
+          aria-label={`What-if score for ${rowTitle(line.name)}`}
+          aria-invalid={bad}
           onInput={(e) => {
             const input = e.target as HTMLInputElement;
-            input.value = input.value.replace(/[^0-9.]/g, '');
-            const v = input.value === '' ? NaN : Number(input.value);
-            onScore(Number.isNaN(v) ? null : v);
+            const read = readWhatIf(input.value, line.max);
+            input.value = read.text;
+            setBad(read.bad);
+            onScore(read.value);
           }}
         />
         <span class="t-bm muted tnum">{line.item ? `/ ${plainNumber(line.max)}` : '%'}</span>
@@ -175,14 +188,15 @@ export function CourseScores({ snap, now, id }: { snap: Snapshot; now: number; i
   const state = snap.state.eclass;
   const err = state?.error ?? state?.marksError;
   if (!g) {
-    if (err) return <ErrorRow service="eclass" error={err} />;
-    return cached ? <p class="empty">eClass has no marks for this course.</p> : <Skeleton lines={6} />;
+    if (cached) return err ? <ErrorRow service="eclass" error={err} at={cached.fetchedAt} /> : <p class="empty">eClass has no marks for this course.</p>;
+    return state?.marksError ? <ErrorRow service="eclass" error={state.marksError} /> : <NoData snap={snap} service="eclass" />;
   }
   const score = CourseScore.of(g);
   return (
     <div style={{ maxWidth: '760px' }}>
-      {err && <ErrorRow service="eclass" error={err} />}
+      {err && <ErrorRow service="eclass" error={err} at={cached!.fetchedAt} />}
       {isStale(snap, 'eclass', cached!.fetchedAt, now) && <Stale at={cached!.fetchedAt} />}
+      <div class="course-head"><h2 class="t-hs">{g.course.name}</h2></div>
       {score ? <Scored score={score} /> : <Unweighted g={g} />}
       <div style={{ marginTop: '8px' }}>
         <a class="btn" style={{ marginLeft: '-12px' }} href={g.source === 'gradebook' ? gradesUrl(id) : courseUrl(id)} target={eclassTarget}>

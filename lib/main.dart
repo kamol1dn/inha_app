@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'app.dart';
 import 'data/app_data.dart';
 import 'data/services.dart';
+import 'features/mail_screen.dart' show deleteMailFiles;
 import 'models/models.dart' show Service;
 import 'notifications/background.dart';
 import 'notifications/home_widgets.dart';
@@ -29,7 +30,11 @@ Future<void> main() async {
   widgetTaps().listen((key) => taps.value = key);
   data.onReminderDataChanged = () => _syncReminders(notifier, data);
   data.onWidgetDataChanged = updateHomeWidgets;
-  data.onSignedOut = (s) => s == Service.eclass ? notifier.forgetEclass() : Future.value();
+  data.onSignedOut = (s) => switch (s) {
+        Service.eclass => notifier.forgetEclass(),
+        Service.mail => deleteMailFiles(),
+        _ => Future<void>.value(),
+      };
   await initBackground(backgroundMain);
   await registerPeriodicRefresh();
 

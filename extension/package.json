@@ -1,6 +1,6 @@
 {
   "name": "iut-eclass-extension",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "IUT for eClass: a new eClass with INS grades, university mail and the timetable built in.",
   "type": "module",

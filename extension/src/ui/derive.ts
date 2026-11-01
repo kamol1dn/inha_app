@@ -2,11 +2,12 @@
 // exams, the next class, Today's lines, Deadlines' sections, the tally's strokes.
 
 import { describeError, type ErrorInfo } from '../core/errors.ts';
-import { plainNumber, type CourseAttendance, type Course, type Deadline, type DeadlineKind, type GradeRecord, type Lesson, type Service, type VodProgress } from '../core/models.ts';
+import { isGraded, plainNumber, type CourseAttendance, type Course, type Deadline, type DeadlineKind, type GradeRecord, type GradeReport, type Lesson, type Service, type VodProgress } from '../core/models.ts';
 import { defaultDeadlineKinds, type Settings, type Snapshot } from '../core/store.ts';
 import { classFreeDays, currentPeriod, matchExams, studentCourses, type ExamMatch, type MyExam } from '../data/exams.ts';
 import { atTime, classWhen, dayDate, dayDateTime, dayKey, duration, HOUR, isoWeekday, midnight, pastWhen, relative, rowTitle, updatedAt } from '../data/format.ts';
 import { AbsenceState, courseFor, courseOf, deadlineStatus, isDone, isDue, markedDone, troubleOrder, vodFor, type Status } from '../data/status.ts';
+import { eclassBase } from '../services/eclass/links.ts';
 
 const classFree = classFreeDays();
 
@@ -171,6 +172,9 @@ export function oldestFetch(snap: Snapshot): number | null {
   return at.length ? Math.min(...at) : null;
 }
 
+/** A notification's link, only when it stays on eClass: the link comes from a message's content. */
+export const noticeUrl = (n: { url: string | null }): string | null => (n.url?.startsWith(`${eclassBase}/`) ? n.url : null);
+
 // ---- Failures ----
 
 const isNetwork = (e: ErrorInfo | null | undefined) => e?.name === 'NetworkError' && !e.certificate && !e.status;
@@ -191,8 +195,8 @@ export function errorLine(error: ErrorInfo, service: Service, at?: number | null
 
 // ---- Deadlines ----
 
-/** Past class periods say nothing: they are shown from now on, while the chip is on. */
-const onShow = (d: Deadline, now: number) => isDue(d) || d.end >= now;
+/** Past a day it is only old cache: the upcoming page no longer lists it. */
+const onShow = (d: Deadline, now: number) => d.end > now - 24 * HOUR;
 
 export interface DeadlineSections {
   /** Not done and past its time, oldest first. */
@@ -274,14 +278,33 @@ export function termLine(records: GradeRecord[], gpa: number | null): string {
   return gpa == null ? creditWord(credits) : `GPA ${gpa.toFixed(2)} · ${creditWord(credits)}`;
 }
 
-/** Credits earned by INS category, largest first: graded and passed. */
+/** Letters that earn no credit. */
+const noCreditLetters = new Set(['F', 'NP', 'U', 'W', 'I']);
+
+/** Credits earned per INS category ("MR-M"), most first. A course taken more than once counts by its latest result, in a term with a result. */
 export function creditsByCategory(records: GradeRecord[]): [string, number][] {
+  const latest = new Map<string, GradeRecord>();
+  for (const r of records.filter(isGraded)) {
+    const key = r.code || r.name;
+    const seen = latest.get(key);
+    if (!seen || r.termKey >= seen.termKey) latest.set(key, r);
+  }
   const by = new Map<string, number>();
-  for (const r of records) {
-    if (!r.category || r.letter === '' || r.letter === '-' || r.letter === 'F') continue;
-    by.set(r.category, (by.get(r.category) ?? 0) + r.credits);
+  for (const r of latest.values()) {
+    if (noCreditLetters.has(r.letter)) continue;
+    const category = r.category || 'Other';
+    by.set(category, (by.get(category) ?? 0) + r.credits);
   }
   return [...by.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+/** INS's own required-credit totals, to compare with the rows counted above; null when it gives neither. */
+export function insTotals(r: GradeReport): string | null {
+  const parts = [
+    ...(r.majorRequired != null ? [`${plainNumber(r.majorRequired)} major-required`] : []),
+    ...(r.generalRequired != null ? [`${plainNumber(r.generalRequired)} general-required`] : []),
+  ];
+  return parts.length ? `INS counts ${parts.join(' and ')} credits.` : null;
 }
 
 // ---- What-if scores ----

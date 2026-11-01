@@ -37,6 +37,12 @@ String duration(Duration d) {
   return '$h h $m min';
 }
 
+/// 23:10 / 1:05:09: a place in a video, from its seconds.
+String playPosition(int seconds) {
+  final h = seconds ~/ 3600, m = seconds ~/ 60 % 60, s = seconds % 60;
+  return h == 0 ? '$m:${_pad(s)}' : '$h:${_pad(m)}:${_pad(s)}';
+}
+
 /// now / in 25 min / in 2 h 15 min / in 6 h / Sat 23:59 / 3 Nov 23:59 / Overdue 2 h
 String relative(DateTime t, {DateTime? now}) {
   final n = now ?? DateTime.now();

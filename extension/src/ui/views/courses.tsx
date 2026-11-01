@@ -4,11 +4,11 @@
 import { useState } from 'preact/hooks';
 import { isGraded, type CourseAttendance } from '../../core/models.ts';
 import { writeSettings, type Snapshot } from '../../core/store.ts';
-import { dayDate, duration, fromDayKey, updatedAt } from '../../data/format.ts';
+import { dayDate, dayKey, duration, fromDayKey, isoWeekday, updatedAt, weekdayShort } from '../../data/format.ts';
 import { CourseScore } from '../../data/scores.ts';
 import { AbsenceState, courseDeadlines, gradeFor, heldClasses, lessonsOf, troubleOrder } from '../../data/status.ts';
 import { courseUrl, vodUrl } from '../../services/eclass/links.ts';
-import { eclassTarget, ErrorRow, Icon, isStale, OfflineRow, Skeleton, SourceError, Stale, StatusLine, Tally } from '../common.tsx';
+import { eclassTarget, Icon, isStale, NoData, OfflineRow, SourceError, Stale, StatusLine, Tally } from '../common.tsx';
 import { courseLine, creditWord, troubleLine, vodWindow } from '../derive.ts';
 import { DeadlineRow } from '../rows.tsx';
 import { ScoresRow } from './scores.tsx';
@@ -17,14 +17,13 @@ const markWord = { present: 'Present', absent: 'Absent', late: 'Late', other: 'O
 
 export function Courses({ snap, now }: { snap: Snapshot; now: number }) {
   const att = snap.cache.attendance?.value;
-  const err = snap.state.eclass?.error;
   const limits = snap.settings.absenceLimits;
   const lessons = snap.cache.lessons?.value ?? [];
   if (!att) {
     return (
       <>
         <OfflineRow snap={snap} />
-        {err ? <SourceError snap={snap} service="eclass" /> : <Skeleton lines={6} />}
+        <NoData snap={snap} service="eclass" />
       </>
     );
   }
@@ -137,11 +136,19 @@ export function AbsenceLimits({ snap }: { snap: Snapshot }) {
   );
 }
 
+/** The next date on this weekday, today included. */
+const nextWeekday = (weekday: number, from: Date) => new Date(from.getFullYear(), from.getMonth(), from.getDate() + ((weekday - isoWeekday(from) + 7) % 7));
+
 /** The course isn't on the list: why, instead of bars that never resolve. */
 function NoCourse({ snap }: { snap: Snapshot }) {
-  const err = snap.state.eclass?.error;
-  if (err && !snap.cache.attendance) return <ErrorRow service="eclass" error={err} />;
-  if (!snap.cache.attendance) return <Skeleton lines={6} />;
+  if (!snap.cache.attendance) {
+    return (
+      <>
+        <OfflineRow snap={snap} />
+        <NoData snap={snap} service="eclass" />
+      </>
+    );
+  }
   return (
     <>
       <p class="t-bl" style={{ margin: '16px 0 8px' }}>eClass has no course with this link.</p>
@@ -172,6 +179,8 @@ export function CourseDetail({ snap, now, id }: { snap: Snapshot; now: number; i
   return (
     <div class="cols">
       <div>
+        <OfflineRow snap={snap} />
+        <SourceError snap={snap} service="eclass" at={snap.cache.attendance!.fetchedAt} />
         <div class="course-head">
           <h2 class="t-hs">{c.course.name}</h2>
           <span class="t-bm muted">{[c.course.code, c.course.professor].filter(Boolean).join(' · ')}</span>
@@ -257,10 +266,10 @@ export function CourseDetail({ snap, now, id }: { snap: Snapshot; now: number; i
             <h2>In the timetable</h2>
             <div class="rows">
               {lessons.map((l) => (
-                <div key={`${l.weekday}${l.start}`} class="row" style={{ minHeight: '48px' }}>
-                  <span class="t-num tnum" style={{ width: '120px' }}>{['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][l.weekday - 1]} {l.start}</span>
+                <a key={`${l.weekday}${l.start}`} class="row" href={`#/schedule/${dayKey(nextWeekday(l.weekday, today))}`} style={{ minHeight: '48px' }}>
+                  <span class="t-num tnum" style={{ width: '120px' }}>{weekdayShort(l.weekday)} {l.start}</span>
                   <span class="main t-bm">{[l.room, l.kind, l.teacher].filter(Boolean).join(' · ')}</span>
-                </div>
+                </a>
               ))}
             </div>
           </section>

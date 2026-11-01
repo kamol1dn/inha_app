@@ -12,6 +12,7 @@ import '../ui/format/format.dart';
 import '../ui/theme/status_colors.dart';
 import 'absence_widgets.dart';
 import 'common.dart';
+import 'update_prompt.dart';
 
 /// What each notification switch covers, in the student's words (DESIGN.md 11).
 const _channelText = {
@@ -160,6 +161,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SectionHeader('About'),
         if (_version case final v?) ListTile(title: Text('Version $v')),
+        ListTile(
+          title: const Text('Check for updates'),
+          subtitle: const Text('New versions are on the GitHub releases page'),
+          onTap: () => checkForUpdateNow(context),
+        ),
         ListTile(
           title: const Text('Open-source licences'),
           subtitle: const Text('Including the Fraunces and Public Sans fonts'),
@@ -393,6 +399,9 @@ class _LoginSheet extends StatefulWidget {
 
 class _LoginSheetState extends State<_LoginSheet> {
   late final _user = TextEditingController(text: widget.existing?.username);
+
+  /// The login saved now: what the sheet opened with, until it saves another.
+  late Credentials? _saved = widget.existing;
   final _pass = TextEditingController();
   bool _showPassword = false;
   bool _busy = false;
@@ -433,7 +442,10 @@ class _LoginSheetState extends State<_LoginSheet> {
 
   Future<void> _saveAndTest() async {
     final user = _user.text.trim();
-    final password = _pass.text.isEmpty ? widget.existing?.password : _pass.text;
+    // The saved password only ever goes with its own ID.
+    final previous = _saved;
+    final another = previous != null && previous.username.trim() != user;
+    final password = _pass.text.isEmpty && !another ? previous?.password : _pass.text;
     if (user.isEmpty || password == null || password.isEmpty) {
       _resultFor = _typed;
       setState(() => _missing = user.isEmpty ? 'Enter the student ID.' : 'Enter the password.');
@@ -448,8 +460,13 @@ class _LoginSheetState extends State<_LoginSheet> {
       _missing = null;
       _tested = false;
     });
-    await store.write(widget.service, Credentials(user, password));
+    final login = Credentials(user, password);
+    await store.write(widget.service, login);
+    _saved = login;
     await sessions.reset(widget.service); // so the test really logs in
+    // Another account now: nothing of the last one's stays, or its marks and
+    // courses would be compared with this one's and announced as news.
+    if (another) await data.forget(widget.service);
     final error = await data.testLogin(widget.service);
     if (!mounted) return;
     setState(() {
@@ -501,7 +518,12 @@ class _LoginSheetState extends State<_LoginSheet> {
     await switch (widget.service) {
       Service.eclass => data.refreshEclass(),
       Service.ins => data.refreshGrades(),
-      Service.mail => data.refreshMail(),
+      // Whichever folder the Mail tab is left on.
+      Service.mail => Future.wait([
+          data.refreshMail(),
+          for (final f in MailFolder.values)
+            if (f != MailFolder.inbox) data.refreshMailFolder(f),
+        ]),
       Service.edupage => Future<void>.value(),
     };
     data.prefs.setAccountCheck(widget.service, null);

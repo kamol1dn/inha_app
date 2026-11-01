@@ -939,6 +939,16 @@ describe('EwsClient', () => {
       assert.deepEqual(readSoap(sent[3].body).find('SendItem')!.find('ItemId')!.attributes, { Id: 'd1', ChangeKey: 'k3' });
     });
 
+    test('a file takes minutes on a slow link, up or down; other requests keep the short timeout', async () => {
+      const { client, sent } = make(route());
+      await client.send({ kind: 'fresh', to: ['a@inha.example'], attachments: [file] });
+      assert.deepEqual(sent.map((r) => r.req.timeoutMs), [undefined, 180_000, undefined]);
+
+      const got = make(() => [200, response('GetAttachment', '<m:ResponseCode>NoError</m:ResponseCode><m:Attachments><t:FileAttachment><t:Name>a.pdf</t:Name><t:ContentType>application/pdf</t:ContentType><t:Content>QUJD</t:Content></t:FileAttachment></m:Attachments>')]);
+      assert.equal((await got.client.attachment('a1')).base64, 'QUJD');
+      assert.equal(got.sent[0].req.timeoutMs, 180_000);
+    });
+
     test('without files a message still goes out in one request', async () => {
       const { client, sent } = make(() => [200, response('CreateItem', '<m:ResponseCode>NoError</m:ResponseCode>')]);
       await client.send({ kind: 'fresh', to: ['a@inha.example'], attachments: [] });

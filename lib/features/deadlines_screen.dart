@@ -84,13 +84,14 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
           EmptyNote('Nothing matches these filters.',
               action: 'Clear filters', onAction: () => setState(prefs.resetDeadlineFilters)),
         if (overdue.isNotEmpty) ...[
-          const SectionHeader('Overdue', first: true, status: Status.danger),
+          SectionHeader('Overdue', first: true, status: Status.danger, source: data.deadlines),
           for (final d in overdue) DueRow(d, attendance: att, now: now, line: false),
         ],
         for (final e in groups.entries) ...[
+          // The first header on screen carries the stale marker.
           SectionHeader(e.key,
               first: e.key == groups.keys.first && overdue.isEmpty,
-              source: e.key == groups.keys.first ? data.deadlines : null),
+              source: e.key == groups.keys.first && overdue.isEmpty ? data.deadlines : null),
           for (final d in e.value) DueRow(d, attendance: att, now: now, line: false),
         ],
         const SizedBox(height: 24),

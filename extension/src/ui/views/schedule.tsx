@@ -3,11 +3,11 @@
 
 import { Fragment, type ComponentChildren } from 'preact';
 import type { Snapshot } from '../../core/store.ts';
-import { periodName, roomChoice } from '../../data/exams.ts';
+import { examRoom, periodName, roomChoice, sittingsLine } from '../../data/exams.ts';
 import { clock, dayDate, dayKey, duration, fromDayKey, isoWeekday, weekdayShort } from '../../data/format.ts';
 import { AbsenceState, courseFor } from '../../data/status.ts';
-import { ErrorRow, isStale, Skeleton, Stale, StatusLine } from '../common.tsx';
-import { classesOn, examMatch, examsOn, isClassFree } from '../derive.ts';
+import { isStale, OfflineRow, Skeleton, SourceError, Stale, StatusLine } from '../common.tsx';
+import { classesOn, examMatch, examsOn, isClassFree, nextClassSentence } from '../derive.ts';
 import { lessonLine } from '../rows.tsx';
 
 /** Monday of the week on show: this week, or next week on the weekend. */
@@ -47,7 +47,8 @@ export function Schedule({ snap, now, day: dayParam }: { snap: Snapshot; now: nu
       start: e.exam.start,
       end: e.exam.end,
       title: e.course.eclass?.name ?? e.course.name,
-      line: `${match ? periodName(match.period) : 'Exam'} · ${e.room ?? roomChoice(e.exam.rooms)}`,
+      line: `${match ? periodName(match.period) : 'Exam'} · ${examRoom(e) ?? roomChoice(e.exam.rooms)}`,
+      extra: e.sittings > 1 ? <StatusLine status="info">{sittingsLine(e)}</StatusLine> : undefined,
       href: '#/exams',
     })),
   ].sort((a, b) => a.start - b.start);
@@ -62,15 +63,17 @@ export function Schedule({ snap, now, day: dayParam }: { snap: Snapshot; now: nu
           </a>
         ))}
       </nav>
-      {err && <ErrorRow service="edupage" error={err} />}
+      <OfflineRow snap={snap} />
+      <SourceError snap={snap} service="edupage" at={snap.cache.lessons?.fetchedAt} />
       {snap.cache.lessons && isStale(snap, 'edupage', snap.cache.lessons.fetchedAt, now) && <Stale at={snap.cache.lessons.fetchedAt} />}
-      {!lessons && !err ? (
-        <Skeleton lines={4} />
+      {/* With no timetable the error row above stands alone: "no classes" would be a guess. */}
+      {!lessons && !rows.length ? (
+        !err && <Skeleton lines={4} />
       ) : rows.length === 0 ? (
         <p class="empty">
           {isClassFree(day) && match
             ? `No classes in ${periodName(match.period).toLowerCase()} week, and no exam of yours on ${dayDate(day)}.`
-            : `No classes on ${dayDate(day)}.`}
+            : `No classes on ${dayDate(day)}. ${nextClassSentence(lessons ?? [], day, now)}`.trim()}
         </p>
       ) : (
         <div class="rail">

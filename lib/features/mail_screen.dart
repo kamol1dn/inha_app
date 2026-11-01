@@ -42,12 +42,27 @@ String safeFileName(String name) {
   return String.fromCharCodes(letters.take(most - end.length)) + end;
 }
 
+/// The folder in the app's cache that holds the file last opened.
+const _mailFiles = 'mail_files';
+
 /// Writes [f] into [dir] and returns it. Only the file last opened stays there:
 /// mail shouldn't pile up on the phone.
 Future<File> saveMailFile(MailFile f, Directory dir) async {
   if (await dir.exists()) await dir.delete(recursive: true);
   await dir.create(recursive: true);
   return File('${dir.path}/${safeFileName(f.name)}').writeAsBytes(f.bytes, flush: true);
+}
+
+/// Removes the file last opened: signing out says the account's mail leaves the
+/// phone, and nothing else would ever replace it. One that can't be removed
+/// isn't worth failing the sign-out for.
+Future<void> deleteMailFiles({Future<Directory> Function() cache = getTemporaryDirectory}) async {
+  try {
+    final dir = Directory('${(await cache()).path}/$_mailFiles');
+    if (await dir.exists()) await dir.delete(recursive: true);
+  } on FileSystemException catch (e) {
+    debugPrint('mail files: $e');
+  }
 }
 
 /// The type to open a file as, or null to go by its name: mail servers often
@@ -61,7 +76,7 @@ String? openAsType(String contentType) {
 /// the sentence saying what stopped it, or null when it opened.
 Future<String?> openMailFile(MailFile f) async {
   final cache = await getTemporaryDirectory();
-  final file = await saveMailFile(f, Directory('${cache.path}/mail_files'));
+  final file = await saveMailFile(f, Directory('${cache.path}/$_mailFiles'));
   final opened = await OpenFilex.open(file.path, type: openAsType(f.contentType));
   return switch (opened.type) {
     ResultType.done => null,
@@ -149,6 +164,15 @@ class _MailScreenState extends State<MailScreen> {
           const SkeletonRows(count: 6, timeColumn: false)
         else
           SourceError(list, 'Mail', onRetry: refresh),
+        // There is no header to carry the marker, so like the rail it gets a line.
+        if (list.error == null && isStale(list, const Duration(minutes: 30)))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: StaleMarker(list.data!.fetchedAt, what: folder.label),
+            ),
+          ),
         if (list.data != null && mails.isEmpty) EmptyNote(_emptyText(folder)),
         for (final (i, m) in mails.indexed) ...[
           if (i > 0) const Rule(),
@@ -328,8 +352,9 @@ class _MailSearchScreenState extends State<MailSearchScreen> {
   @override
   void initState() {
     super.initState();
+    // A page that failed waits for Retry, not for the next bit of scrolling.
     _scroll.addListener(() {
-      if (_scroll.position.extentAfter < 600) _loadMore();
+      if (_scroll.position.extentAfter < 600 && _moreError == null) _loadMore();
     });
   }
 
@@ -609,7 +634,7 @@ class _MailMessageScreenState extends State<MailMessageScreen> {
       problem = SnackBar(
         content: Text(switch (e) {
           LoginRequired() => 'Mail sign-in needed.',
-          _ when isNetworkError(e) => "Couldn't reach Mail. Check the connection.",
+          _ when isNetworkError(e) => "Couldn't get $name from Mail. Check the connection.",
           ParseError() when e is! EwsError => "Couldn't open $name here. An attached message opens only in webmail.",
           _ => "Couldn't get $name from Mail.",
         }),
@@ -633,6 +658,8 @@ class _MailMessageScreenState extends State<MailMessageScreen> {
     // Sent mail can be forwarded; a reply would go back to the student.
     final canReply = folder != MailFolder.sent && folder != MailFolder.notes;
     final canForward = folder != MailFolder.notes;
+    // A deleted draft goes back to Drafts, where it opens in the composer.
+    final restoreTo = m?.isDraft == true ? MailFolder.drafts : MailFolder.inbox;
     return HeadingScaffold(
       title: subject,
       actions: [
@@ -644,9 +671,9 @@ class _MailMessageScreenState extends State<MailMessageScreen> {
           ),
         if (folder == MailFolder.deleted)
           IconButton(
-            tooltip: 'Move to Inbox',
+            tooltip: 'Move to ${restoreTo.label}',
             icon: const Icon(Icons.restore_from_trash_outlined),
-            onPressed: _busy ? null : () => _move(MailFolder.inbox),
+            onPressed: _busy ? null : () => _move(restoreTo),
           )
         else
           IconButton(

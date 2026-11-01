@@ -8,6 +8,8 @@ a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* Boxless fields turn the outline off; the keyboard still has to see where it is. */
+.compose .line input:focus-visible, .compose textarea:focus-visible, .mail .search input:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 4px; }
 
 /* ---- Shell ---- */
 .shell { display: grid; grid-template-columns: 232px 1fr; height: 100vh; }
@@ -29,20 +31,25 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 main { overflow-y: auto; min-width: 0; }
 .bar { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--rule); display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 32px; }
-.bar h1 { margin: 0; font: 600 24px/30px var(--serif); }
+.bar h1 { margin: 0; min-width: 0; font: 600 24px/30px var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar .btn, .bar .icon-btn { flex: none; white-space: nowrap; }
 .bar .sub { color: var(--muted); }
 .bar .grow { flex: 1; }
 .page { padding: 8px 32px 48px; max-width: 1180px; }
-.cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 48px; align-items: start; }
-.cols > * { min-width: 0; }
+/* Two columns when the content has room, whatever the viewport: eClass's content area is narrower than the window. */
+.cols { display: flex; flex-wrap: wrap; column-gap: 48px; align-items: flex-start; }
+.cols > * { min-width: 0; max-width: 100%; }
+.cols > :first-child { flex: 1.25 1 420px; }
+.cols > :last-child { flex: 1 1 320px; }
 
 @media (max-width: 860px) {
   .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .nav { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--rule); padding: 0 8px; overflow-x: auto; overflow-y: hidden; }
-  .nav .brand, .nav .group, .nav a.course, .nav .spacer, .nav .foot { display: none; }
+  .nav .brand, .nav .group, .nav a.course, .nav .spacer { display: none; }
   .nav a.item { padding: 0 12px; white-space: nowrap; }
+  .nav .foot { margin: 0; padding: 0 12px; border: 0; justify-content: center; }
+  .nav .foot a { font: 500 14px/20px var(--sans); white-space: nowrap; }
   .bar, .page { padding-left: 16px; padding-right: 16px; }
-  .cols { grid-template-columns: 1fr; gap: 0; }
 }
 
 /* ---- Sections and rows ---- */
@@ -53,10 +60,24 @@ main { overflow-y: auto; min-width: 0; }
 .rows > * + * { border-top: 1px solid var(--rule); }
 .row { display: flex; gap: 16px; align-items: flex-start; padding: 12px 0; min-height: 56px; color: inherit; text-decoration: none; }
 a.row:hover, button.row:hover { background: var(--low); text-decoration: none; }
-button.row { width: 100%; border: 0; background: none; text-align: left; cursor: pointer; }
+button.row { width: 100%; background: none; text-align: left; cursor: pointer; }
+:where(button.row) { border: 0; } /* no specificity, so the rule between .rows still draws */
 .row .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .row .side { text-align: right; flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.row .side .btn { min-height: 32px; white-space: nowrap; }
+.row.with-action { padding: 0; }
+.row-link { flex: 1; min-width: 0; display: flex; gap: 16px; align-items: flex-start; padding: 12px 0; color: inherit; text-decoration: none; }
+a.row-link:hover { background: var(--low); text-decoration: none; }
+.row.with-action .side { padding: 12px 0 8px; }
+.row-time { flex: none; min-width: 48px; display: flex; flex-direction: column; text-align: right; }
 .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clamp2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wrap { overflow-wrap: anywhere; }
+.intro { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 16px 0 8px; }
+.intro .grow { flex: 1 1 200px; min-width: 0; }
+.status-lines { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.course-head { display: flex; flex-direction: column; gap: 2px; padding-top: 16px; }
+.course-head h2 { margin: 0; overflow-wrap: anywhere; }
 
 .status { display: inline-flex; align-items: center; gap: 6px; font: 400 14px/20px var(--sans); }
 .status svg { width: 16px; height: 16px; flex: none; }
@@ -65,6 +86,7 @@ button.row { width: 100%; border: 0; background: none; text-align: left; cursor:
 
 .error-row { background: var(--high); padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin: 12px 0; }
 .error-row .grow { flex: 1; }
+.offline-icon { flex: none; width: 20px; height: 20px; color: var(--muted); }
 .stale { color: var(--warning); font: 400 12px/16px var(--sans); display: inline-flex; gap: 4px; align-items: center; }
 .stale svg { width: 14px; height: 14px; }
 .skeleton { background: var(--highest); border-radius: 4px; height: 16px; margin: 12px 0; }
@@ -77,6 +99,8 @@ button.row { width: 100%; border: 0; background: none; text-align: left; cursor:
 .btn.filled:hover { filter: brightness(1.08); }
 .btn.outline { border: 1px solid var(--outline); }
 .btn.quiet { color: var(--muted); }
+.btn.danger { color: var(--danger); }
+.btn.danger:hover { background: var(--danger-c); }
 .btn:disabled { opacity: .5; cursor: default; }
 .btn svg { width: 18px; height: 18px; }
 .icon-btn { width: 36px; height: 36px; display: inline-grid; place-items: center; border: 0; background: none; border-radius: 8px; color: var(--muted); cursor: pointer; }
@@ -87,7 +111,7 @@ button.row { width: 100%; border: 0; background: none; text-align: left; cursor:
 .input { min-height: 40px; padding: 8px 12px; border: 1px solid var(--outline); border-radius: 8px; background: var(--lowest); width: 100%; }
 textarea.input { min-height: 240px; resize: vertical; font: 400 15px/22px var(--sans); }
 .check { display: flex; align-items: center; gap: 12px; min-height: 40px; cursor: pointer; }
-.check input { width: 18px; height: 18px; accent-color: var(--primary); }
+.check input { flex: none; width: 18px; height: 18px; accent-color: var(--primary); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { min-height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--outline); background: none; color: var(--muted); font: 500 13px/18px var(--sans); cursor: pointer; }
 .chip.on { background: var(--primary-container); color: var(--on-primary-container); border-color: transparent; }
@@ -112,13 +136,11 @@ a.rail-row:hover { background: var(--low); text-decoration: none; }
 .rail-row .nowline { display: flex; align-items: center; gap: 12px; color: var(--primary); font: 600 15px/20px var(--sans); }
 .rail-row .nowline::after { content: ''; flex: 1; height: 1px; background: var(--primary); }
 .rail-row.day .body { padding-top: 20px; }
+.room-line { display: block; white-space: nowrap; overflow: hidden; }
 .rail-row.past { color: var(--muted); }
 
 /* ---- Tally (absences) ---- */
-.tally { display: inline-flex; gap: 3px; align-items: center; height: 18px; }
-.tally i { width: 2px; height: 16px; background: currentColor; display: block; border-radius: 1px; }
-.tally i.faint { background: var(--rule); }
-.tally i.gap { width: 6px; background: none; }
+.tally { display: block; flex: none; max-width: 100%; }
 
 /* ---- Progress bar (VOD) ---- */
 .meter { height: 4px; background: var(--rule); border-radius: 2px; overflow: hidden; width: 100%; }
@@ -155,7 +177,7 @@ a.rail-row:hover { background: var(--low); text-decoration: none; }
 .compose .line input { border: 0; background: none; min-height: 44px; outline: none; }
 .compose .line .fixed { padding: 12px 0; overflow-wrap: anywhere; }
 .compose textarea { width: 100%; border: 0; background: none; outline: none; min-height: 320px; padding: 16px 0; font: 400 15px/24px var(--sans); resize: vertical; }
-.compose .files { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-top: 12px; }
+.compose .files { border-bottom: 1px solid var(--rule); }
 .compose .file { display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .compose .file > svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
 .compose .file .ellipsis { flex: 0 1 auto; min-width: 0; }
@@ -165,7 +187,22 @@ a.rail-row:hover { background: var(--low); text-decoration: none; }
 .suggest { position: absolute; z-index: 5; background: var(--bright); border: 1px solid var(--rule); border-radius: 8px; min-width: 320px; max-height: 280px; overflow-y: auto; }
 .suggest button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 12px; cursor: pointer; }
 .suggest button:hover, .suggest button.on { background: var(--low); }
-@media (max-width: 1100px) { .mail { grid-template-columns: 0 minmax(260px, 340px) 1fr; } .mail .folders { display: none; } }
+/* Below three panes the folders and New become a strip over the list and reader. */
+@media (max-width: 1100px) {
+  .mail { grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .mail .folders { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; padding: 4px 8px; overflow: auto hidden; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .mail .folders > div { flex: none; padding: 0 8px 0 0 !important; }
+  .mail .folders .btn { width: auto !important; }
+  .mail .folders a { flex: none; gap: 8px; padding: 8px 12px; white-space: nowrap; }
+}
+/* Then one pane at a time: the list, or what is open in its place. The bar's Back returns to the list. */
+@media (max-width: 700px) {
+  .mail { grid-template-columns: minmax(0, 1fr); }
+  .mail > .reader.empty { display: none; }
+  .mail:has(> .reader:not(.empty)) > .list { display: none; }
+  .mail .reader { padding: 16px; }
+}
+@media (max-width: 860px) { .shell .mail { height: calc(100vh - 65px - 41px); } body.inline .shell .mail { height: calc(100vh - 65px); } }
 
 /* ---- Dialog (sheets) ---- */
 .scrim { position: fixed; inset: 0; background: rgb(0 0 0 / .32); display: grid; place-items: center; z-index: 10; }
@@ -174,6 +211,7 @@ a.rail-row:hover { background: var(--low); text-decoration: none; }
 .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--inverse); color: var(--on-inverse); padding: 12px 16px; border-radius: 8px; display: flex; gap: 16px; align-items: center; z-index: 20; }
 .toast .btn { color: var(--primary-container); min-height: 28px; }
+.toast .btn:hover { background: transparent; text-decoration: underline; }
 
 /* ---- Week strip ---- */
 .week { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 8px; }
@@ -183,17 +221,17 @@ a.rail-row:hover { background: var(--low); text-decoration: none; }
 .week a.on { border-bottom-color: var(--on-surface); }
 
 /* ---- Grades ---- */
-.gpa { display: flex; gap: 48px; padding: 16px 0 8px; }
-.gpa div { display: flex; flex-direction: column; }
+.gpa { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 16px 0 8px; }
 .grade-letter { font: 600 19px/24px var(--serif); min-width: 32px; text-align: right; }
 
 /* ---- Scores (a course's marks from eClass) ---- */
 .score-total { display: flex; align-items: baseline; gap: 8px; padding-top: 16px; }
-.whatif { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.whatif { display: flex; align-items: center; gap: 8px; margin-top: 8px; position: sticky; top: 65px; z-index: 1; background: var(--surface); }
 .whatif .grow { flex: 1; }
 .grade-mark { flex: none; text-align: right; }
 .score-open { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .score-field { width: 72px; min-height: 36px; padding: 6px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+.score-field[aria-invalid="true"] { border-color: var(--warning); }
 
 /* ---- Drawer (mail over an eClass page) ---- */
 body.drawer .shell { grid-template-columns: 1fr; }
@@ -202,10 +240,17 @@ body.drawer .mail { height: calc(100vh - 65px); }
 
 /* ---- Popup ---- */
 body.popup { width: 400px; height: 560px; }
-body.popup .shell { grid-template-columns: 1fr; grid-template-rows: 1fr; }
-body.popup .nav { display: none; }
+body.popup .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+body.popup main { grid-row: 1; }
+body.popup .bar { gap: 8px; min-height: 56px; }
 body.popup .bar, body.popup .page { padding-left: 16px; padding-right: 16px; }
-body.popup .cols { grid-template-columns: 1fr; gap: 0; }
+/* The tabs at the foot, under the one strong rule (DESIGN.md 6). Settings is the gear in the bar. */
+body.popup .nav { grid-row: 2; flex-direction: row; padding: 0; border: 0; border-top: 1px solid var(--on-surface); overflow-x: auto; overflow-y: hidden; }
+body.popup .nav .brand, body.popup .nav .group, body.popup .nav a.course, body.popup .nav .spacer, body.popup .nav .foot { display: none; }
+body.popup .nav a.item { position: relative; flex: 1 0 auto; flex-direction: column; justify-content: center; gap: 2px; min-height: 52px; padding: 0 4px; font: 500 11px/16px var(--sans); }
+body.popup .nav a.item.on { font-weight: 600; }
+body.popup .nav a.item .count { position: absolute; top: 2px; left: calc(50% + 6px); margin: 0; }
+body.popup .shell .mail { height: calc(100vh - 57px - 53px); }
 
 /* ---- Welcome ---- */
 .welcome { max-width: 640px; margin: 0 auto; padding: 48px 24px; }

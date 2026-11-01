@@ -46,6 +46,11 @@ class ExamsTarget extends NotificationTarget {
   const ExamsTarget();
 }
 
+/// A bell-menu item: everything the menu lists, with its text, over Today.
+class NoticesTarget extends NotificationTarget {
+  const NoticesTarget();
+}
+
 /// The item is gone (submitted, moved, the course dropped): its tab. A
 /// home-screen widget opens a tab directly with `tab:<n>`.
 class TabTarget extends NotificationTarget {
@@ -86,7 +91,7 @@ NotificationTarget? notificationTarget(
     return day == null ? const TabTarget(1) : ScheduleTarget(day.weekday);
   }
   if (key.startsWith(examKeyPrefix)) return const ExamsTarget();
-  if (key.startsWith(noticeKeyPrefix)) return const TabTarget(0); // Today lists them
+  if (key.startsWith(noticeKeyPrefix)) return const NoticesTarget();
   if (key.startsWith(tabKeyPrefix)) {
     final tab = int.tryParse(key.substring(tabKeyPrefix.length));
     return tab != null && tab >= 0 && tab <= 4 ? TabTarget(tab) : null;

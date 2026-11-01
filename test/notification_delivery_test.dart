@@ -37,7 +37,7 @@ CourseAttendance absences(List<DateTime> days) => CourseAttendance(course: ai, c
       for (final d in days) AttendanceEntry(date: d, label: '3Class', mark: AttendanceMark.absent),
     ]);
 
-MyExam exam({String? room, List<String> rooms = const ['B209', 'B210'], DateTime? start}) {
+MyExam exam({String? room, List<String> rooms = const ['B209', 'B210'], DateTime? start, int sittings = 1}) {
   final at = start ?? DateTime(2026, 10, 29, 10);
   final e = Exam(
       slot: 'Th-3',
@@ -46,7 +46,7 @@ MyExam exam({String? room, List<String> rooms = const ['B209', 'B210'], DateTime
       cell: 'Database',
       rooms: rooms,
       read: ExamCell.parse('Database'));
-  return MyExam(const StudentCourse('Database'), e, room: room);
+  return MyExam(const StudentCourse('Database'), e, room: room, sittings: sittings);
 }
 
 EclassNotification notice(int id, {bool read = false, DateTime? time}) =>
@@ -269,6 +269,15 @@ void main() {
       expect(planNotifications(now: before, exams: [exam(rooms: const ['B101'])]).first.body, endsWith('· Room B101'));
     });
 
+    test('the same words and keys as the extension (extension/test/notify.test.ts)', () {
+      final halls = planNotifications(now: before, exams: [exam(rooms: const ['B304(A)', 'B304(B)', 'B304(C)', 'B305'])]);
+      expect(halls.first.body, 'Thu 29 Oct, 10:00 · Room not set: B304(A–C) or B305');
+      expect(planNotifications(now: before, exams: [exam(rooms: const [])]).first.body, 'Thu 29 Oct, 10:00 · Room not set');
+      expect(planNotifications(now: before, exams: [exam(rooms: const ['B1'], sittings: 2)]).first.body,
+          'Thu 29 Oct, 10:00 · Room B1. The timetable lists 2 sittings; check which is yours.');
+      expect(halls.first.key, matches(RegExp(r'^exam:th-3\|database\|\d{8}T\d{4}Z\|eve$')));
+    });
+
     test('found after the evening: sent now; none once it has started', () {
       final morning = DateTime(2026, 10, 29, 7, 45);
       final out = planNotifications(now: morning, exams: [exam()]);
@@ -341,9 +350,9 @@ void main() {
       expect(planNotifications(now: now, notices: [notice(1, time: now.subtract(const Duration(days: 30)))]), isEmpty);
     });
 
-    test('a tap opens Today', () {
+    test('a tap opens the list of them, with their text', () {
       final key = planNotifications(now: now, notices: [notice(1)]).single.key;
-      expect((notificationTarget(key) as TabTarget).tab, 0);
+      expect(notificationTarget(key), isA<NoticesTarget>());
     });
   });
 }

@@ -47,8 +47,8 @@ import {
 
 export const defaultEndpoint = 'https://mail.inha.uz/EWS/Exchange.asmx';
 
-/** An attachment can take a while to go up on a slow link. */
-const uploadTimeoutMs = 3 * 60_000;
+/** An attachment can take a while to travel on a slow link, in either direction. */
+const transferTimeoutMs = 3 * 60_000;
 
 /** NetBIOS domain of the IUT mail server, from its NTLM challenge (INHA / INHA.local). OWA's form login adds it for you; EWS Basic auth does not. */
 export const windowsDomain = 'INHA';
@@ -193,7 +193,7 @@ export class EwsClient {
   private async attach(parent: { id: string; changeKey: string }, files: OutgoingAttachment[]): Promise<{ id: string; changeKey: string }> {
     let at = parent;
     for (const file of files) {
-      at = parseCreateAttachment(await this.call(createAttachmentEnvelope(at, file), uploadTimeoutMs)) ?? at;
+      at = parseCreateAttachment(await this.call(createAttachmentEnvelope(at, file), transferTimeoutMs)) ?? at;
     }
     return at;
   }
@@ -210,7 +210,7 @@ export class EwsClient {
 
   /** One attachment's file, base64 as Exchange sends it, for a download. */
   async attachment(id: string): Promise<{ name: string; contentType: string; base64: string }> {
-    return parseAttachment(await this.call(getAttachmentEnvelope(id)));
+    return parseAttachment(await this.call(getAttachmentEnvelope(id), transferTimeoutMs));
   }
 
   /** POSTs envelope and returns the SOAP response text. */

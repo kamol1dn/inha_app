@@ -113,7 +113,9 @@ export const isGraded = (r: GradeRecord) => r.letter !== '' && r.letter !== '-';
  * out, so a term of only those has no GPA. Null then.
  */
 export function termGpa(records: GradeRecord[]): number | null {
-  const counted = records.filter((r) => /^[A-DF][+0-]?$/.test(r.letter) && r.credits > 0);
+  const counted = records.filter((r) => /^([A-D][+0-]|F)$/.test(r.letter) && r.credits > 0);
+  // A figure off the 4.5 scale (a passing letter with 0 points, say) means none here can be trusted.
+  if (counted.some((r) => r.points > 4.5 || (r.points <= 0 && r.letter !== 'F'))) return null;
   const credits = counted.reduce((sum, r) => sum + r.credits, 0);
   return credits ? counted.reduce((sum, r) => sum + r.points * r.credits, 0) / credits : null;
 }
@@ -124,6 +126,9 @@ export interface GradeReport {
   creditsEarned: number;
   yearOfStudy: number;
   records: GradeRecord[];
+  /** INS's own totals of required credits (JUNPIL, KYOPIL), to compare with what the records add up to. */
+  majorRequired?: number | null;
+  generalRequired?: number | null;
 }
 
 /** A number the way a mark reads best: 37, 0.37, 6.25, never 37.00. */

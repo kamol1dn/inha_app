@@ -32,6 +32,15 @@ import {
   type Submission,
 } from './parsers.ts';
 
+/** The calendar pages put together, and which of them failed. */
+export interface Upcoming {
+  deadlines: Deadline[];
+  /** The first failure, or null when every page answered. */
+  failed: unknown;
+  calendarFailed: boolean;
+  failedCourses: Course[];
+}
+
 /**
  * Every fetch that lands on the login page (session expired) logs in once
  * with the saved credentials and retries once. A login eClass refused is not
@@ -101,10 +110,10 @@ export class EclassClient {
   /**
    * Every upcoming event: the calendar's page, which appears to stop at 10
    * events (class periods use up the slots), and each course's own page. A page
-   * that fails costs only what it alone would have shown, and comes back in
-   * `failed`; with no page at all, or a login needed, it throws.
+   * that fails costs only what it alone would have shown, and is reported; with
+   * no page at all, or a login needed, it throws.
    */
-  async allUpcoming(courses: Course[]): Promise<{ deadlines: Deadline[]; failed: unknown }> {
+  async allUpcoming(courses: Course[]): Promise<Upcoming> {
     const pages = await Promise.allSettled([
       this.upcoming(),
       ...courses.map((c) => this.fetchParsed<Deadline[]>(`/calendar/view.php?view=upcoming&course=${c.id}`, parseUpcoming, true)),
@@ -112,7 +121,12 @@ export class EclassClient {
     const lost = pages.flatMap((p) => (p.status === 'rejected' ? [p.reason as unknown] : []));
     const login = lost.find((e) => e instanceof LoginRequired);
     if (login || lost.length === pages.length) throw login ?? lost[0];
-    return { deadlines: mergeUpcoming(pages.flatMap((p) => (p.status === 'fulfilled' ? [p.value] : []))), failed: lost[0] ?? null };
+    return {
+      deadlines: mergeUpcoming(pages.flatMap((p) => (p.status === 'fulfilled' ? [p.value] : []))),
+      failed: lost[0] ?? null,
+      calendarFailed: pages[0].status === 'rejected',
+      failedCourses: courses.filter((_, i) => pages[i + 1].status === 'rejected'),
+    };
   }
 
   /** Class attendance and VOD progress for one course. */
@@ -273,6 +287,19 @@ export class EclassClient {
     }
     if (res.status >= 400) throw new NetworkError(`eclass.inha.ac.kr answered ${res.status}`, res.status);
   }
+}
+
+/**
+ * What a refresh found, with the cache's events still to come standing in for
+ * the pages that failed, as AppData._upcoming does. A course whose page answered
+ * says for itself what is coming, so a moved or deleted event doesn't stay. With
+ * no course list (`courses` null) or no calendar page, there is no telling which
+ * courses are covered, so everything stays.
+ */
+export function withKnownUpcoming(found: Upcoming, known: Deadline[], courses: Course[] | null, now: number): Deadline[] {
+  const all = found.calendarFailed || courses == null;
+  const kept = known.filter((d) => d.end > now && (all || found.failedCourses.some((c) => d.courseId === c.id || d.courseName === c.name)));
+  return mergeUpcoming([found.deadlines, kept]);
 }
 
 /** Events from several calendar pages, each once. The same event reads the same on every page. */

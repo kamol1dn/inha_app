@@ -1,19 +1,21 @@
 // What the extension adds into eClass's own layout, each where it fits:
 // header buttons, a menu section, a line of facts on every course in the
 // course list, side blocks for today, what's due and mail, the course strip,
-// the time left on an activity, and the panel the app's views open in.
+// and the time left on an activity.
 
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { isMarked, plainNumber } from '../core/models.ts';
+import { isMarked, plainNumber, type Service } from '../core/models.ts';
 import type { Snapshot } from '../core/store.ts';
 import { CourseScore } from '../data/scores.ts';
-import { classFreeDays, currentPeriod, matchExams, roomChoice, studentCourses } from '../data/exams.ts';
-import { atTime, clock, dayHeader, dayKey, duration, isoWeekday, pastWhen, relative, rowTitle } from '../data/format.ts';
-import { AbsenceState, courseDeadlines, deadlineStatus, gradeFor, isDone, needsAttention, vodFor } from '../data/status.ts';
-import { itemUrl } from '../services/eclass/links.ts';
-import { useRoute } from '../ui/common.tsx';
+import { currentPeriod, matchExams, roomChoice, studentCourses } from '../data/exams.ts';
+import { clock, dayHeader, dayKey, duration, pastWhen, relative, rowTitle } from '../data/format.ts';
+import { AbsenceState, courseDeadlines, deadlineStatus, gradeFor, isDone, markedDone, needsAttention, vodFor } from '../data/status.ts';
+import { isStale, Stale, useNow, useRoute } from '../ui/common.tsx';
+import { classesOn, errorLine } from '../ui/derive.ts';
+import { courseListSelector, dueHref, dueWhen } from './pages.ts';
 import { Icon, shadowHost, StatusLine, Tally, useSnap, viewUrl, type IconName } from './shared.tsx';
+import { openView } from './view.tsx';
 
 // ---------------------------------------------------------------- left menu
 
@@ -28,7 +30,7 @@ function MenuSection({ host }: { host: HTMLElement }) {
     return () => ro.disconnect();
   }, []);
   const now = Date.now();
-  const due = snap ? needsAttention(snap.cache.deadlines?.value ?? [], snap.cache.attendance?.value ?? [], now).length : 0;
+  const due = snap ? needsAttention(snap.cache.deadlines?.value ?? [], snap.cache.attendance?.value ?? [], now, snap.settings.dismissed).length : 0;
   const unread = snap?.cache.mailUnread?.value ?? 0;
   const exams = !!currentPeriod(now);
   const here = useRoute()[0];
@@ -57,18 +59,20 @@ function MenuSection({ host }: { host: HTMLElement }) {
 // ---------------------------------------------------------------- course list
 
 /**
- * A course's facts at the right of its row in eClass's list, in fixed columns
- * so they line up down the list: absences, VODs, the eClass score, the INS grade, the next thing due.
+ * A course's facts in its row of eClass's list, in fixed columns so they line
+ * up down the list: absences, VODs, the eClass score, the INS grade, the next
+ * thing due. How many columns fit, and whether they go under the course's name,
+ * is moodle.css's call from the room the row has.
  */
-function CourseFacts({ courseId }: { courseId: number }) {
+export function CourseFacts({ courseId }: { courseId: number }) {
   const snap = useSnap();
+  const now = useNow();
   const c = snap?.cache.attendance?.value.find((x) => x.course.id === courseId);
   if (!snap || !c) return null;
-  const now = Date.now();
   const att = snap.cache.attendance!.value;
   const s = AbsenceState.of(c, snap.settings.absenceLimits);
   const grade = gradeFor(c.course, snap.cache.grades?.value);
-  const next = courseDeadlines(c.course, snap.cache.deadlines?.value ?? [], att, now).find((d) => d.end > now && !isDone(d, att));
+  const next = courseDeadlines(c.course, snap.cache.deadlines?.value ?? [], att, now).find((d) => d.end > now && !isDone(d, att, snap.settings.dismissed));
   const nextStatus = next ? deadlineStatus(next, now) : null;
   const watched = c.vods.filter((v) => v.percent >= 100).length;
   const marks = snap.cache.courseGrades?.value.find((g) => g.course.id === courseId);
@@ -100,7 +104,7 @@ function CourseFacts({ courseId }: { courseId: number }) {
       <span class="fact grade">{grade && grade.letter !== '-' ? grade.letter : ''}</span>
       <span class="fact next">
         {next && (
-          <a class={nextStatus ? `fg-${nextStatus}` : ''} href={itemUrl(next) ?? '#'} title={next.title}>
+          <a class={nextStatus ? `fg-${nextStatus}` : ''} href={dueHref(next)} title={next.title}>
             <span class="k">{relative(next.end, now)}</span>
             <span class="ellipsis">{rowTitle(next.title)}</span>
           </a>
@@ -112,10 +116,21 @@ function CourseFacts({ courseId }: { courseId: number }) {
 
 // ---------------------------------------------------------------- side blocks
 
+/** A block's service failed: one line naming it, leading to the view that has the next step (DESIGN.md 7). */
+function Failed({ snap, service, to }: { snap: Snapshot; service: Service; to: string }) {
+  const error = snap.state[service]?.error;
+  if (!error) return null;
+  return <StatusLine status="danger"><a href={viewUrl(error.name === 'SetupNeeded' ? 'settings' : to)}>{errorLine(error, service)}</a></StatusLine>;
+}
+
+/** On a block's header, when what it shows is old or its service failed (DESIGN.md 7). */
+const asOf = (snap: Snapshot, service: Service, fetchedAt: number | undefined, now: number) =>
+  isStale(snap, service, fetchedAt, now) ? <Stale at={fetchedAt!} /> : null;
+
 function TodayBlock({ snap, now }: { snap: Snapshot; now: number }) {
   const today = new Date(now);
   const lessons = snap.cache.lessons?.value;
-  const free = classFreeDays();
+  const failed = !!snap.state.edupage?.error;
   const period = currentPeriod(now);
   const match = period ? matchExams(period, studentCourses(lessons ?? [], snap.cache.attendance?.value ?? []), snap.settings.classGroup, snap.settings.examRooms) : null;
 
@@ -124,11 +139,7 @@ function TodayBlock({ snap, now }: { snap: Snapshot; now: number }) {
     const exams = (match?.exams ?? [])
       .filter((e) => dayKey(e.exam.start) === dayKey(day))
       .map((e) => ({ start: e.exam.start, end: e.exam.end, title: e.course.eclass?.name ?? e.course.name, room: e.room ?? '', line: e.room ? 'Exam' : `Exam · ${roomChoice(e.exam.rooms)}` }));
-    const classes = free.has(dayKey(day))
-      ? []
-      : (lessons ?? [])
-          .filter((l) => l.weekday === isoWeekday(day))
-          .map((l) => ({ start: atTime(day, l.start)!.getTime(), end: atTime(day, l.end)!.getTime(), title: l.subject, room: l.room, line: [l.kind, l.teacher].filter(Boolean).join(' · ') }));
+    const classes = classesOn(day, lessons ?? []).map(({ start, end, lesson: l }) => ({ start, end, title: l.subject, room: l.room, line: [l.kind, l.teacher].filter(Boolean).join(' · ') }));
     return [...exams, ...classes].sort((a, b) => a.start - b.start);
   };
 
@@ -162,7 +173,9 @@ function TodayBlock({ snap, now }: { snap: Snapshot; now: number }) {
     <section class="sblock">
       <h2>
         <a class="link h" href={viewUrl('schedule')}>Today</a>
+        {asOf(snap, 'edupage', snap.cache.lessons?.fetchedAt, now)}
       </h2>
+      {failed && (!lessons || !shown) && <Failed snap={snap} service="edupage" to="schedule" />}
       {shown ? (
         <>
           <div class="label fg-primary">{label}</div>
@@ -183,7 +196,7 @@ function TodayBlock({ snap, now }: { snap: Snapshot; now: number }) {
           )}
         </>
       ) : (
-        <div class="muted">No classes this week.</div>
+        !failed && <div class="muted">{lessons ? 'No classes this week.' : 'Updating…'}</div>
       )}
     </section>
   );
@@ -192,27 +205,29 @@ function TodayBlock({ snap, now }: { snap: Snapshot; now: number }) {
 function DueBlock({ snap, now }: { snap: Snapshot; now: number }) {
   const att = snap.cache.attendance?.value ?? [];
   const all = snap.cache.deadlines?.value;
-  if (!all) return null;
-  const soon = needsAttention(all, att, now).slice(0, 6);
+  const failed = !!snap.state.eclass?.error;
+  if (!all && !failed) return null;
+  const soon = needsAttention(all ?? [], att, now, snap.settings.dismissed).slice(0, 6);
   return (
     <section class="sblock">
       <h2>
         <a class="link h" href={viewUrl('deadlines')}>Due soon</a>
+        {asOf(snap, 'eclass', snap.cache.deadlines?.fetchedAt, now)}
       </h2>
       {!soon.length ? (
-        <StatusLine status="ok">Nothing due in the next 3 days.</StatusLine>
+        failed ? <Failed snap={snap} service="eclass" to="deadlines" /> : <StatusLine status="ok">Nothing due in the next 3 days.</StatusLine>
       ) : (
         soon.map((d) => {
           const st = deadlineStatus(d, now);
           const vod = vodFor(d, att);
           const what = d.kind === 'vod' ? `${Math.floor(vod?.percent ?? 0)}% watched` : d.kind === 'quiz' ? 'not attempted' : d.kind === 'assignment' ? 'not submitted' : '';
           return (
-            <a key={`${d.moduleId}${d.end}`} class="drow" href={itemUrl(d) ?? '#'}>
+            <a key={`${d.moduleId}${d.end}`} class="drow" href={dueHref(d)}>
               <span class={`t ${st ? `fg-${st}` : ''}`}>{clock(d.end)}</span>
               <span class="grow">
                 <span class="dt">{rowTitle(d.title)}</span>
                 <span class={st ? `small fg-${st}` : 'small muted'}>
-                  {d.end < now ? relative(d.end, now) : `${dayHeader(d.end, new Date(now))} · ${relative(d.end, now)}`}
+                  {dueWhen(d.end, now)}
                   {what ? ` · ${what}` : ''}
                 </span>
                 <span class="small muted ellipsis">{d.courseName}</span>
@@ -225,7 +240,7 @@ function DueBlock({ snap, now }: { snap: Snapshot; now: number }) {
   );
 }
 
-function MailBlock({ snap }: { snap: Snapshot }) {
+function MailBlock({ snap, now }: { snap: Snapshot; now: number }) {
   if (!snap.logins.mail) {
     return (
       <section class="sblock">
@@ -236,16 +251,23 @@ function MailBlock({ snap }: { snap: Snapshot }) {
   }
   const unread = (snap.cache.inbox?.value ?? []).filter((m) => m.unread);
   const count = snap.cache.mailUnread?.value ?? unread.length;
+  const failed = !!snap.state.mail?.error;
+  const known = !!snap.cache.mailUnread || !!snap.cache.inbox;
+  const open = (e: Event, id: string) => {
+    // The message's id stays out of eClass's address: the frame gets it directly.
+    if (openView(`mail/inbox/${encodeURIComponent(id)}`)) e.preventDefault();
+  };
   return (
     <section class="sblock">
       <h2>
         <a class="link h" href={viewUrl('mail/inbox')}>{count ? `${count} unread` : 'Mail'}</a>
+        {asOf(snap, 'mail', (snap.cache.inbox ?? snap.cache.mailUnread)?.fetchedAt, now)}
       </h2>
       {!count ? (
-        <div class="muted">No unread mail.</div>
+        failed ? <Failed snap={snap} service="mail" to="mail/inbox" /> : <div class="muted">{known ? 'No unread mail.' : 'Updating…'}</div>
       ) : (
         unread.slice(0, 3).map((m) => (
-          <a key={m.id} class="mrow" href={viewUrl(`mail/inbox/${encodeURIComponent(m.id)}`)}>
+          <a key={m.id} class="mrow" href={viewUrl('mail/inbox')} onClick={(e) => open(e, m.id)}>
             <span class="grow">
               <span class="dt ellipsis">{m.subject || '(no subject)'}</span>
               <span class="small muted ellipsis">{m.from}</span>
@@ -258,19 +280,15 @@ function MailBlock({ snap }: { snap: Snapshot }) {
   );
 }
 
-function SideBlocks() {
+export function SideBlocks() {
   const snap = useSnap();
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(t);
-  }, []);
+  const now = useNow();
   if (!snap) return null;
   return (
     <div class="side">
       <TodayBlock snap={snap} now={now} />
       <DueBlock snap={snap} now={now} />
-      <MailBlock snap={snap} />
+      <MailBlock snap={snap} now={now} />
     </div>
   );
 }
@@ -280,13 +298,13 @@ function SideBlocks() {
 /** On a course page: absences, VODs, the eClass score, the INS grade and what is due, above eClass's own content. */
 function CourseStrip({ courseId }: { courseId: number }) {
   const snap = useSnap();
+  const now = useNow();
   const c = snap?.cache.attendance?.value.find((x) => x.course.id === courseId);
   if (!snap || !c) return null;
-  const now = Date.now();
   const att = snap.cache.attendance!.value;
   const s = AbsenceState.of(c, snap.settings.absenceLimits);
   const grade = gradeFor(c.course, snap.cache.grades?.value);
-  const due = courseDeadlines(c.course, snap.cache.deadlines?.value ?? [], att, now).filter((d) => !isDone(d, att)).slice(0, 4);
+  const due = courseDeadlines(c.course, snap.cache.deadlines?.value ?? [], att, now).filter((d) => !isDone(d, att, snap.settings.dismissed)).slice(0, 4);
   const watched = c.vods.filter((v) => v.percent >= 100).length;
   const marks = snap.cache.courseGrades?.value.find((g) => g.course.id === courseId);
   const score = marks ? CourseScore.of(marks) : null;
@@ -323,7 +341,7 @@ function CourseStrip({ courseId }: { courseId: number }) {
           {due.map((d) => {
             const st = deadlineStatus(d, now);
             return (
-              <a key={`${d.moduleId}${d.end}`} href={itemUrl(d) ?? '#'}>
+              <a key={`${d.moduleId}${d.end}`} href={dueHref(d)}>
                 <span class={`t ${st ? `fg-${st}` : ''}`}>{clock(d.end)}</span>
                 <span class="grow">{rowTitle(d.title)}</span>
                 <span class={st ? `fg-${st}` : 'muted'}>{relative(d.end, now)}</span>
@@ -337,16 +355,17 @@ function CourseStrip({ courseId }: { courseId: number }) {
 }
 
 /** On an assignment, quiz or VOD page: how long is left, or that it's done. */
-function DueBanner({ moduleId }: { moduleId: number }) {
+export function DueBanner({ moduleId }: { moduleId: number }) {
   const snap = useSnap();
+  const now = useNow();
   const d = snap?.cache.deadlines?.value.find((x) => x.moduleId === moduleId);
   if (!snap || !d) return null;
-  const now = Date.now();
-  const done = isDone(d, snap.cache.attendance?.value ?? []);
+  const done = isDone(d, snap.cache.attendance?.value ?? [], snap.settings.dismissed);
   const st = done ? 'ok' : deadlineStatus(d, now);
+  const doneWord = d.kind === 'quiz' ? 'Attempted' : d.kind === 'vod' ? 'Watched' : 'Submitted';
   return (
     <div class="banner">
-      <span class={`when ${st ? `fg-${st}` : ''}`}>{done ? (d.kind === 'quiz' ? 'Attempted' : d.kind === 'vod' ? 'Watched' : 'Submitted') : relative(d.end, now)}</span>
+      <span class={`when ${st ? `fg-${st}` : ''}`}>{done ? (markedDone(d, snap.settings.dismissed) ? 'Marked done by you' : doneWord) : relative(d.end, now)}</span>
       <span class="muted">
         {d.kind === 'vod' ? 'Window closes' : 'Due'} {new Date(d.end).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
       </span>
@@ -378,15 +397,21 @@ export function decorate(path: string): void {
   }
 
   // The course list on the dashboard: a line of facts on each course.
-  document.querySelectorAll<HTMLElement>('.my-course-lists .course_box').forEach((box) => {
+  const list = document.querySelector(courseListSelector);
+  list?.querySelectorAll<HTMLElement>('.course_box').forEach((box) => {
     const id = Number(new URL(box.querySelector<HTMLAnchorElement>('a.course_link')?.href ?? location.href).searchParams.get('id'));
-    // A column of its own at the row's right, beside eClass's link.
+    // A column of its own beside eClass's link, or under it where the row is narrow.
     if (id) mount(`iut-course-${id}`, (el) => box.append(el), <CourseFacts courseId={id} />);
   });
+  // moodle.css measures the row with a container query, which takes the row's
+  // width from around it. If eClass's layout sizes it by its content instead, the
+  // row comes out with no width: then it is laid out without measuring.
+  const row = list?.querySelector('li');
+  if (row && row.getBoundingClientRect().width < 120) document.documentElement.classList.add('iut-rows-plain');
 
   // The right column: today, what's due and mail above eClass's own blocks.
   const blocks = document.getElementById('page-blocks');
-  if (blocks && document.querySelector('.my-course-lists')) {
+  if (blocks && list) {
     mount('iut-side', (el) => blocks.prepend(el), <SideBlocks />);
     document.documentElement.classList.add('iut-has-due');
   }

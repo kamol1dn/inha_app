@@ -311,13 +311,35 @@ describe('eClass, part by part', () => {
   });
 
   test('a course page failing keeps what it last showed, until it answers', async () => {
-    await writeCache('deadlines', [lab]);
+    await writeCache('deadlines', [{ ...lab, courseId: 2622 }]);
     site.pages.set('/calendar/view.php?view=upcoming&course=2622', { status: 503, body: '' });
     await refresh('eclass').catch(() => {});
     assert.ok((await readCache('deadlines'))!.value.some((d) => d.title === 'Old lab'));
     site.pages.clear();
     await refresh('eclass');
     assert.ok(!(await readCache('deadlines'))!.value.some((d) => d.title === 'Old lab'));
+  });
+
+  test('another course failing keeps only its own: a moved deadline is not listed twice', async () => {
+    const event = (id: number, title: string, course: number) =>
+      `<div class="event"><h3 class="referer"><a href="https://eclass.inha.ac.kr/mod/assign/view.php?id=${id}">${title}</a></h3><span class="date"><a href="/calendar/view.php?view=day&amp;time=1792954500">Sunday</a></span><div class="course"><a href="https://eclass.inha.ac.kr/course/view.php?id=${course}">Course ${course}</a></div></div>`;
+    const stays: Deadline = { ...lab, title: 'Lab of the failing course', courseId: 2626, moduleId: 8, end: Date.now() + 7200e3 };
+    const moved: Deadline = { ...lab, title: 'Lab 5', courseId: 2622, moduleId: 99, moduleType: 'assign', kind: 'assignment', courseName: 'Course 2622', end: Date.now() + 3600e3 };
+    await writeCache('deadlines', [stays, moved]);
+    site.pages.set('/calendar/view.php?view=upcoming&course=2622', { body: signedIn(`<html><body id="page-calendar-view"><div class="maincalendar"><div class="eventlist">${event(99, 'Lab 5', 2622)}</div></div></body></html>`) });
+    site.pages.set('/calendar/view.php?view=upcoming&course=2626', { status: 503, body: '' });
+    await refresh('eclass');
+    const deadlines = (await readCache('deadlines'))!.value;
+    assert.equal(deadlines.filter((d) => d.title === 'Lab 5').length, 1, 'only its new time');
+    assert.notEqual(deadlines.find((d) => d.title === 'Lab 5')!.end, moved.end);
+    assert.ok(deadlines.some((d) => d.title === stays.title));
+  });
+
+  test('with no course list there is no telling what the calendar left out, so it all stays', async () => {
+    await writeCache('deadlines', [lab]);
+    site.pages.set('/', { body: signedIn('<html><body>changed</body></html>') });
+    await refresh('eclass');
+    assert.ok((await readCache('deadlines'))!.value.some((d) => d.title === 'Old lab'));
   });
 
   test('a refresh that finds new eClass notifications announces them after the first look', async () => {
@@ -600,6 +622,15 @@ describe('INS tabs', () => {
     assert.deepEqual(await rpc('insLogin', [], insPage(77)), { username: 'student', password: 'pw' });
     await rpc('insReport', [report, null], insPage(77));
     assert.deepEqual(browser.closedTabs, []);
+    assert.equal(await rpc('insSyncAllowed', [], insPage(77)), false);
+  });
+
+  test('a picked tab whose read failed stays allowed, once, however often it is offered', async () => {
+    await rpc('insAdoptTab', [], insPage(77));
+    await rpc('insReport', [null, { name: 'NetworkError', message: 'x' }], insPage(77));
+    assert.equal(await rpc('insSyncAllowed', [], insPage(77)), true);
+    await rpc('insAdoptTab', [], insPage(77));
+    await rpc('insReport', [report, null], insPage(77));
     assert.equal(await rpc('insSyncAllowed', [], insPage(77)), false);
   });
 

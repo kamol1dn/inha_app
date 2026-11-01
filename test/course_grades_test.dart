@@ -12,6 +12,7 @@ import 'package:inha_app/models/models.dart';
 import 'package:inha_app/notifications/notifier.dart';
 import 'package:inha_app/notifications/routes.dart';
 import 'package:inha_app/notifications/rules.dart';
+import 'package:inha_app/services/eclass/eclass_links.dart';
 import 'package:inha_app/services/eclass/eclass_parsers.dart';
 import 'package:provider/provider.dart';
 
@@ -337,7 +338,7 @@ void main() {
     testWidgets('typing a what-if score moves the projection, and Clear takes it back', (tester) async {
       await show(tester, await withMarks({ai.id: book}), CourseScoresScreen(courseId: ai.id, name: ai.name));
       expect(find.textContaining('With these scores'), findsNothing);
-      await tester.enterText(find.byKey(const ValueKey('category:Final exam/0')), '80');
+      await tester.enterText(find.byKey(const ValueKey('category:Final exam')), '80');
       await tester.pump();
       expect(find.text('With these scores: 48.5 of 100'), findsOneWidget);
       expect(find.text('28.5'), findsOneWidget); // the real score does not move
@@ -346,6 +347,128 @@ void main() {
       await tester.pump();
       expect(find.textContaining('With these scores'), findsNothing);
       expect(find.widgetWithText(TextField, '80'), findsNothing);
+    });
+
+    group('what-if fields', () {
+      // More open rows than a screen holds, each worth 2 points of 40.
+      final long = CourseGrades(course: ai, source: GradeSource.gradebook, percent: 10, categories: const [
+        GradeCategory('Assign', 40),
+      ], items: [
+        for (var i = 0; i < 20; i++)
+          GradeItem(key: 'g$i', name: 'Homework-$i', category: 'Assign', max: 10, weight: 5, categoryWeight: 40),
+      ]);
+
+      Future<void> onPhone(WidgetTester tester, AppData data) async {
+        await show(tester, data, CourseScoresScreen(courseId: ai.id, name: ai.name));
+        tester.view.physicalSize = const Size(412 * 3, 640 * 3);
+        await tester.pump();
+      }
+
+      testWidgets('a score stays in its field when the row scrolls away and comes back', (tester) async {
+        await onPhone(tester, await withMarks({ai.id: long}));
+        await tester.enterText(find.byKey(const ValueKey('g0')), '8');
+        await tester.pump();
+        // The focus moves on, so nothing keeps the first row alive off screen.
+        await tester.enterText(find.byKey(const ValueKey('g1')), '5');
+        await tester.pump();
+        expect(find.text('With these scores: 12.6 of 100'), findsOneWidget);
+
+        final list = find.byType(Scrollable).first;
+        await tester.drag(list, const Offset(0, -2000));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('g0')), findsNothing);
+        await tester.drag(list, const Offset(0, 4000));
+        await tester.pumpAndSettle();
+
+        expect(find.widgetWithText(TextField, '8'), findsOneWidget);
+        expect(find.text('With these scores: 12.6 of 100'), findsOneWidget);
+      });
+
+      testWidgets('the result stays in sight while the list scrolls, and typing keeps the field', (tester) async {
+        await onPhone(tester, await withMarks({ai.id: long}));
+        await tester.scrollUntilVisible(find.byKey(const ValueKey('g10')), 200, scrollable: find.byType(Scrollable).first);
+        await tester.pumpAndSettle();
+        expect(find.text('of 100 so far'), findsNothing); // the total has scrolled away
+        await tester.tap(find.byKey(const ValueKey('g10')));
+        await tester.pump();
+        await tester.enterText(find.byKey(const ValueKey('g10')), '10');
+        await tester.pump();
+        final result = find.text('With these scores: 12 of 100');
+        expect(result, findsOneWidget);
+        expect(tester.getTopLeft(result).dy, greaterThan(0));
+        expect(find.byKey(const ValueKey('g10')), findsOneWidget);
+        expect(tester.testTextInput.isVisible, isTrue);
+      });
+
+      testWidgets('a comma is a decimal point, and what is not a number is refused', (tester) async {
+        expect(parseWhatIf('8,5'), 8.5);
+        expect(parseWhatIf('8.5'), 8.5);
+        expect(parseWhatIf(','), isNull);
+
+        await show(tester, await withMarks({ai.id: long}), CourseScoresScreen(courseId: ai.id, name: ai.name));
+        final field = find.byKey(const ValueKey('g0'));
+        await tester.enterText(field, '8,5');
+        await tester.pump();
+        expect(find.text('With these scores: 11.7 of 100'), findsOneWidget); // 8.5 of 10, not capped from 85
+
+        await tester.enterText(field, '8,5,1');
+        await tester.pump();
+        expect(tester.widget<TextField>(field).controller!.text, '8,5');
+        await tester.enterText(field, 'abc');
+        await tester.pump();
+        expect(tester.widget<TextField>(field).controller!.text, '8,5');
+      });
+
+      testWidgets('a field says what it is for, is 48 tall, and fits 100 at any text scale', (tester) async {
+        final handle = tester.ensureSemantics();
+        for (final scale in [1.0, 2.0]) {
+          await show(tester, await withMarks({ai.id: long}), CourseScoresScreen(courseId: ai.id, name: ai.name), scale: scale);
+          final field = find.byKey(const ValueKey('g0'));
+          expect(tester.getSize(field).height, greaterThanOrEqualTo(48));
+          final painter = TextPainter(
+            text: TextSpan(text: '100', style: InhaApp.light.textTheme.bodyLarge),
+            textScaler: TextScaler.linear(scale),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          expect(tester.getSize(field).width - 16, greaterThanOrEqualTo(painter.width));
+          painter.dispose();
+          expect(find.bySemanticsLabel(RegExp('What-if score for Homework-0')), findsOneWidget);
+        }
+        handle.dispose();
+      });
+    });
+
+    testWidgets('rows read as on Deadlines, without the kind tag', (tester) async {
+      await show(tester, await withMarks({ai.id: book}), CourseScoresScreen(courseId: ai.id, name: ai.name));
+      expect(find.text('Week 6'), findsOneWidget);
+      expect(find.textContaining('[QUIZ]'), findsNothing);
+    });
+
+    test('an item with a module opens its activity; one without has no link', () {
+      const assign = GradeItem(key: 'm1', name: 'Lab 1', moduleId: 7001, moduleType: 'assign');
+      expect(eclassGradeItemUrl(assign).toString(), 'https://eclass.inha.ac.kr/mod/assign/view.php?id=7001');
+      expect(eclassGradeItemUrl(const GradeItem(key: 'g1', name: 'Attendance book')), isNull);
+    });
+
+    testWidgets('a marked row with a module is one tap target; a manual one is not', (tester) async {
+      final marks = CourseGrades(course: ai, source: GradeSource.activities, items: const [
+        GradeItem(key: 'm1', name: 'Lab 1', mark: '8', grade: 8, max: 10, moduleId: 7001, moduleType: 'assign'),
+        GradeItem(key: 'g2', name: 'Attendance book', mark: '14', grade: 14, max: 20),
+      ]);
+      await show(tester, await withMarks({ai.id: marks}), CourseScoresScreen(courseId: ai.id, name: ai.name));
+      expect(find.ancestor(of: find.text('Lab 1'), matching: find.byType(InkWell)), findsOneWidget);
+      expect(find.ancestor(of: find.text('Attendance book'), matching: find.byType(InkWell)), findsNothing);
+    });
+
+    testWidgets('with no answer from eClass it says so, and not that the course has no marks', (tester) async {
+      final (data, eclass, _, _, _) = await makeAppData();
+      eclass.error = LoginRequired(Service.eclass, 'no saved login');
+      await data.refreshEclass();
+      await show(tester, data, CourseScoresScreen(courseId: ai.id, name: ai.name));
+      expect(find.text('eClass sign-in needed.'), findsOneWidget);
+      expect(find.text('Sign in'), findsOneWidget);
+      expect(find.textContaining('has no marks'), findsNothing);
+      expect(find.bySemanticsLabel('Loading'), findsNothing);
     });
 
     testWidgets('a closed grades page: the marks, and why there is no score', (tester) async {

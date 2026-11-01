@@ -61,12 +61,11 @@ export const go = (path: string) => {
   location.hash = `#/${path}`;
 };
 
-/** How the views are shown: inside eClass's own pages, in the toolbar popup, or in a tab of the extension. */
-export const frame: 'inline' | 'popup' | 'tab' =
-  location.host === 'eclass.inha.ac.kr' ? 'inline' : new URLSearchParams(location.search).get('frame') === 'popup' ? 'popup' : 'tab';
+/** How the views are shown: in a frame inside eClass's own pages, in the toolbar popup, or in a tab of the extension. */
+export const frame: 'inline' | 'popup' | 'tab' = ((f) => (f === 'inline' || f === 'popup' ? f : 'tab'))(new URLSearchParams(location.search).get('frame'));
 
-/** Links to eClass pages: in place inside eClass, a new tab from the extension's pages. */
-export const eclassTarget = frame === 'inline' ? '_self' : '_blank';
+/** Links to eClass pages: in place of the page around the frame inside eClass, a new tab from the extension's pages. */
+export const eclassTarget = frame === 'inline' ? '_top' : '_blank';
 
 // ---- Icons (Material Symbols paths, 24px grid) ----
 
@@ -139,6 +138,9 @@ export const Stale = ({ at }: { at: number }) => (
   </span>
 );
 
+/** Settings from here: a file dialog or a password manager would close the toolbar popup, so there it opens in a tab. */
+const settingsLink = () => (frame === 'popup' ? { href: chrome.runtime.getURL('pages/app.html#/settings'), target: '_blank' } : { href: '#/settings' });
+
 /** One error row for a failed service, with what is still on screen (`at`, when the cache has it) and the next step (DESIGN.md 10). */
 export function ErrorRow({ service, error, at }: { service: Service; error: ErrorInfo; at?: number | null }) {
   const [busy, setBusy] = useState(false);
@@ -159,9 +161,7 @@ export function ErrorRow({ service, error, at }: { service: Service; error: Erro
       <StatusLine status="danger">{errorLine(error, service, at)}</StatusLine>
       <span class="grow" />
       {signIn || setup ? (
-        <a class="btn" href={frame === 'popup' ? chrome.runtime.getURL('pages/app.html#/settings') : '#/settings'} target={frame === 'popup' ? '_blank' : undefined}>
-          {setup ? 'Settings' : 'Sign in'}
-        </a>
+        <a class="btn" {...settingsLink()}>{setup ? 'Settings' : 'Sign in'}</a>
       ) : (
         <button class="btn" disabled={busy} onClick={retry}>
           {cert ? 'Open INS' : 'Retry'}
@@ -201,6 +201,30 @@ export function OfflineRow({ snap }: { snap: Snapshot }) {
   );
 }
 
+const signInNote: Partial<Record<Service, string>> = {
+  eclass: 'Sign in to eClass to see deadlines and attendance.',
+  ins: 'Sign in to INS to see your grades.',
+};
+
+/**
+ * What a part shows with nothing cached: bars while it is on its way, the
+ * failure's row, or, signed out, one sentence with "Sign in" in place of that
+ * row (DESIGN.md 8, Empty states). Never bars with no refresh coming.
+ */
+export function NoData({ snap, service, lines = 6 }: { snap: Snapshot; service: Service; lines?: number }) {
+  const st = snap.state[service];
+  const signedOut = !snap.logins[service] && (st?.error ? st.error.name === 'LoginRequired' : !!st && !st.busy);
+  if (signedOut && signInNote[service]) {
+    return (
+      <>
+        <p class="t-bl" style={{ margin: '16px 0 8px' }}>{signInNote[service]}</p>
+        <a class="btn" style={{ marginLeft: '-12px' }} {...settingsLink()}>Sign in</a>
+      </>
+    );
+  }
+  return st?.error ? <SourceError snap={snap} service={service} /> : <Skeleton lines={lines} />;
+}
+
 export const Skeleton = ({ lines = 3 }: { lines?: number }) => (
   <div aria-busy="true">
     {Array.from({ length: lines }, (_, i) => (
@@ -218,7 +242,6 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
   close.current = onClose;
   useEffect(() => {
     const el = box.current!;
-    // Inside eClass this all lives in a shadow root, where document.activeElement is only the host.
     const root = el.getRootNode() as Document | ShadowRoot;
     const opener = root.activeElement as HTMLElement | null;
     const inside = () => [...el.querySelectorAll<HTMLElement>(focusables)];

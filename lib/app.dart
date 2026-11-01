@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,9 +14,11 @@ import 'features/deadlines_screen.dart';
 import 'features/exams_screen.dart';
 import 'features/grades_screen.dart';
 import 'features/mail_screen.dart';
+import 'features/notices_screen.dart';
 import 'features/settings_screen.dart';
 import 'features/timetable_screen.dart';
 import 'features/today_screen.dart';
+import 'features/update_prompt.dart';
 import 'models/models.dart';
 import 'ui/format/format.dart';
 import 'ui/theme/app_colors.dart';
@@ -174,6 +177,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       _askForNotificationsOnce();
       _taps = context.read<NotificationTaps>()..addListener(_openTapped);
       _openTapped();
+      // A debug build is signed with another key: the release couldn't install over it.
+      if (kReleaseMode) promptForUpdate(context);
     });
   }
 
@@ -204,6 +209,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         _timetable.currentState?.showWeekday(weekday);
       case ExamsTarget():
         _push(const ExamsScreen());
+      case NoticesTarget():
+        setState(() => _tab = 0);
+        openNotices(context);
       case TabTarget(:final tab):
         setState(() => _tab = tab);
       case null:

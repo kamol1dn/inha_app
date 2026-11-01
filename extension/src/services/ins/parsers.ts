@@ -341,6 +341,11 @@ function toDouble(s: string): number {
   return Number(t);
 }
 
+function numberOrNull(s: string): number | null {
+  const n = s.trim() === '' ? NaN : Number(s);
+  return Number.isNaN(n) ? null : n;
+}
+
 function yearOfStudy(s: string): number {
   const digitsOnly = s.replace(/\D/g, '');
   if (digitsOnly) return Number(digitsOnly);
@@ -394,6 +399,8 @@ export function parseGrades(xml: string): GradeReport {
     creditsEarned: toDouble(main.field('com_credit')),
     yearOfStudy: yearOfStudy(main.field('grade')),
     records,
+    majorRequired: numberOrNull(main.field('junpil')),
+    generalRequired: numberOrNull(main.field('kyopil')),
   };
 }
 

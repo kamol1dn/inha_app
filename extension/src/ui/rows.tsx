@@ -44,7 +44,7 @@ export function DeadlineRow({ d, att, now, dismissed = [], showCourse = true, sh
       <div class="side">
         <span class="t-bs muted">{deadlineKindWord(d.kind)}</span>
         {isDue(d) && marked && <button class="btn" onClick={() => setMarked(d, false)}>Undo</button>}
-        {isDue(d) && !isDone(d, att, dismissed) && <button class="btn" onClick={() => setMarked(d, true)}>Mark as done</button>}
+        {isDue(d) && !isDone(d, att, dismissed) && <button class="btn quiet" onClick={() => setMarked(d, true)}>Mark as done</button>}
       </div>
     </div>
   );

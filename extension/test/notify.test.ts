@@ -71,7 +71,7 @@ describe('reminders for one item', () => {
   test('notificationId strips the lead from reminders only', () => {
     assert.equal(notificationId('due:quiz:a|b|c|3h'), 'due:quiz:a|b|c');
     assert.equal(notificationId('vod:a|b|c|48h'), 'vod:a|b|c');
-    assert.equal(notificationId('exam:p|s|c|evening'), 'exam:p|s|c');
+    assert.equal(notificationId('exam:s|c|20261022T0900Z|eve'), 'exam:s|c|20261022T0900Z');
     assert.equal(notificationId('absent:1|2026-10-01|x'), 'absent:1|2026-10-01|x');
     assert.equal(notificationId('grade:1|m1|>5'), 'grade:1|m1|>5');
   });
@@ -134,32 +134,44 @@ describe('exam reminders', () => {
   });
   const start = period.exams[0].start;
   const match = (rooms: Record<string, string> = {}) => matchExams(period, [{ name: 'Multimedia Computing', teachers: new Set(), eclass: null }, { name: 'Artificial Intelligence', teachers: new Set(), eclass: null }], '', rooms);
-  const plan = (now: number, quiet = false, rooms: Record<string, string> = {}) => planNotifications({ now, exams: match(rooms), quiet }).filter((n) => n.title.startsWith('Multimedia'));
+  const plan = (now: number, quiet = false, rooms: Record<string, string> = {}) => planNotifications({ now, exams: match(rooms), quiet }).filter((n) => n.title.endsWith('Multimedia Computing'));
 
   test('the evening before at 20:00 and 1 h before, with the rooms it may be in', () => {
     const [evening, soon] = plan(new Date(2026, 9, 20, 12).getTime());
     assert.deepEqual([new Date(evening.when).getHours(), new Date(evening.when).getDate()], [20, 21]);
     assert.equal(evening.channel, 'exams');
-    assert.equal(evening.title, 'Multimedia Computing exam');
-    assert.equal(evening.body, 'Tomorrow: B209 or B210 at 14:00.');
+    // Word for word what rules.dart says, as test/notification_delivery_test.dart has it.
+    assert.equal(evening.title, 'Exam: Multimedia Computing');
+    assert.equal(evening.body, 'Thu 22 Oct, 14:00 · Room not set: B209 or B210');
     assert.equal(soon.when, start - HOUR);
-    assert.equal(soon.body, 'B209 or B210 at 14:00.');
+    assert.equal(soon.title, 'Exam at 14:00: Multimedia Computing');
+    assert.equal(soon.body, evening.body);
     assert.equal(notificationId(evening.key), notificationId(soon.key));
+    assert.deepEqual([evening, soon].map((n) => n.key.split('|').at(-1)), ['eve', '1h']);
+    assert.match(evening.key, /^exam:th-3\|multimedia computing\|\d{8}T\d{4}Z\|eve$/);
   });
 
   test('the room the student set wins', () => {
     const key = `test-mid|Th-3|Multimedia Computing`;
-    assert.equal(plan(new Date(2026, 9, 20, 12).getTime(), false, { [key]: 'B210' })[1].body, 'B210 at 14:00.');
+    assert.equal(plan(new Date(2026, 9, 20, 12).getTime(), false, { [key]: 'B210' })[1].body, 'Thu 22 Oct, 14:00 · Room B210');
   });
 
-  test('found on the day, the late reminder says today, not tomorrow', () => {
-    const [late] = plan(new Date(2026, 9, 22, 9).getTime());
-    assert.equal(late.body, 'Today: B209 or B210 at 14:00.');
+  test('found on the day, the evening one goes out at once and names the day', () => {
+    const now = new Date(2026, 9, 22, 9).getTime();
+    const [late] = plan(now);
+    assert.equal(late.when, now);
+    assert.equal(late.body, 'Thu 22 Oct, 14:00 · Room not set: B209 or B210');
+  });
+
+  test('a sitting with sections runs them together, and still says the room is not set', () => {
+    const halls = readSheet({ format: 1, id: 'p', kind: 'midterm', term: '', source: '', exams: [{ slot: 'a', date: '2026-10-22', start: '09:00', end: '10:00', cell: 'Multimedia Computing', rooms: ['B304(A)', 'B304(B)', 'B304(C)', 'B305'] }] });
+    const [n] = planNotifications({ now: new Date(2026, 9, 20, 12).getTime(), exams: matchExams(halls, [{ name: 'Multimedia Computing', teachers: new Set(), eclass: null }]) });
+    assert.equal(n.body, 'Thu 22 Oct, 09:00 · Room not set: B304(A–C) or B305');
   });
 
   test('a sitting with no rooms says so; an hour before 07:30 moves out of quiet hours', () => {
-    const ai = planNotifications({ now: new Date(2026, 9, 20, 12).getTime(), exams: match(), quiet: true }).filter((n) => n.title.startsWith('Artificial'));
-    assert.match(ai[0].body, /At 08:00, room not set/);
+    const ai = planNotifications({ now: new Date(2026, 9, 20, 12).getTime(), exams: match(), quiet: true }).filter((n) => n.title.endsWith('Artificial Intelligence'));
+    assert.equal(ai[0].body, 'Fri 23 Oct, 08:00 · Room not set');
     assert.ok(ai.every((n) => !n.quiet));
   });
 
@@ -173,7 +185,7 @@ describe('exam reminders', () => {
       ],
     });
     const [n] = planNotifications({ now: new Date(2026, 9, 20, 12).getTime(), exams: matchExams(twice, [{ name: 'Multimedia Computing', teachers: new Set(), eclass: null }]) });
-    assert.match(n.body, /2 sittings of this course are listed: check yours\./);
+    assert.equal(n.body, 'Thu 22 Oct, 09:00 · Room B1. The timetable lists 2 sittings; check which is yours.');
   });
 
   test('a class that day stays silent, the exam does not', () => {

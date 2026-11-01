@@ -8,10 +8,12 @@ import type { Snapshot } from '../../core/store.ts';
 import { examLine, examRoom, roomChoice, periodName, sittingsLine, type ExamPeriod, type MyExam } from '../../data/exams.ts';
 import { clock, dayHeader, dayKey, duration, HOUR, pastWhen, relative, rowTitle, updatedAt, weekdayShort, isoWeekday } from '../../data/format.ts';
 import { AbsenceState, courseFor, isDue, needsAttention } from '../../data/status.ts';
-import { itemUrl } from '../../services/eclass/links.ts';
-import { eclassTarget, isStale, OfflineRow, Skeleton, SourceError, Stale, StatusLine } from '../common.tsx';
-import { attendanceSummary, classesOn, deadlineLine, examMatch, examSection, examsOn, inTrouble, nothingDue, oldestFetch, railLaterClasses, type DayClass } from '../derive.ts';
+import { eclassBase, itemUrl } from '../../services/eclass/links.ts';
+import { eclassTarget, isStale, NoData, OfflineRow, Skeleton, SourceError, Stale, StatusLine } from '../common.tsx';
+import { attendanceSummary, classesOn, deadlineLine, examMatch, examSection, examsOn, inTrouble, nothingDue, noticeUrl, oldestFetch, railLaterClasses, type DayClass } from '../derive.ts';
 import { AbsenceRow, lessonLine } from '../rows.tsx';
+
+const eclassHome = `${eclassBase}/`;
 
 type Node = 'now' | 'class' | 'class past' | 'class live' | 'due' | 'due warning' | 'due danger' | null;
 
@@ -107,8 +109,11 @@ function RoomLine({ text }: { text: string }) {
     const el = ref.current!;
     const fit = () => {
       el.style.fontSize = '';
-      const full = parseFloat(getComputedStyle(el).fontSize);
-      if (el.scrollWidth > el.clientWidth && el.clientWidth > 0) el.style.fontSize = `${Math.floor((full * el.clientWidth) / el.scrollWidth)}px`;
+      el.style.lineHeight = '';
+      if (el.scrollWidth <= el.clientWidth || el.clientWidth === 0) return;
+      const size = Math.floor((parseFloat(getComputedStyle(el).fontSize) * el.clientWidth) / el.scrollWidth);
+      el.style.fontSize = `${size}px`;
+      el.style.lineHeight = `${Math.ceil(size * 1.07)}px`;
     };
     fit();
     const seen = new ResizeObserver(fit);
@@ -337,7 +342,7 @@ export function Today({ snap, now }: { snap: Snapshot; now: number }) {
             {cache.attendance && isStale(snap, 'eclass', cache.attendance.fetchedAt, now) && <span class="right"><Stale at={cache.attendance.fetchedAt} /></span>}
           </h2>
           {!cache.attendance ? (
-            eclassErr ? <p class="empty">Attendance comes from eClass.</p> : <Skeleton lines={2} />
+            eclassErr ? <p class="empty">Attendance comes from eClass.</p> : <NoData snap={snap} service="eclass" lines={2} />
           ) : (
             <>
               <div class="rows">
@@ -384,7 +389,7 @@ export function Today({ snap, now }: { snap: Snapshot; now: number }) {
             <h2><a href="#/notifications" style={{ color: 'inherit' }}>From eClass</a></h2>
             <div class="rows">
               {notes.map((n) => (
-                <a key={n.id} class="row" href={n.url ?? 'https://eclass.inha.ac.kr/'} target={eclassTarget}>
+                <a key={n.id} class="row" href={noticeUrl(n) ?? eclassHome} target={eclassTarget}>
                   <div class="main">
                     <span class="t-ts">{n.subject}</span>
                   </div>
@@ -397,7 +402,7 @@ export function Today({ snap, now }: { snap: Snapshot; now: number }) {
         )}
 
         <p class="t-bs muted" style={{ marginTop: '24px' }}>
-          {busy ? 'Updating…' : updated ? `Updated ${updatedAt(updated)}` : ''}
+          {busy ? 'Updating…' : updated ? `Updated ${updatedAt(updated, new Date(now))}` : ''}
         </p>
       </div>
     </div>

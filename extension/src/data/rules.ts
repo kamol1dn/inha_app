@@ -7,10 +7,10 @@
 
 import { courseFromTitle, isMarked, itemScore, plainNumber, type CourseAttendance, type CourseGrades, type Deadline, type GradeItem, type Lesson, type VodProgress } from '../core/models.ts';
 import type { NotifyChannel } from '../core/store.ts';
-import { examKey, roomChoice, type ExamMatch } from './exams.ts';
+import { examRoom, roomChoice, sittingsLine, type ExamMatch } from './exams.ts';
 import { clock, dayKey, fromDayKey, HOUR, isoWeekday, MIN, parseHm, DAY } from './format.ts';
 import { CourseScore, isAttendanceMark } from './scores.ts';
-import { courseOf, reminderStem } from './status.ts';
+import { courseOf, reminderStem, stamp } from './status.ts';
 
 export { reminderStem };
 
@@ -295,19 +295,18 @@ export function planNotifications(p: PlanInput): PlannedNotification[] {
   }
 
   for (const mine of p.exams?.exams ?? []) {
-    const { exam, sittings, room } = mine;
+    const { exam, sittings } = mine;
     const day = new Date(exam.start);
     const evening = new Date(day.getFullYear(), day.getMonth(), day.getDate() - 1, examEveningHour).getTime();
-    const key = `exam:${examKey(p.exams!.period, exam)}`;
-    const where = room ?? roomChoice(exam.rooms);
-    const at = clock(exam.start);
-    const place = where ? `${where} at ${at}` : `At ${at}, room not set`;
-    const caveat = sittings > 1 ? ` ${sittings} sittings of this course are listed: check yours.` : '';
-    const title = `${clean(mine.course.name)} exam`;
+    const stem = `exam:${norm(exam.slot)}|${norm(exam.cell)}|${stamp(exam.start)}`;
+    const room = examRoom(mine);
+    const where = room ? `Room ${room}` : exam.rooms.length ? `Room not set: ${roomChoice(exam.rooms)}` : 'Room not set';
+    const caveat = sittings > 1 ? `. ${sittingsLine(mine)}` : '';
+    const course = clean(mine.course.name);
     const reminders = reminderTimes(now, exam.start, [exam.start - evening, examReminderLead]).map(([lead, when]) => ({
-      key: `${key}|${lead === examReminderLead ? leadTag(lead) : 'evening'}`,
-      title,
-      body: lead === examReminderLead ? `${place}.${caveat}` : `${dayKey(when) === dayKey(exam.start) ? 'Today' : 'Tomorrow'}: ${place}.${caveat}`,
+      key: `${stem}|${lead === examReminderLead ? leadTag(lead) : 'eve'}`,
+      title: lead === examReminderLead ? `Exam at ${clock(exam.start)}: ${course}` : `Exam: ${course}`,
+      body: `${dayTime(exam.start)} · ${where}${caveat}`,
       when,
       channel: 'exams' as const,
       quiet: false,

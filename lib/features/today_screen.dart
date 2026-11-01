@@ -19,6 +19,7 @@ import 'details.dart';
 import 'exam_rows.dart';
 import 'exams_screen.dart';
 import 'mail_screen.dart';
+import 'notices_screen.dart';
 import 'rail_rows.dart';
 
 /// Answers "where do I need to be next, what's due, am I in trouble" as one
@@ -81,6 +82,7 @@ class _TodayScreenState extends State<TodayScreen> {
         ..._exams(context, data, exams, now),
         _attendance(context, data, lessons, now),
         ..._mail(context, data),
+        ..._notices(context, data),
         _footer(context, data),
       ]),
     );
@@ -282,6 +284,27 @@ class _TodayScreenState extends State<TodayScreen> {
             ),
           ),
         ),
+    ];
+  }
+
+  /// The newest unread items of eClass's bell menu, and the way to all of them
+  /// with their text, where an item with no link of its own opens too.
+  List<Widget> _notices(BuildContext context, AppData data) {
+    final all = data.eclassNotifications.data?.value ?? const <EclassNotification>[];
+    if (all.isEmpty) return const [];
+    return [
+      SectionHeader('From eClass', source: data.eclassNotifications),
+      for (final n in all.where((n) => !n.read).take(4)) NoticeRow(n, onTap: () => openNotices(context)),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: TextButton(
+            onPressed: () => openNotices(context),
+            child: Text(all.length == 1 ? 'All 1 notification' : 'All ${all.length} notifications'),
+          ),
+        ),
+      ),
     ];
   }
 

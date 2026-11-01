@@ -4,8 +4,8 @@
 
 import { isGraded, plainNumber, termGpa, type GradeRecord } from '../../core/models.ts';
 import type { Snapshot } from '../../core/store.ts';
-import { ErrorRow, isStale, Skeleton, Stale, StatusLine } from '../common.tsx';
-import { creditsByCategory, creditWord, termLine } from '../derive.ts';
+import { ErrorRow, isStale, NoData, Stale, StatusLine } from '../common.tsx';
+import { creditsByCategory, creditWord, insTotals, termLine } from '../derive.ts';
 import { ScoresRow } from './scores.tsx';
 
 function ScoresThisSemester({ snap, now }: { snap: Snapshot; now: number }) {
@@ -32,7 +32,7 @@ export function Grades({ snap, now }: { snap: Snapshot; now: number }) {
   if (!report) {
     return (
       <>
-        {err ? <ErrorRow service="ins" error={err} /> : <Skeleton lines={6} />}
+        <NoData snap={snap} service="ins" />
         <ScoresThisSemester snap={snap} now={now} />
       </>
     );
@@ -50,9 +50,18 @@ export function Grades({ snap, now }: { snap: Snapshot; now: number }) {
         <span class="t-bm muted tnum">GPA of 4.5 · {plainNumber(report.creditsEarned)} credits{report.yearOfStudy ? ` · year ${report.yearOfStudy}` : ''}</span>
       </div>
       {categories.length > 0 && (
-        <p class="t-bm muted tnum" style={{ margin: '4px 0 0' }}>
-          {categories.map(([name, credits]) => `${name} ${plainNumber(credits)}`).join(' · ')}
-        </p>
+        <section class="section">
+          <h2>Credits by category</h2>
+          <div class="rows">
+            {categories.map(([name, credits]) => (
+              <div key={name} class="row" style={{ minHeight: '48px', alignItems: 'center' }}>
+                <span class="main t-bl">{name}</span>
+                <span class="t-bm muted tnum">{creditWord(credits)}</span>
+              </div>
+            ))}
+          </div>
+          {insTotals(report) && <p class="t-bm muted tnum" style={{ margin: '4px 0 0' }}>{insTotals(report)}</p>}
+        </section>
       )}
       <ScoresThisSemester snap={snap} now={now} />
       {[...terms.entries()]
@@ -62,10 +71,8 @@ export function Grades({ snap, now }: { snap: Snapshot; now: number }) {
           const inProgress = records.every((r) => !isGraded(r));
           return (
             <section class="section" key={key}>
-              <h2>
-                {inProgress ? 'This semester' : records[0].term}
-                <span class="right muted tnum">{inProgress ? 'Not graded yet' : termLine(records, termGpa(records))}</span>
-              </h2>
+              <h2>{inProgress ? 'This semester' : records[0].term}</h2>
+              <p class="t-bm muted tnum" style={{ margin: 0 }}>{inProgress ? 'Not graded yet' : termLine(records, termGpa(records))}</p>
               <div class="rows">
                 {records.map((r) => (
                   <div key={r.code + r.name} class="row" style={{ alignItems: 'center' }}>

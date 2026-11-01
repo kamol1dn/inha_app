@@ -317,6 +317,9 @@ class MyExam {
   const MyExam(this.course, this.exam, {this.sittings = 1, this.room});
 }
 
+/// "The timetable lists 2 sittings; check which is yours."
+String sittingsLine(MyExam m) => 'The timetable lists ${m.sittings} sittings; check which is yours.';
+
 /// The student's exams in time order, and their courses the sheet has none for.
 class ExamMatch {
   final ExamPeriod period;

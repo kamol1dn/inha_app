@@ -52,7 +52,7 @@ export function vodFor(d: Deadline, all: CourseAttendance[]): VodProgress | null
 }
 
 /** Minute-precision UTC stamp, so keys don't depend on the zone. */
-const stamp = (t: number) => new Date(Math.floor(t / MIN) * MIN).toISOString().slice(0, 16).replace(/[-:]/g, '') + 'Z';
+export const stamp = (t: number) => new Date(Math.floor(t / MIN) * MIN).toISOString().slice(0, 16).replace(/[-:]/g, '') + 'Z';
 
 /** The part of a deadline's reminder keys that names the item: every key is `<stem>|<lead>`. Also what Settings.dismissed holds. */
 export function reminderStem(d: Deadline): string {

@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show Tristate;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inha_app/app.dart';
 import 'package:inha_app/core/cache.dart';
@@ -127,7 +128,7 @@ void main() {
       expect(safeFileName(r'..\..\evil.docx'), 'evil.docx');
       expect(safeFileName('..hidden.txt'), 'hidden.txt');
       expect(safeFileName('a:b*c?.txt'), 'a_b_c_.txt');
-      expect(safeFileName('report‮fdp.exe'), 'reportfdp.exe');
+      expect(safeFileName('report\u202efdp.exe'), 'reportfdp.exe');
       expect(safeFileName(''), 'Attachment');
       expect(safeFileName('..'), 'Attachment');
       expect(safeFileName('/'), 'Attachment');
@@ -143,9 +144,21 @@ void main() {
       final first = await saveMailFile(const MailFile(name: 'a.pdf', bytes: [1, 2]), sub);
       expect(await first.readAsBytes(), [1, 2]);
       final second = await saveMailFile(const MailFile(name: '../b.pdf', bytes: [3]), sub);
-      expect(second.path, '${sub.path}/b.pdf');
+      expect(second.uri.pathSegments.last, 'b.pdf');
       expect(await second.readAsBytes(), [3]);
-      expect(sub.listSync().map((f) => f.path), [second.path]);
+      expect(sub.listSync().map((f) => f.uri.pathSegments.last), ['b.pdf']);
+    });
+
+    test('signing out removes the file last opened, and nothing else in the cache', () async {
+      final cache = await Directory.systemTemp.createTemp('app_cache');
+      addTearDown(() => cache.delete(recursive: true));
+      final other = await File('${cache.path}/other.txt').writeAsString('x');
+      final file = await saveMailFile(const MailFile(name: 'a.pdf', bytes: [1]), Directory('${cache.path}/mail_files'));
+      await deleteMailFiles(cache: () async => cache);
+      expect(await file.exists(), isFalse);
+      expect(await Directory('${cache.path}/mail_files').exists(), isFalse);
+      expect(await other.exists(), isTrue);
+      await deleteMailFiles(cache: () async => cache); // with none there, nothing to do
     });
 
     test('a file is opened by its type, or by its name when the type says nothing', () {
@@ -205,6 +218,24 @@ void main() {
       await tester.tap(find.text('Undo'));
       await tester.pumpAndSettle();
       expect(mail.moves.last, ('moved-id0', MailFolder.inbox));
+    });
+
+    testWidgets('a deleted draft goes back to Drafts, other mail to Inbox (F182)', (tester) async {
+      final (data, mail) = await makeData();
+      mail.messages['id0'] = MailMessage(
+          id: 'id0', from: '', subject: 'Leave of absence', received: _when, body: 'Dear', isDraft: true);
+      await push(tester, data, MailMessageScreen(header: header(), folder: MailFolder.deleted));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Move to Inbox'), findsNothing);
+      await tester.tap(find.byTooltip('Move to Drafts'));
+      await tester.pumpAndSettle();
+      expect(mail.moves.single, ('id0', MailFolder.drafts));
+      expect(find.text('Moved to Drafts.'), findsOneWidget);
+
+      mail.messages['id1'] = message(id: 'id1');
+      await push(tester, data, MailMessageScreen(header: header(id: 'id1'), folder: MailFolder.deleted));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Move to Inbox'), findsOneWidget);
     });
 
     testWidgets('Reply waits while it is moving', (tester) async {
@@ -311,6 +342,13 @@ void main() {
         await failing(tester, LoginRequired(Service.mail), 'Mail sign-in needed.', signIn: true);
       });
 
+      testWidgets('no connection names the file too', (tester) async {
+        await failing(
+            tester,
+            DioException(requestOptions: RequestOptions(), type: DioExceptionType.connectionError),
+            "Couldn't get Rooms.pdf from Mail. Check the connection.");
+      });
+
       testWidgets("Exchange's own refusal names the file", (tester) async {
         await failing(tester, EwsError('ErrorInvalidIdMalformed'), "Couldn't get Rooms.pdf from Mail.");
       });
@@ -402,8 +440,8 @@ void main() {
     testWidgets('asks when told to, in the folder on show, and lists what it finds', (tester) async {
       final (data, mail) = await makeData();
       mail.folders[MailFolder.sent] = [
-        const MailHeader(id: 's1', from: '', to: 'Prof. Kim', subject: 'Lab report', received: _when),
-        const MailHeader(id: 's2', from: '', to: 'Dean', subject: 'Leave of absence', received: _when),
+        MailHeader(id: 's1', from: '', to: 'Prof. Kim', subject: 'Lab report', received: _when),
+        MailHeader(id: 's2', from: '', to: 'Dean', subject: 'Leave of absence', received: _when),
       ];
       await push(tester, data, const MailSearchScreen(folder: MailFolder.sent));
       expect(find.text('Search Sent'), findsOneWidget);
@@ -474,12 +512,15 @@ void main() {
       await tester.drag(find.byType(ListView), const Offset(0, -1800));
       await tester.pumpAndSettle();
       expect(mail.searches, hasLength(2));
-      await tester.scrollUntilVisible(find.widgetWithText(TextButton, 'Retry'), 300,
-          scrollable: find.byType(Scrollable).last);
+      // The list's own Scrollable: the field in the app bar has one as well.
+      final list = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable));
+      await tester.scrollUntilVisible(find.widgetWithText(TextButton, 'Retry'), 300, scrollable: list);
+      await tester.pumpAndSettle();
+      expect(mail.searches, hasLength(2), reason: 'a failed page waits for Retry');
       mail.error = null;
       await tester.tap(find.widgetWithText(TextButton, 'Retry'));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Midterm 44'), 600, scrollable: find.byType(Scrollable).last);
+      await tester.scrollUntilVisible(find.text('Midterm 44'), 600, scrollable: list);
       expect(find.text('Midterm 44'), findsOneWidget);
     });
 
@@ -839,10 +880,4 @@ Future<void> pressBackDuringWork(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 400));
 }
 
-const _when = _Moment();
-
-class _Moment implements DateTime {
-  const _Moment();
-  @override
-  dynamic noSuchMethod(Invocation invocation) => DateTime(2026, 10, 20, 9).noSuchMethod(invocation);
-}
+final _when = DateTime(2026, 10, 20, 9);

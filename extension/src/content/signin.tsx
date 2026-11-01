@@ -1,25 +1,47 @@
 // eClass's sign-in page, redone: "Continue as <ID>" signs the browser in with
 // the saved login (the worker posts it; this page never sees the password),
-// and the form below it can remember a new one.
+// and the form below it can remember a new one, once eClass has accepted it.
 
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import { call } from '../core/rpc.ts';
 import { readSnapshot, writeSettings } from '../core/store.ts';
+import { afterSignIn, SIGN_IN_TRY, signInForm, signInLooped } from './pages.ts';
 import { shadowHost, StatusLine } from './shared.tsx';
 
+/** Whether this tab came back here just after signing in, with the record of it cleared. */
+function cameBack(): boolean {
+  try {
+    const looped = signInLooped(sessionStorage.getItem(SIGN_IN_TRY), Date.now());
+    sessionStorage.removeItem(SIGN_IN_TRY);
+    return looped;
+  } catch {
+    return false; // blocked site data: as if it were the first try
+  }
+}
+
 export function SignIn({ saved, form }: { saved: string | null; form: HTMLFormElement | null }) {
+  // The worker's sign-in is in the browser's main cookies. A container tab or a private window has its own, and only its own form reaches those.
+  const [ownSession] = useState(cameBack);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(
-    // eClass's own message after a failed sign-in, in our words where we can.
-    document.querySelector('#loginerrormessage, .loginerrors .error, .alert-danger')?.textContent?.trim() || null,
+    ownSession
+      ? 'The browser signed in, but this tab didn’t stay signed in. A container tab or a private window keeps its own session, so sign in here.'
+      : // eClass's own message after a failed sign-in, in our words where we can.
+        document.querySelector('#loginerrormessage, .loginerrors .error, .alert-danger')?.textContent?.trim() || null,
   );
-  const [other, setOther] = useState(!saved);
+  const [other, setOther] = useState(!saved || ownSession);
   const [user, setUser] = useState((form?.querySelector('input[name="username"]') as HTMLInputElement | null)?.value || saved || '');
   const [pass, setPass] = useState('');
   const [remember, setRemember] = useState(true);
-  const wants = new URLSearchParams(location.search).get('wantsurl');
-  const goOn = () => location.replace(wants && wants.startsWith('https://eclass.inha.ac.kr/') ? wants : '/');
+  const goOn = () => {
+    try {
+      sessionStorage.setItem(SIGN_IN_TRY, String(Date.now()));
+    } catch {
+      // As in cameBack.
+    }
+    location.replace(afterSignIn(location.search, location.hash));
+  };
 
   const continueAs = async () => {
     setBusy(true);
@@ -39,7 +61,18 @@ export function SignIn({ saved, form }: { saved: string | null; form: HTMLFormEl
     e.preventDefault();
     if (!form) return;
     setBusy(true);
-    if (remember) await call('eclassRemember', user.trim(), pass).catch(() => {});
+    setError(null);
+    if (remember) {
+      // Tried first: a mistyped password never replaces the one that works. It is
+      // the same one attempt on eClass's lockout count as the form's would be.
+      const trouble = await call('saveLogin', 'eclass', user.trim(), pass).catch((err: Error) => ({ name: err.name, message: err.message }));
+      if (trouble?.name === 'LoginRequired') {
+        setError('eClass rejected this username or password.');
+        setBusy(false);
+        return;
+      }
+      if (!trouble && !ownSession) return goOn(); // the worker's sign-in already holds for this tab
+    }
     // eClass's own form does the sign-in, so its checks and redirects stay as they are.
     (form.querySelector('input[name="username"]') as HTMLInputElement).value = user.trim();
     (form.querySelector('input[name="password"]') as HTMLInputElement).value = pass;
@@ -60,7 +93,7 @@ export function SignIn({ saved, form }: { saved: string | null; form: HTMLFormEl
         <h2>Sign in to eClass</h2>
         <p class="sub">{saved ? 'Welcome back.' : 'With your student ID and eClass password.'}</p>
         {error && <StatusLine status="danger">{error}</StatusLine>}
-        {saved && (
+        {saved && !ownSession && (
           <button class="continue" disabled={busy} onClick={continueAs} autoFocus>
             <span class="avatar">{initial}</span>
             <span class="who">
@@ -77,7 +110,7 @@ export function SignIn({ saved, form }: { saved: string | null; form: HTMLFormEl
         )}
         {other && (
           <>
-            {saved && <div class="or">or</div>}
+            {saved && !ownSession && <div class="or">or</div>}
             <form onSubmit={submit}>
               <div class="field">
                 <label for="iut-user">Student ID</label>
@@ -107,7 +140,6 @@ export function SignIn({ saved, form }: { saved: string | null; form: HTMLFormEl
 
 export async function signInPage() {
   const saved = (await readSnapshot()).logins.eclass ?? null;
-  const form = document.querySelector<HTMLFormElement>('form[action*="/login/index.php"]');
   const shadow = shadowHost('iut-signin', (el) => document.body.append(el));
-  render(<SignIn saved={saved} form={form} />, shadow);
+  render(<SignIn saved={saved} form={signInForm(document)} />, shadow);
 }

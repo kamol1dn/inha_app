@@ -2,8 +2,10 @@
 //   node build.mjs             dist/ for Chrome ("Load unpacked")
 //   node build.mjs --firefox   dist-firefox/ for Firefox and Zen
 //   node build.mjs --watch     rebuild on change
+// IUT_VERSION in the environment (CI, from the release tag) replaces the manifest's version.
 import * as esbuild from 'esbuild';
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { manifestFor } from './manifest.ts';
 
 const watch = process.argv.includes('--watch');
 // --dev (and --watch) builds let the test harness reload the extension from an eClass page.
@@ -15,24 +17,9 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 cpSync('static', out, { recursive: true });
 
-// Firefox (and Zen, which is built on it) runs the worker's code as a
-// background script rather than a service worker, and needs a fixed add-on ID.
-if (firefox) {
-  const manifest = JSON.parse(readFileSync('static/manifest.json', 'utf8'));
-  manifest.background = { scripts: ['background.js'], type: 'module' };
-  manifest.options_ui = { page: manifest.options_page, open_in_tab: true };
-  delete manifest.options_page;
-  manifest.browser_specific_settings = {
-    gecko: {
-      id: 'iut-eclass@kamol1dn.github.io',
-      strict_min_version: '128.0',
-      // It talks only to the university's own services, as the student; nothing goes to us or anyone else.
-      data_collection_permissions: { required: ['none'] },
-    },
-  };
-  writeFileSync(`${out}/manifest.json`, `${JSON.stringify(manifest, null, 2)}
+const manifest = manifestFor(JSON.parse(readFileSync('static/manifest.json', 'utf8')), { firefox, version: process.env.IUT_VERSION });
+writeFileSync(`${out}/manifest.json`, `${JSON.stringify(manifest, null, 2)}
 `);
-}
 
 const common = {
   outdir: out,

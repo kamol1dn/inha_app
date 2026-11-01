@@ -350,9 +350,23 @@ class _HeadingScaffoldState extends State<HeadingScaffold> {
   final _heading = GlobalKey();
   final _bar = GlobalKey();
   bool _shown = false;
+  bool _measuring = false;
 
+  /// Measured once the frame is done. A list can report a scroll during its own
+  /// layout, when a heading it is letting go of can't be asked where it is, and
+  /// when no screen may be rebuilt.
   bool _onScroll(ScrollNotification n) {
-    if (n.depth != 0) return false;
+    if (n.depth != 0 || _measuring) return false;
+    _measuring = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measuring = false;
+      if (mounted) _measure();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+    return false;
+  }
+
+  void _measure() {
     final heading = _heading.currentContext?.findRenderObject() as RenderBox?;
     final bar = _bar.currentContext?.findRenderObject() as RenderBox?;
     // A heading the list has already let go of is far above the app bar.
@@ -361,7 +375,6 @@ class _HeadingScaffoldState extends State<HeadingScaffold> {
         bar == null ||
         heading.localToGlobal(Offset(0, heading.size.height)).dy <= bar.localToGlobal(Offset(0, bar.size.height)).dy;
     if (under != _shown) setState(() => _shown = under);
-    return false;
   }
 
   @override

@@ -5,7 +5,7 @@ import { LoginRequired, NetworkError, ParseError } from '../src/core/errors.ts';
 import type { HttpRequest, HttpResponse } from '../src/core/http.ts';
 import { courseFromTitle, type Course, type Deadline } from '../src/core/models.ts';
 import type { Credentials } from '../src/core/credentials.ts';
-import { EclassClient, mergeUpcoming } from '../src/services/eclass/client.ts';
+import { EclassClient, mergeUpcoming, withKnownUpcoming } from '../src/services/eclass/client.ts';
 import { itemUrl, vodUrl } from '../src/services/eclass/links.ts';
 import {
   extractSesskey,
@@ -670,14 +670,19 @@ describe('EclassClient', () => {
       const { deadlines, failed } = await new EclassClient(async () => saved, failing).allUpcoming([multimedia]);
       assert.equal(deadlines.length, 10);
       assert.ok(failed instanceof NetworkError);
+      const found = await new EclassClient(async () => saved, failing).allUpcoming([multimedia, lecture]);
+      assert.deepEqual(found.failedCourses, [multimedia]);
+      assert.equal(found.calendarFailed, false);
     });
 
     test('allUpcoming(): the calendar page failing costs only that page', async () => {
       server.pages.delete('/calendar/view.php?view=upcoming');
       server.pages.set('/calendar/view.php?view=upcoming&course=2622', fixture('eclass_upcoming.html'));
-      const { deadlines, failed } = await client.allUpcoming([multimedia]);
+      const { deadlines, failed, calendarFailed, failedCourses } = await client.allUpcoming([multimedia]);
       assert.equal(deadlines.length, 10);
       assert.ok(failed instanceof NetworkError);
+      assert.equal(calendarFailed, true);
+      assert.deepEqual(failedCourses, []);
     });
 
     test('allUpcoming() with no page at all throws', async () => {

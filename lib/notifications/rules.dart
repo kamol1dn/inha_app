@@ -17,7 +17,7 @@ import '../data/exams.dart';
 import '../data/scores.dart';
 import '../data/urgency.dart';
 import '../models/models.dart';
-import '../ui/format/format.dart' show rowTitle;
+import '../ui/format/format.dart' show roomChoice, rowTitle;
 
 // ---------------------------------------------------------------------------
 // Thresholds
@@ -362,22 +362,24 @@ Iterable<PlannedNotification> _deadlineReminders(DateTime now, Deadline d) sync*
 }
 
 /// The evening before an exam, and [examReminderLead] before it. The room is
-/// the student's own once they set it, else the rooms the exam uses.
+/// the student's own once they set it, else the rooms the exam uses. rules.ts
+/// says the same, word for word, under the same keys.
 Iterable<PlannedNotification> _examReminders(DateTime now, MyExam m) sync* {
   final e = m.exam;
   final start = e.start.toLocal();
   final evening = DateTime(start.year, start.month, start.day - 1, examEveningHour);
   final eveningLead = start.difference(evening);
-  final course = _clean(e.course);
+  final course = _clean(m.course.name);
   final when = _dayTime.format(start);
   final room = m.room ?? (e.rooms.length == 1 ? e.rooms.single : null);
-  final where = room != null ? 'Room $room' : e.rooms.isEmpty ? 'Room not set' : 'Room not set: ${e.rooms.join(' or ')}';
+  final where = room != null ? 'Room $room' : e.rooms.isEmpty ? 'Room not set' : 'Room not set: ${roomChoice(e.rooms)}';
+  final caveat = m.sittings > 1 ? '. ${sittingsLine(m)}' : '';
   final stem = '$examKeyPrefix${_norm(e.slot)}|${_norm(e.cell)}|${_stamp(e.start)}';
   for (final (lead, at) in _reminderTimes(now: now, end: e.start, leads: [eveningLead, examReminderLead])) {
     yield PlannedNotification(
       key: '$stem|${lead == examReminderLead ? _leadTag(lead) : 'eve'}',
       title: lead == examReminderLead ? 'Exam at ${_hm.format(start)}: $course' : 'Exam: $course',
-      body: '$when · $where',
+      body: '$when · $where$caveat',
       when: at,
       channel: NotifyChannel.exams,
     );

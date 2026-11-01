@@ -14,7 +14,8 @@ on:
 
 concurrency:
   group: extension-${{ github.ref }}
-  cancel-in-progress: true
+  # Never on a tag: Mozilla signs a version once, so a sign cancelled halfway can't be run again.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: write # attach the builds to the release on a tag
@@ -22,9 +23,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Longer than the signing step's own limit, so that step gives up first and the job still attaches a build.
+    timeout-minutes: 45
     env:
-      # Mozilla's add-on signing key (addons.mozilla.org > Developer Hub > API keys); optional.
+      # Mozilla's add-on signing key (addons.mozilla.org > Developer Hub > API keys).
       AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
       AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
     defaults:
@@ -44,48 +46,117 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+      # A tag names the version of both builds, so every release has a new one for Mozilla to sign.
+      - name: Version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -e "import('./manifest.ts').then((m) => console.log(m.versionOfTag(process.argv[1]) ?? ''))" "$GITHUB_REF_NAME")
+          if [ -z "$version" ]; then
+            echo "::error::$GITHUB_REF_NAME has no version a browser accepts (like v1.4.0)."
+            exit 1
+          fi
+          echo "IUT_VERSION=$version" >> "$GITHUB_ENV"
+
       # Production builds (no development reload hook): Chrome, then Firefox and Zen.
       - run: npm run build
       - run: npm run build:firefox
       - run: npm run lint:firefox
 
+      # Until Mozilla signs it, the .xpi says in its name that it is unsigned: it loads only as a temporary add-on (README).
       - name: Package
         id: pkg
         run: |
           version=$(node -p "require('./dist/manifest.json').version")
-          suffix="${version}-${GITHUB_REF_NAME//\//-}"
+          ref="${GITHUB_REF_NAME//\//-}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then suffix="$version"; else suffix="$version-$ref"; fi
           chrome="iut-eclass-chrome-${suffix}.zip"
-          firefox="iut-eclass-zen-firefox-${suffix}.xpi"
+          unsigned="iut-eclass-zen-firefox-${suffix}-unsigned-temporary.xpi"
           (cd dist && zip -qr "../$chrome" .)
-          (cd dist-firefox && zip -qr "../$firefox" .)
-          echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
-          echo "firefox=$firefox" >> "$GITHUB_OUTPUT"
-
-      # Firefox and Zen install only signed add-ons for good. With the AMO API key in the repository
-      # secrets, Mozilla signs it (unlisted: not published, just signed) and the signed .xpi replaces
-      # the unsigned one; without them the .xpi still loads as a temporary add-on (README).
-      - name: Sign for Firefox and Zen
-        if: startsWith(github.ref, 'refs/tags/v') && env.AMO_JWT_ISSUER != ''
-        run: |
-          npx web-ext sign --source-dir dist-firefox --channel unlisted --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" --artifacts-dir signed
-          mv signed/*.xpi "${{ steps.pkg.outputs.firefox }}"
+          (cd dist-firefox && zip -qr "../$unsigned" .)
+          {
+            echo "ref=$ref"
+            echo "chrome=$chrome"
+            echo "unsigned=$unsigned"
+            echo "signed=iut-eclass-zen-firefox-${suffix}.xpi"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: iut-eclass-chrome-${{ github.ref_name }}-${{ github.run_number }}
+          name: iut-eclass-chrome-${{ steps.pkg.outputs.ref }}-${{ github.run_number }}
           path: extension/dist/
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: iut-eclass-zen-firefox-${{ github.ref_name }}-${{ github.run_number }}
-          path: extension/${{ steps.pkg.outputs.firefox }}
-          if-no-files-found: error
-
-      - name: Attach to the release
+      # The Chrome zip needs no signing: it goes up first, so nothing that happens to signing can take it down.
+      - name: Attach the Chrome build to the release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            extension/${{ steps.pkg.outputs.chrome }}
-            extension/${{ steps.pkg.outputs.firefox }}
+          files: extension/${{ steps.pkg.outputs.chrome }}
+
+      # Firefox and Zen install only signed add-ons for good: Mozilla signs it, unlisted (not published,
+      # just signed). A second run of the same tag can't sign again, so it takes the file the first run attached.
+      - name: Sign for Firefox and Zen
+        id: sign
+        if: startsWith(github.ref, 'refs/tags/v') && env.AMO_JWT_ISSUER != '' && env.AMO_JWT_SECRET != ''
+        continue-on-error: true
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release download "$GITHUB_REF_NAME" --pattern "${{ steps.pkg.outputs.signed }}" --dir signed; then
+            echo "This tag's signed build is already on the release."
+            exit 0
+          fi
+          npx web-ext sign --source-dir dist-firefox --channel unlisted --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" --artifacts-dir signed --approval-timeout 1500000
+
+      - name: Name the Zen and Firefox build
+        id: xpi
+        env:
+          SIGNED: ${{ steps.pkg.outputs.signed }}
+          UNSIGNED: ${{ steps.pkg.outputs.unsigned }}
+        run: |
+          shopt -s nullglob
+          files=(signed/*.xpi)
+          if [ "${#files[@]}" -gt 0 ]; then
+            mv "${files[0]}" "$SIGNED"
+            rm "$UNSIGNED"
+            echo "file=$SIGNED" >> "$GITHUB_OUTPUT"
+            echo "how=Download $SIGNED. In Zen or Firefox open about:addons, press the gear, choose Install Add-on From File and pick it. It stays installed, and a newer one installs over it the same way." >> "$GITHUB_OUTPUT"
+          else
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::warning::Mozilla didn't sign this build, so the release has $UNSIGNED: a temporary add-on only (README, Install)."
+            fi
+            echo "file=$UNSIGNED" >> "$GITHUB_OUTPUT"
+            echo "how=This release has no signed build. $UNSIGNED loads only as a temporary add-on: about:debugging, This Firefox, Load Temporary Add-on. It is gone when the browser restarts." >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: iut-eclass-zen-firefox-${{ steps.pkg.outputs.ref }}-${{ github.run_number }}
+          path: extension/${{ steps.xpi.outputs.file }}
+          if-no-files-found: error
+
+      - name: Attach the Zen and Firefox build to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: extension/${{ steps.xpi.outputs.file }}
+          body: |
+            ## Browser extension: IUT for eClass
+
+            **Zen or Firefox:** ${{ steps.xpi.outputs.how }}
+
+            **Chrome:** it isn't in the Chrome Web Store, so it loads from a folder.
+
+            1. Download ${{ steps.pkg.outputs.chrome }} and unzip it into a folder you will keep. Chrome reads the extension from that folder every time it starts.
+            2. Open `chrome://extensions` and turn on Developer mode.
+            3. Press Load unpacked and pick the folder that holds `manifest.json`.
+
+            To update, unzip the new zip over the same folder, then press the reload icon on the extension's card. Your logins and settings stay.
+
+            More in the [extension's README](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/extension/README.md#install).
+
+            ## Android
+
+            Install the APK for your phone below: `app-arm64-v8a-release.apk` on nearly every current phone.
