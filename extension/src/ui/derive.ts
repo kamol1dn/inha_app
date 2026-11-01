@@ -137,7 +137,7 @@ export function attendanceSummary(att: CourseAttendance[], limits: Record<string
   const their = fine === 1 ? 'its' : 'their';
   let ok: string | null = null;
   if (fine > 0) {
-    if (trouble.length) ok = `The other ${fine} ${are} within ${their} limit.`;
+    if (trouble.length) ok = fine === 1 ? 'The other course is within its limit.' : `The other ${fine} courses are within their limit.`;
     else if (fine === tracked.length) ok = fine === 1 ? 'The 1 course is within its limit.' : `All ${fine} courses are within their limit.`;
     else ok = `${fine} ${are} within ${their} limit.`;
   }

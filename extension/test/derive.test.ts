@@ -67,7 +67,7 @@ describe('attendanceSummary (F53)', () => {
     const s = attendanceSummary([ai, mc, course(4, 'Deep Learning')], { 1: 8, 2: 20, 4: 20 }, []);
     assert.deepEqual(s.trouble.map((c) => c.course.id), [1]);
     assert.equal(s.ok, 'The other 2 courses are within their limit.');
-    assert.equal(attendanceSummary([ai, mc], { 1: 8, 2: 20 }, []).ok, 'The other 1 course is within its limit.');
+    assert.equal(attendanceSummary([ai, mc], { 1: 8, 2: 20 }, []).ok, 'The other course is within its limit.');
   });
 
   test('no course, or none with attendance, never reads "All 0 courses"', () => {
