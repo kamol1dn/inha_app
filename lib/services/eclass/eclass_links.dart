@@ -7,6 +7,26 @@ final Uri eclassBase = Uri.parse('https://eclass.inha.ac.kr');
 /// A course's main page.
 Uri eclassCourseUrl(int courseId) => eclassBase.replace(path: '/course/view.php', query: 'id=$courseId');
 
+/// A course's grades page.
+Uri eclassGradesUrl(int courseId) => eclassBase.replace(path: '/grade/report/user/index.php', query: 'id=$courseId');
+
+/// A VOD, by [VodProgress.moduleId].
+Uri eclassVodUrl(int moduleId) => eclassBase.replace(path: '/mod/vod/view.php', query: 'id=$moduleId');
+
+/// A bell-menu item's link, only when it stays on eClass: the link comes from a
+/// message's content.
+Uri? eclassNoticeUrl(EclassNotification n) {
+  final url = n.url;
+  return url != null && url.startsWith('$eclassBase/') ? Uri.tryParse(url) : null;
+}
+
+/// A marked item's activity, or null for one that isn't an activity.
+Uri? eclassGradeItemUrl(GradeItem i) {
+  final (id, type) = (i.moduleId, i.moduleType);
+  if (id == null || type == null || type.isEmpty) return null;
+  return eclassBase.replace(path: '/mod/$type/view.php', query: 'id=$id');
+}
+
 /// The activity behind a calendar event (`/mod/<type>/view.php?id=<moduleId>`),
 /// or null for a course-level event that has none. Cached events from before
 /// the module type was stored fall back on their kind.

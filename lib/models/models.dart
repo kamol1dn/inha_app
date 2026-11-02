@@ -4,6 +4,13 @@
 /// and shown offline, except an opened [MailMessage], which is fetched each time.
 library;
 
+/// An instant for the cache: UTC, so it means the same moment after a time
+/// zone change. Read back with [_readInstant].
+String _writeInstant(DateTime t) => t.toUtc().toIso8601String();
+
+/// Device time. A value cached before instants carried a zone reads as local.
+DateTime _readInstant(String s) => DateTime.parse(s).toLocal();
+
 enum Service { eclass, edupage, ins, mail }
 
 extension ServiceLabel on Service {
@@ -107,6 +114,7 @@ class Deadline {
   final DeadlineKind kind;
   final DateTime? start;
   final DateTime end;
+  final int? courseId; // the eClass course the event links to; null in an old cache
   final int? moduleId; // eClass module id, for opening it
   final String? moduleType; // "assign", "quiz", "vod", "ubboard", ...
 
@@ -115,16 +123,22 @@ class Deadline {
   final bool done;
   final DateTime? doneAt;
 
+  /// The student marked it done here: eClass can't track it (handed in on
+  /// paper, a plain calendar event). Kept apart from [done], eClass's own word.
+  final bool dismissed;
+
   const Deadline({
     required this.title,
     required this.courseName,
     required this.kind,
     required this.end,
     this.start,
+    this.courseId,
     this.moduleId,
     this.moduleType,
     this.done = false,
     this.doneAt,
+    this.dismissed = false,
   });
 
   Deadline withDone(bool done, DateTime? at) => Deadline(
@@ -133,32 +147,51 @@ class Deadline {
       kind: kind,
       end: end,
       start: start,
+      courseId: courseId,
       moduleId: moduleId,
       moduleType: moduleType,
       done: done,
-      doneAt: done ? at : null);
+      doneAt: done ? at : null,
+      dismissed: dismissed);
+
+  Deadline withDismissed(bool dismissed) => Deadline(
+      title: title,
+      courseName: courseName,
+      kind: kind,
+      end: end,
+      start: start,
+      courseId: courseId,
+      moduleId: moduleId,
+      moduleType: moduleType,
+      done: done,
+      doneAt: doneAt,
+      dismissed: dismissed);
 
   Map<String, dynamic> toJson() => {
         'title': title,
         'courseName': courseName,
         'kind': kind.name,
-        'start': start?.toIso8601String(),
-        'end': end.toIso8601String(),
+        'start': start == null ? null : _writeInstant(start!),
+        'end': _writeInstant(end),
+        'courseId': courseId,
         'moduleId': moduleId,
         'moduleType': moduleType,
         'done': done,
-        'doneAt': doneAt?.toIso8601String(),
+        'doneAt': doneAt == null ? null : _writeInstant(doneAt!),
+        'dismissed': dismissed,
       };
   factory Deadline.fromJson(Map<String, dynamic> j) => Deadline(
         title: j['title'] as String,
         courseName: j['courseName'] as String,
         kind: DeadlineKind.values.byName(j['kind'] as String),
-        start: j['start'] == null ? null : DateTime.parse(j['start'] as String),
-        end: DateTime.parse(j['end'] as String),
+        start: j['start'] == null ? null : _readInstant(j['start'] as String),
+        end: _readInstant(j['end'] as String),
+        courseId: j['courseId'] as int?,
         moduleId: j['moduleId'] as int?,
         moduleType: j['moduleType'] as String?,
         done: (j['done'] as bool?) ?? false,
-        doneAt: j['doneAt'] == null ? null : DateTime.parse(j['doneAt'] as String),
+        doneAt: j['doneAt'] == null ? null : _readInstant(j['doneAt'] as String),
+        dismissed: (j['dismissed'] as bool?) ?? false,
       );
 }
 
@@ -187,22 +220,79 @@ class VodProgress {
   final Duration length;
   final double percent; // 0..100
 
+  /// The course module, for `/mod/vod/view.php?id=<this>`. Null when the course's
+  /// VOD list didn't name it, and in an old cache.
+  final int? moduleId;
+
+  /// The watch window. Null when the page gives none, and in an old cache.
+  final DateTime? opens;
+  final DateTime? closes;
+
   const VodProgress({
     required this.week,
     required this.title,
     required this.length,
     required this.percent,
+    this.moduleId,
+    this.opens,
+    this.closes,
   });
 
   bool get done => percent >= 100;
 
-  Map<String, dynamic> toJson() =>
-      {'week': week, 'title': title, 'lengthSec': length.inSeconds, 'percent': percent};
+  /// The watch window has ended. Unknown counts as still open.
+  bool closedAt(DateTime now) => closes != null && now.isAfter(closes!);
+
+  VodProgress withModuleId(int? id) => VodProgress(
+      week: week, title: title, length: length, percent: percent, moduleId: id, opens: opens, closes: closes);
+
+  Map<String, dynamic> toJson() => {
+        'week': week,
+        'title': title,
+        'lengthSec': length.inSeconds,
+        'percent': percent,
+        'moduleId': moduleId,
+        'opens': opens == null ? null : _writeInstant(opens!),
+        'closes': closes == null ? null : _writeInstant(closes!),
+      };
   factory VodProgress.fromJson(Map<String, dynamic> j) => VodProgress(
         week: j['week'] as int,
         title: j['title'] as String,
         length: Duration(seconds: j['lengthSec'] as int),
         percent: (j['percent'] as num).toDouble(),
+        moduleId: j['moduleId'] as int?,
+        opens: j['opens'] == null ? null : _readInstant(j['opens'] as String),
+        closes: j['closes'] == null ? null : _readInstant(j['closes'] as String),
+      );
+}
+
+/// One item of eClass's bell menu: an announcement, feedback, a graded item.
+class EclassNotification {
+  final int id;
+  final String subject;
+  final String text; // the short message, plain text
+  final String? url; // what it is about, when Moodle gives a link
+  final DateTime time;
+  final bool read;
+
+  const EclassNotification({
+    required this.id,
+    required this.subject,
+    required this.text,
+    required this.time,
+    this.url,
+    this.read = false,
+  });
+
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'subject': subject, 'text': text, 'url': url, 'time': _writeInstant(time), 'read': read};
+  factory EclassNotification.fromJson(Map<String, dynamic> j) => EclassNotification(
+        id: j['id'] as int,
+        subject: j['subject'] as String,
+        text: j['text'] as String,
+        url: j['url'] as String?,
+        time: _readInstant(j['time'] as String),
+        read: (j['read'] as bool?) ?? false,
       );
 }
 
@@ -216,11 +306,14 @@ class CourseAttendance {
 
   int count(AttendanceMark m) => classes.where((e) => e.mark == m).length;
 
-  /// Sessions dated on or before [now]'s day. eClass lists the whole
-  /// semester, the weeks still to come as unmarked rows.
+  /// Sessions held so far: those before [now]'s day, and today's once marked.
+  /// eClass lists the whole semester, the weeks still to come as unmarked rows,
+  /// and an unmarked class today may not have happened yet.
   List<AttendanceEntry> held(DateTime now) {
-    final end = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-    return classes.where((e) => e.date.isBefore(end)).toList();
+    final today = DateTime(now.year, now.month, now.day);
+    return classes
+        .where((e) => e.date.isBefore(today) || (!e.date.isAfter(today) && e.mark != AttendanceMark.unmarked))
+        .toList();
   }
 
   Map<String, dynamic> toJson() => {
@@ -285,6 +378,48 @@ class GradeRecord {
       );
 }
 
+/// Letters that count toward a GPA. Pass marks and withdrawals don't.
+const _gpaLetters = {'A+', 'A0', 'A-', 'B+', 'B0', 'B-', 'C+', 'C0', 'C-', 'D+', 'D0', 'D-', 'F'};
+
+/// Letters that earn no credit.
+const _noCreditLetters = {'F', 'NP', 'U', 'W', 'I'};
+
+/// The credits-weighted GPA of [records], one term's: "3.81". Null when none has
+/// a letter that counts, or when a points figure isn't on the 4.5 scale (a passing
+/// letter with 0 points, say), since then no figure here could be trusted.
+double? termGpa(Iterable<GradeRecord> records) {
+  var credits = 0.0, points = 0.0;
+  for (final r in records) {
+    if (!_gpaLetters.contains(r.letter) || r.credits <= 0) continue;
+    if (r.points > 4.5 || (r.points <= 0 && r.letter != 'F')) return null;
+    credits += r.credits;
+    points += r.credits * r.points;
+  }
+  return credits == 0 ? null : points / credits;
+}
+
+/// Credits earned per INS category ("MR-M"), most first. A course taken more
+/// than once counts by its latest result, in a term with a result.
+Map<String, double> creditsByCategory(Iterable<GradeRecord> records) {
+  final latest = <String, GradeRecord>{};
+  for (final r in records.where((r) => r.graded)) {
+    final key = r.code.isEmpty ? r.name : r.code;
+    final seen = latest[key];
+    if (seen == null || r.termKey >= seen.termKey) latest[key] = r;
+  }
+  final totals = <String, double>{};
+  for (final r in latest.values) {
+    if (_noCreditLetters.contains(r.letter)) continue;
+    totals.update(r.category.isEmpty ? 'Other' : r.category, (v) => v + r.credits, ifAbsent: () => r.credits);
+  }
+  final order = totals.keys.toList()
+    ..sort((a, b) {
+      final byCredits = totals[b]!.compareTo(totals[a]!);
+      return byCredits != 0 ? byCredits : a.compareTo(b);
+    });
+  return {for (final k in order) k: totals[k]!};
+}
+
 /// INS "View Grades and Standings". Deliberately has no field for the
 /// national ID that the source XML carries.
 class GradeReport {
@@ -293,17 +428,26 @@ class GradeReport {
   final int yearOfStudy;
   final List<GradeRecord> records;
 
+  /// INS's own totals of major-required and general-required credits (JUNPIL and
+  /// KYOPIL). Null when it gives none, and in an old cache.
+  final double? majorRequired;
+  final double? generalRequired;
+
   const GradeReport({
     required this.gpa,
     required this.creditsEarned,
     required this.yearOfStudy,
     required this.records,
+    this.majorRequired,
+    this.generalRequired,
   });
 
   Map<String, dynamic> toJson() => {
         'gpa': gpa,
         'creditsEarned': creditsEarned,
         'yearOfStudy': yearOfStudy,
+        'majorRequired': majorRequired,
+        'generalRequired': generalRequired,
         'records': records.map((e) => e.toJson()).toList(),
       };
   factory GradeReport.fromJson(Map<String, dynamic> j) => GradeReport(
@@ -313,6 +457,139 @@ class GradeReport {
         records: (j['records'] as List)
             .map((e) => GradeRecord.fromJson(e as Map<String, dynamic>))
             .toList(),
+        majorRequired: (j['majorRequired'] as num?)?.toDouble(),
+        generalRequired: (j['generalRequired'] as num?)?.toDouble(),
+      );
+}
+
+/// A number the way a mark reads best: 37, 0.37, 6.25, never 37.00.
+String plainNumber(double v) => v.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+
+/// One marked thing in an eClass course: a row of the course's grades page, or
+/// of its assignment and quiz lists where that page is closed.
+class GradeItem {
+  final String key; // the same on every refresh: "m<module id>" or "g<grade item id>"
+  final String name;
+  final String category; // '' when it sits directly under the course
+  final String mark; // as eClass shows it: "8.50", "A"; '-' or '' while unmarked
+  final double? grade; // the mark as a number, when it is one
+  final double? max;
+  final double? weight; // % of its category ("Calculated weight"); null where eClass shows "-"
+  final double? categoryWeight; // the category's % of the course total; 100 directly under the course
+  final double? contribution; // points in the course total, eClass's "백분 환산 점수"
+  final int? moduleId; // for opening it, when it is an activity
+  final String? moduleType; // "assign", "quiz", ...
+
+  const GradeItem({
+    required this.key,
+    required this.name,
+    this.category = '',
+    this.mark = '',
+    this.grade,
+    this.max,
+    this.weight,
+    this.categoryWeight,
+    this.contribution,
+    this.moduleId,
+    this.moduleType,
+  });
+
+  bool get marked => mark.isNotEmpty && mark != '-';
+
+  /// "8.5 / 10", or the mark alone when it isn't a number or has no maximum.
+  String get score => switch ((grade, max)) {
+        (final g?, final m?) => '${plainNumber(g)} / ${plainNumber(m)}',
+        (final g?, null) => plainNumber(g),
+        _ => mark,
+      };
+
+  GradeItem withMax(double max) => GradeItem(
+      key: key,
+      name: name,
+      category: category,
+      mark: mark,
+      grade: grade,
+      max: max,
+      weight: weight,
+      categoryWeight: categoryWeight,
+      contribution: contribution,
+      moduleId: moduleId,
+      moduleType: moduleType);
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'name': name,
+        'category': category,
+        'mark': mark,
+        'grade': grade,
+        'max': max,
+        'weight': weight,
+        'categoryWeight': categoryWeight,
+        'contribution': contribution,
+        'moduleId': moduleId,
+        'moduleType': moduleType,
+      };
+  factory GradeItem.fromJson(Map<String, dynamic> j) => GradeItem(
+        key: j['key'] as String,
+        name: j['name'] as String,
+        category: (j['category'] as String?) ?? '',
+        mark: (j['mark'] as String?) ?? '',
+        grade: (j['grade'] as num?)?.toDouble(),
+        max: (j['max'] as num?)?.toDouble(),
+        weight: (j['weight'] as num?)?.toDouble(),
+        categoryWeight: (j['categoryWeight'] as num?)?.toDouble(),
+        contribution: (j['contribution'] as num?)?.toDouble(),
+        moduleId: j['moduleId'] as int?,
+        moduleType: j['moduleType'] as String?,
+      );
+}
+
+/// A category of the grades page and its % of the course total. Listed even
+/// with nothing in it yet: a Final exam worth 25% before the final exists.
+class GradeCategory {
+  final String name;
+  final double? weight;
+  const GradeCategory(this.name, this.weight);
+
+  Map<String, dynamic> toJson() => {'name': name, 'weight': weight};
+  factory GradeCategory.fromJson(Map<String, dynamic> j) =>
+      GradeCategory(j['name'] as String, (j['weight'] as num?)?.toDouble());
+}
+
+/// Where a course's marks came from. Professors can close the grades page
+/// ("Can not view grades"), which leaves the assignment and quiz lists; those
+/// have marks but no weights. [none]: neither has anything.
+enum GradeSource { gradebook, activities, none }
+
+/// One course's marks in eClass.
+class CourseGrades {
+  final Course course;
+  final GradeSource source;
+  final List<GradeItem> items;
+  final List<GradeCategory> categories;
+  final double? percent; // the course total, %, as eClass works it out
+
+  const CourseGrades({
+    required this.course,
+    required this.source,
+    this.items = const [],
+    this.categories = const [],
+    this.percent,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'course': course.toJson(),
+        'source': source.name,
+        'items': items.map((e) => e.toJson()).toList(),
+        'categories': categories.map((e) => e.toJson()).toList(),
+        'percent': percent,
+      };
+  factory CourseGrades.fromJson(Map<String, dynamic> j) => CourseGrades(
+        course: Course.fromJson(j['course'] as Map<String, dynamic>),
+        source: GradeSource.values.byName(j['source'] as String),
+        items: (j['items'] as List).map((e) => GradeItem.fromJson(e as Map<String, dynamic>)).toList(),
+        categories: (j['categories'] as List).map((e) => GradeCategory.fromJson(e as Map<String, dynamic>)).toList(),
+        percent: (j['percent'] as num?)?.toDouble(),
       );
 }
 
@@ -360,6 +637,7 @@ class MailHeader {
   final String preview;
   final DateTime received;
   final bool unread;
+  final bool hasAttachments;
 
   const MailHeader({
     required this.id,
@@ -369,6 +647,7 @@ class MailHeader {
     this.to = '',
     this.preview = '',
     this.unread = false,
+    this.hasAttachments = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -377,8 +656,9 @@ class MailHeader {
         'to': to,
         'subject': subject,
         'preview': preview,
-        'received': received.toIso8601String(),
+        'received': _writeInstant(received),
         'unread': unread,
+        'hasAttachments': hasAttachments,
       };
   factory MailHeader.fromJson(Map<String, dynamic> j) => MailHeader(
         id: j['id'] as String,
@@ -386,20 +666,54 @@ class MailHeader {
         to: (j['to'] as String?) ?? '',
         subject: j['subject'] as String,
         preview: (j['preview'] as String?) ?? '',
-        received: DateTime.parse(j['received'] as String),
+        received: _readInstant(j['received'] as String),
         unread: (j['unread'] as bool?) ?? false,
+        hasAttachments: (j['hasAttachments'] as bool?) ?? false,
       );
 
   MailHeader withUnread(bool unread) => MailHeader(
-      id: id, from: from, to: to, subject: subject, received: received, preview: preview, unread: unread);
+      id: id,
+      from: from,
+      to: to,
+      subject: subject,
+      received: received,
+      preview: preview,
+      unread: unread,
+      hasAttachments: hasAttachments);
+
+  /// The same message under the id it has in another folder.
+  MailHeader withId(String id) => MailHeader(
+      id: id,
+      from: from,
+      to: to,
+      subject: subject,
+      received: received,
+      preview: preview,
+      unread: unread,
+      hasAttachments: hasAttachments);
 }
 
-/// A file attached to a message: only its name and size, not its content.
+/// A file attached to a message: its name and size, not its content.
+/// [id] is what `MailApi.attachment` fetches the file with.
 class MailAttachment {
+  final String id; // '' when Exchange gave none
   final String name;
   final int size; // bytes; 0 when Exchange didn't say
-  const MailAttachment({required this.name, this.size = 0});
+  final String contentType; // '' when Exchange didn't say
+  const MailAttachment({required this.name, this.id = '', this.size = 0, this.contentType = ''});
 }
+
+/// A whole file: one fetched from a message, or one to attach to a new one.
+class MailFile {
+  final String name;
+  final String contentType;
+  final List<int> bytes;
+  const MailFile({required this.name, required this.bytes, this.contentType = 'application/octet-stream'});
+}
+
+/// The most a message's new attachments may add up to. Exchange's default limit
+/// for a message is 35 MB, and base64 makes a file a third larger on the way.
+const maxMailAttachmentBytes = 25 * 1024 * 1024;
 
 /// One opened message. Fetched when it is opened and not cached.
 class MailMessage {
@@ -453,5 +767,9 @@ class OutgoingMail {
   final String? subject;
   final String? body;
 
-  const OutgoingMail(this.kind, {this.ref, this.to, this.cc, this.bcc, this.subject, this.body});
+  /// New files to attach. A saved draft keeps the ones it already has.
+  final List<MailFile> attachments;
+
+  const OutgoingMail(this.kind,
+      {this.ref, this.to, this.cc, this.bcc, this.subject, this.body, this.attachments = const []});
 }

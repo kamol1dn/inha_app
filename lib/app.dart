@@ -1,29 +1,31 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'data/app_data.dart';
 import 'notifications/notifier.dart';
 import 'notifications/routes.dart';
+import 'features/common.dart';
 import 'features/compose_screen.dart';
+import 'features/course_scores_screen.dart';
 import 'features/details.dart';
 import 'features/courses_screen.dart';
 import 'features/deadlines_screen.dart';
 import 'features/exams_screen.dart';
 import 'features/grades_screen.dart';
 import 'features/mail_screen.dart';
+import 'features/notices_screen.dart';
 import 'features/settings_screen.dart';
 import 'features/timetable_screen.dart';
 import 'features/today_screen.dart';
+import 'features/update_prompt.dart';
 import 'models/models.dart';
 import 'ui/format/format.dart';
 import 'ui/theme/app_colors.dart';
 import 'ui/theme/app_text.dart';
 import 'ui/theme/status_colors.dart';
 
-/// The key of the last tapped notification, until HomeShell has opened it.
-class NotificationTaps extends ValueNotifier<String?> {
-  NotificationTaps() : super(null);
-}
+export 'notifications/routes.dart' show NotificationTaps;
 
 class InhaApp extends StatelessWidget {
   const InhaApp({super.key});
@@ -175,6 +177,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       _askForNotificationsOnce();
       _taps = context.read<NotificationTaps>()..addListener(_openTapped);
       _openTapped();
+      // A debug build is signed with another key: the release couldn't install over it.
+      if (kReleaseMode) promptForUpdate(context);
     });
   }
 
@@ -188,16 +192,26 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final data = context.read<AppData>();
     Navigator.of(context).popUntil((r) => r.isFirst);
     switch (notificationTarget(key,
-        deadlines: data.deadlines.data?.value ?? const [], attendance: data.attendance.data?.value ?? const [])) {
+        deadlines: data.deadlines.data?.value ?? const [],
+        attendance: data.attendance.data?.value ?? const [],
+        courseGrades: data.courseGrades.data?.value ?? const [])) {
       case DeadlineTarget(:final deadline):
         setState(() => _tab = 2);
         showDeadlineSheet(context, deadline);
       case CourseTarget(:final course):
         setState(() => _tab = 3);
         openCourse(context, course);
+      case ScoresTarget(:final course):
+        setState(() => _tab = 3);
+        openScores(context, course);
       case ScheduleTarget(:final weekday):
         setState(() => _tab = 1);
         _timetable.currentState?.showWeekday(weekday);
+      case ExamsTarget():
+        _push(const ExamsScreen());
+      case NoticesTarget():
+        setState(() => _tab = 0);
+        openNotices(context);
       case TabTarget(:final tab):
         setState(() => _tab = tab);
       case null:
@@ -218,7 +232,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final data = context.read<AppData>();
     if (data.prefs.notificationsAsked) return;
     data.prefs.notificationsAsked = true;
-    await context.read<Notifier>().requestPermission();
+    // While notifications were off, nothing was planned.
+    if (await context.read<Notifier>().requestPermission()) await data.onReminderDataChanged?.call();
   }
 
   @override
@@ -268,29 +283,35 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               TextButton(onPressed: () => _push(const ExamsScreen()), child: const Text('Exams')),
             if (_tab == 3)
               TextButton(onPressed: () => _push(const GradesScreen()), child: const Text('Grades')),
+            if (_tab == 4)
+              IconButton(
+                tooltip: 'Search ${_folder.label}',
+                icon: const Icon(Icons.search),
+                onPressed: () => openMailSearch(context, _folder),
+              ),
           ],
-          bottom: _anyLoading(data) || (_tab == 4 && data.mailbox(_folder).list.loading)
-              ? const PreferredSize(
-                  preferredSize: Size.fromHeight(2),
-                  child: LinearProgressIndicator())
-              : null,
         ),
-        body: IndexedStack(
-          index: _tab,
-          children: [
-            TodayScreen(
-              onOpenTab: (i) => setState(() => _tab = i),
-              onOpenSchedule: (weekday) {
-                setState(() => _tab = 1);
-                _timetable.currentState?.showWeekday(weekday);
-              },
+        body: Column(children: [
+          const SyncStrip(),
+          Expanded(
+            child: IndexedStack(
+              index: _tab,
+              children: [
+                TodayScreen(
+                  onOpenTab: (i) => setState(() => _tab = i),
+                  onOpenSchedule: (weekday) {
+                    setState(() => _tab = 1);
+                    _timetable.currentState?.showWeekday(weekday);
+                  },
+                ),
+                TimetableScreen(key: _timetable),
+                const DeadlinesScreen(),
+                const CoursesScreen(),
+                MailScreen(folder: _folder),
+              ],
             ),
-            TimetableScreen(key: _timetable),
-            const DeadlinesScreen(),
-            const CoursesScreen(),
-            MailScreen(folder: _folder),
-          ],
-        ),
+          ),
+        ]),
         // The Mail tab's folders, behind the menu button where Back would be.
         drawer: _tab == 4
             ? MailDrawer(
@@ -340,8 +361,4 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       ),
     );
   }
-
-  static bool _anyLoading(AppData d) =>
-      d.lessons.loading || d.deadlines.loading || d.attendance.loading || d.inbox.loading ||
-      d.mailUnread.loading;
 }

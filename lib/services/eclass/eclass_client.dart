@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import '../../core/credentials.dart';
@@ -21,9 +23,15 @@ class EclassClient implements EclassApi {
   final Sessions _sessions;
   final CredentialStore _credentials;
 
+  /// Wraps a login that is about to run, so the app can say so.
+  Future<void> Function(Future<void> Function() login)? loginStep;
+
   /// The login in progress, shared so parallel fetches that all find the
   /// session expired trigger one login, not several.
   Future<void>? _loggingIn;
+
+  /// The sesskey and user id the AJAX call needs, from the last page read.
+  (String, int)? _ajaxKeys;
 
   Dio get _dio => _sessions.client(Service.eclass);
 
@@ -41,6 +49,11 @@ class EclassClient implements EclassApi {
       _fetchList('/calendar/view.php?view=upcoming', parseUpcoming);
 
   @override
+  Future<List<Deadline>> upcomingIn(Course course) => _fetchList(
+      '/calendar/view.php?view=upcoming&course=${course.id}', parseUpcoming,
+      optional: true);
+
+  @override
   Future<CourseAttendance> attendance(Course course) async {
     final classes = _fetchList<AttendanceEntry>(
         '/local/ubattendance/my_status.php?id=${course.id}', parseAttendance,
@@ -48,9 +61,22 @@ class EclassClient implements EclassApi {
     final vods = _fetchList<VodProgress>(
         '/report/ubcompletion/user_progress.php?id=${course.id}', parseVodProgress,
         optional: true);
-    // Wait on both together so a failure in one never goes unhandled.
-    await Future.wait([classes, vods]);
-    return CourseAttendance(course: course, classes: await classes, vods: await vods);
+    final modules = _vodModules(course);
+    // Wait on them together so a failure in one never goes unhandled.
+    await Future.wait([classes, vods, modules]);
+    return CourseAttendance(course: course, classes: await classes, vods: withVodModules(await vods, await modules));
+  }
+
+  /// The course's VOD list, for the module ids. Only the links depend on it, so
+  /// it never fails the course's attendance, unless the session did.
+  Future<List<(String, int)>> _vodModules(Course course) async {
+    try {
+      return await _fetchList<(String, int)>('/mod/vod/index.php?id=${course.id}', parseVodModules, optional: true);
+    } on DioException {
+      return const [];
+    } on ParseError {
+      return const [];
+    }
   }
 
   @override
@@ -64,6 +90,82 @@ class EclassClient implements EclassApi {
     };
     if (path == null || parse == null) return null;
     return (await _fetchList(path, (html) => [parse(html)])).single;
+  }
+
+  @override
+  Future<CourseGrades> courseGrades(Course course) async {
+    final book = await _fetchList<CourseGrades>(
+      '/grade/report/user/index.php?id=${course.id}',
+      (html) => [?parseGradeBook(html, course)],
+      optional: true,
+    );
+    if (book.isNotEmpty) return book.single;
+
+    // A closed grades page answers 404 "Can not view grades".
+    final assignments = _fetchList<GradeItem>(
+        '/mod/assign/index.php?id=${course.id}', (html) => parseActivityGrades(html, 'assign'),
+        optional: true);
+    final quizzes = _fetchList<GradeItem>(
+        '/mod/quiz/index.php?id=${course.id}', (html) => parseActivityGrades(html, 'quiz'),
+        optional: true);
+    await Future.wait([assignments, quizzes]);
+    final items = [...await Future.wait((await assignments).map(_withAssignMax)), ...await quizzes];
+    return CourseGrades(
+        course: course, source: items.isEmpty ? GradeSource.none : GradeSource.activities, items: items);
+  }
+
+  @override
+  Future<List<EclassNotification>> notifications() async {
+    for (var attempt = 0;; attempt++) {
+      final (sesskey, userId) = _ajaxKeys ?? await _readAjaxKeys();
+      try {
+        final res = await _dio.post<String>(
+          base.resolve('/lib/ajax/service.php?sesskey=${Uri.encodeQueryComponent(sesskey)}').toString(),
+          data: jsonEncode([
+            {
+              'index': 0,
+              'methodname': 'message_popup_get_popup_notifications',
+              'args': {'useridto': userId, 'newestfirst': true, 'limit': 20, 'offset': 0},
+            }
+          ]),
+          options: Options(contentType: Headers.jsonContentType, responseType: ResponseType.plain),
+        );
+        final status = res.statusCode ?? 0;
+        if (status >= 400) {
+          throw DioException.badResponse(statusCode: status, requestOptions: res.requestOptions, response: res);
+        }
+        return parseNotifications(res.data ?? '');
+      } on Exception {
+        // Most likely an expired sesskey: read the keys again, once.
+        _ajaxKeys = null;
+        if (attempt >= 1) rethrow;
+      }
+    }
+  }
+
+  Future<(String, int)> _readAjaxKeys() async {
+    final keys = await _fetchList<(String, int)>('/', (html) {
+      final (sesskey, userId) = (extractSesskey(html), parseUserId(html));
+      if (sesskey == null || userId == null) throw ParseError('eClass session key');
+      return [(sesskey, userId)];
+    });
+    return _ajaxKeys = keys.single;
+  }
+
+  /// The assignment list gives a mark without its maximum; the assignment's
+  /// own page has both. A page that fails only costs the "/ 100".
+  Future<GradeItem> _withAssignMax(GradeItem item) async {
+    final id = item.moduleId;
+    if (!item.marked || item.max != null || id == null) return item;
+    try {
+      final max = await _fetchList<double>(
+          '/mod/assign/view.php?id=$id', (html) => [?parseAssignMax(html)]);
+      return max.isEmpty ? item : item.withMax(max.single);
+    } on DioException {
+      return item;
+    } on ParseError {
+      return item;
+    }
   }
 
   /// GETs [path] and parses it, logging in and retrying once if the session
@@ -98,13 +200,17 @@ class EclassClient implements EclassApi {
       );
 
   Future<void> _login() =>
-      _loggingIn ??= _postLogin().whenComplete(() => _loggingIn = null);
+      _loggingIn ??= (loginStep?.call(_postLogin) ?? _postLogin()).whenComplete(() => _loggingIn = null);
 
   Future<void> _postLogin() async {
     final creds = await _credentials.read(Service.eclass);
     if (creds == null || creds.username.isEmpty || creds.password.isEmpty) {
       throw LoginRequired(Service.eclass, 'No eClass login saved');
     }
+    if (await _credentials.isRefused(Service.eclass, creds)) {
+      throw LoginRequired(Service.eclass, 'eClass rejected the saved login');
+    }
+    _ajaxKeys = null; // they belong to the session that ended
 
     var at = base.resolve('/login/index.php');
     var res = await _dio.post<String>(
@@ -126,6 +232,7 @@ class EclassClient implements EclassApi {
 
     // A rejected login shows the login form again (with an error box).
     if (isLoginPage(res.data ?? '')) {
+      await _credentials.markRefused(Service.eclass, creds);
       throw LoginRequired(Service.eclass, 'eClass rejected the saved login');
     }
     final status = res.statusCode ?? 0;

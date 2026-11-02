@@ -9,8 +9,9 @@ grades and university mail.
 | Today | Next class and room, what needs attention in the next 3 days, unread mail | All of the below |
 | Schedule | The week's classes, one day at a time | EduPage timetable |
 | Deadlines | Assignments, quizzes and VOD watch windows, with "Open in eClass" | eClass |
-| Courses | Absences against the limit you set, VOD progress, the INS grade | eClass, INS |
-| Grades | GPA, credits and every course by term | INS |
+| Courses | Absences against the limit you set, VOD progress and watching a VOD in the app, your score so far, the INS grade | eClass, INS |
+| Scores | Every mark by category with its weight, the accumulated score, and a what-if calculator; a notification when something is graded | eClass |
+| Grades | GPA, credits and every course by term, this semester's scores | INS, eClass |
 | Mail | Inbox, Drafts, Sent, Deleted, Junk and Notes; read, reply, reply all, forward and write new mail, with names from the university directory | University Exchange mail |
 | Exams | Your midterm or final exams: when, and the rooms each uses until you set yours (on Today, Schedule and course detail too); no classes in exam week | The university's exam timetable PDF, bundled (`docs/EXAMS.md`) |
 
@@ -27,7 +28,7 @@ The app has no server of its own and sends nothing anywhere else: no analytics, 
 connects directly to:
 
 - `iut.edupage.org` (the public timetable; no login),
-- `eclass.inha.ac.kr` (form login, then the pages a browser would load),
+- `eclass.inha.ac.kr` (form login, then the pages a browser would load; its VOD player page, in a WebView, loads the video from wherever eClass hosts it),
 - `ins.inha.uz` (form login, grades),
 - `mail.inha.uz` (Exchange Web Services with Basic auth over HTTPS).
 
@@ -35,6 +36,11 @@ The two typefaces, Fraunces and Public Sans (both under the SIL Open Font Licens
 nothing is downloaded at run time. So are the exam timetables: no IUT service publishes them, so each PDF the
 university posts is read into `assets/exams/` and ships with the next version of the app. The per-student room
 list is not bundled (it names every student); you set your own room in the app.
+
+The app also asks `api.github.com` for the number of the newest release, when it starts and from Settings. Nothing about
+the student is sent. If that release is newer, the app says so and opens this repository's releases page in the
+browser; the student downloads the APK and installs it over the old one. The app downloads nothing itself. A plain push
+announces nothing: only a `v*` tag makes a release, and its number must match `pubspec.yaml` or the build fails.
 
 One exception is the student's choice, not the app's: when they ask an assistant such as Gemini about their
 classes, Android hands it the answer of one of the app's AppFunctions, and Gemini may process that on Google's
@@ -84,7 +90,8 @@ release build falls back to the debug key, which is fine for testing but cannot 
 `.github/workflows/release.yml` runs on every push to `main`, on `v*` tags and by hand (Actions,
 "Release APK", Run workflow). It runs `flutter analyze`, `flutter test`, builds
 `flutter build apk --release --split-per-abi`, runs the Android unit tests and uploads the APKs as an
-artifact; a `v*` tag also attaches them to a GitHub release.
+artifact; a `v*` tag also attaches them to a GitHub release. The browser extension's builds go on the same
+release, with their install steps in [`extension/README.md`](extension/README.md#install).
 
 It signs with the same keystore as a local release build, read from four repository secrets. Set them
 once from Git Bash in the repository (each `gh secret set` without `--body` asks for the value, so no

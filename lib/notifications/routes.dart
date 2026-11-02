@@ -2,8 +2,16 @@
 /// top of the tab that owns it). Pure: the payload is the notification key.
 library;
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
+
 import '../models/models.dart';
 import 'rules.dart';
+
+/// The key of the last tapped notification, until HomeShell has opened it. A
+/// screen on top of the tabs can send a key here to lead to a tab as well.
+class NotificationTaps extends ValueNotifier<String?> {
+  NotificationTaps() : super(null);
+}
 
 sealed class NotificationTarget {
   const NotificationTarget();
@@ -21,10 +29,26 @@ class CourseTarget extends NotificationTarget {
   const CourseTarget(this.course);
 }
 
+/// A new mark: the course's scores, over the Courses tab.
+class ScoresTarget extends NotificationTarget {
+  final Course course;
+  const ScoresTarget(this.course);
+}
+
 /// A class reminder: Schedule on that weekday.
 class ScheduleTarget extends NotificationTarget {
   final int weekday;
   const ScheduleTarget(this.weekday);
+}
+
+/// An exam reminder: the Exams screen.
+class ExamsTarget extends NotificationTarget {
+  const ExamsTarget();
+}
+
+/// A bell-menu item: everything the menu lists, with its text, over Today.
+class NoticesTarget extends NotificationTarget {
+  const NoticesTarget();
 }
 
 /// The item is gone (submitted, moved, the course dropped): its tab. A
@@ -41,7 +65,14 @@ NotificationTarget? notificationTarget(
   String key, {
   List<Deadline> deadlines = const [],
   List<CourseAttendance> attendance = const [],
+  List<CourseGrades> courseGrades = const [],
 }) {
+  if (gradeCourseId(key) case final courseId?) {
+    for (final g in courseGrades) {
+      if (g.course.id == courseId) return ScoresTarget(g.course);
+    }
+    return const TabTarget(3);
+  }
   if (key.startsWith(vodKeyPrefix) || key.startsWith(dueKeyPrefix)) {
     for (final d in deadlines) {
       if (key.startsWith('${reminderStem(d)}|')) return DeadlineTarget(d);
@@ -59,6 +90,8 @@ NotificationTarget? notificationTarget(
     final day = DateTime.tryParse(key.substring(classKeyPrefix.length).split('|').first);
     return day == null ? const TabTarget(1) : ScheduleTarget(day.weekday);
   }
+  if (key.startsWith(examKeyPrefix)) return const ExamsTarget();
+  if (key.startsWith(noticeKeyPrefix)) return const NoticesTarget();
   if (key.startsWith(tabKeyPrefix)) {
     final tab = int.tryParse(key.substring(tabKeyPrefix.length));
     return tab != null && tab >= 0 && tab <= 4 ? TabTarget(tab) : null;

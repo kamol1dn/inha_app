@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -12,11 +11,15 @@ import '../core/cache.dart';
 import '../core/session.dart';
 import '../models/models.dart';
 import '../notifications/notifier.dart';
+import '../notifications/rules.dart' show reminderStem;
 import '../services/eclass/eclass_api.dart';
 import '../services/edupage/timetable_api.dart';
+import '../services/edupage/timetable_parser.dart' show UnknownClassGroup;
 import '../services/ins/ins_api.dart';
 import '../services/mail/mail_api.dart';
+import '../ui/format/format.dart';
 import 'exams.dart';
+import 'sync_progress.dart';
 
 /// The last time a service answered with the saved login: [ok] when it let
 /// the app in, false when it rejected the username or password.
@@ -25,26 +28,48 @@ class AccountCheck {
   final DateTime at;
   const AccountCheck(this.ok, this.at);
 
-  Map<String, dynamic> toJson() => {'ok': ok, 'at': at.toIso8601String()};
+  Map<String, dynamic> toJson() => {'ok': ok, 'at': at.toUtc().toIso8601String()};
   static AccountCheck? fromJson(Object? j) {
     if (j is! Map<String, dynamic>) return null;
     final at = DateTime.tryParse(j['at'] as String? ?? '');
-    return at == null ? null : AccountCheck(j['ok'] == true, at);
+    return at == null ? null : AccountCheck(j['ok'] == true, at.toLocal());
   }
 }
 
 /// User choices that aren't secrets.
 class Prefs {
   final SharedPreferences _p;
-  Prefs(this._p);
+  Prefs(this._p) {
+    _keepOldDefaults();
+  }
 
-  String get classGroup => _p.getString('classGroup') ?? 'ICE23-1';
+  /// Once, for an install from when the class group and the hidden subjects had
+  /// defaults instead of being the student's choice: what it has been running
+  /// on becomes its saved choice. A missing pref alone can't tell such an
+  /// install from a fresh one, so anything else it left behind is the sign.
+  void _keepOldDefaults() {
+    const done = 'prefs.defaultsSettled';
+    if (_p.getBool(done) ?? false) return;
+    const signs = ['classGroup', 'excludedSubjects', 'notify.asked', 'cache.lessons', 'cache.deadlines', Notifier.prefsKey];
+    if (signs.any(_p.containsKey)) {
+      if (!_p.containsKey('classGroup')) _p.setString('classGroup', 'ICE23-1');
+      if (!_p.containsKey('excludedSubjects')) _p.setStringList('excludedSubjects', const ['Big Data']);
+    }
+    _p.setBool(done, true);
+  }
+
+  /// The student's class group, as EduPage names it; '' until they choose one.
+  String get classGroup => _p.getString('classGroup') ?? '';
   set classGroup(String v) => _p.setString('classGroup', v);
 
   /// Subjects the student dropped but EduPage still lists for the group.
-  Set<String> get excludedSubjects =>
-      (_p.getStringList('excludedSubjects') ?? const ['Big Data']).toSet();
+  Set<String> get excludedSubjects => (_p.getStringList('excludedSubjects') ?? const <String>[]).toSet();
   set excludedSubjects(Set<String> v) => _p.setStringList('excludedSubjects', v.toList());
+
+  /// The deadlines the student marked done, by [reminderStem]: what eClass can't
+  /// track, such as work handed in on paper.
+  Set<String> get dismissedDeadlines => (_p.getStringList('deadlines.dismissed') ?? const <String>[]).toSet();
+  set dismissedDeadlines(Set<String> v) => _p.setStringList('deadlines.dismissed', v.toList());
 
   // Deadlines-tab filters. A per-device convenience, so plain prefs.
   static const defaultDeadlineKinds = {
@@ -92,6 +117,40 @@ class Prefs {
     final all = absenceLimits;
     limit == null ? all.remove(courseId) : all[courseId] = limit;
     _p.setString(Notifier.absenceLimitsKey, jsonEncode({for (final e in all.entries) '${e.key}': e.value}));
+  }
+
+  /// Forgets what the notifier and the student recorded about the eClass
+  /// account, along with it: another account starts from its own baseline.
+  void clearEclassMemory() {
+    _p.remove(Notifier.seenGradesKey);
+    _p.remove(Notifier.seenGradeSourcesKey);
+    _p.remove(Notifier.seenCoursesKey);
+    _p.remove(Notifier.noticesSeenKey);
+    _p.remove('deadlines.dismissed');
+    _p.remove(_vodPositionsKey);
+  }
+
+  static const _vodPositionsKey = 'vod.positions.v1';
+
+  /// Where the student last was in each VOD, in seconds, by module id. This
+  /// phone's own note, for "Continue from"; eClass's record is kept by its player.
+  Map<int, int> get vodPositions {
+    try {
+      return {
+        for (final e in (jsonDecode(_p.getString(_vodPositionsKey) ?? '{}') as Map<String, dynamic>).entries)
+          int.parse(e.key): (e.value as num).toInt(),
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  int? vodPosition(int moduleId) => vodPositions[moduleId];
+
+  void setVodPosition(int moduleId, int? seconds) {
+    final all = vodPositions;
+    seconds == null ? all.remove(moduleId) : all[moduleId] = seconds;
+    _p.setString(_vodPositionsKey, jsonEncode({for (final e in all.entries) '${e.key}': e.value}));
   }
 
   /// The exam rooms the student set once they knew them, by [Exam.keyIn].
@@ -148,6 +207,9 @@ class AppData extends ChangeNotifier {
   final JsonCache cache;
   final Prefs prefs;
 
+  /// What the refreshes are doing right now (the strip under the app bar).
+  final sync = SyncProgress();
+
   AppData({
     required this.eclass,
     required this.timetable,
@@ -156,6 +218,8 @@ class AppData extends ChangeNotifier {
     required this.cache,
     required this.prefs,
   }) {
+    _timetableGroup = prefs.classGroup;
+    _timetableAsked = _timetableQuestion();
     _readCache();
   }
 
@@ -167,6 +231,23 @@ class AppData extends ChangeNotifier {
   /// clears one, or a change to the absence limits. The app hooks the widget
   /// update in here (docs/WIDGETS.md).
   Future<void> Function()? onWidgetDataChanged;
+
+  /// Called from [forget], to take the account's notifications away too.
+  Future<void> Function(Service)? onSignedOut;
+
+  /// Whether a login is saved for the service. Hooked up to the credential
+  /// store: a sign-out in the other isolate can't reach this one's refreshes,
+  /// so they look before writing, and a resume looks at what was written.
+  Future<bool> Function(Service)? hasLogin;
+
+  Future<bool> _signedIn(Service s) async {
+    if (!s.needsLogin || hasLogin == null) return true;
+    try {
+      return await hasLogin!(s);
+    } catch (_) {
+      return true; // the store can't say: nothing suggests a sign-out
+    }
+  }
 
   static const _widgetCacheKeys = {'lessons', 'deadlines', 'attendance', 'grades'};
 
@@ -181,24 +262,45 @@ class AppData extends ChangeNotifier {
     }
 
     lessons = read(() => lessons, cache.read('lessons', _decodeList(Lesson.fromJson)));
+    if (lessons.data == null && prefs.classGroup.isEmpty) lessons = Snapshot(error: _noClassGroup);
     deadlines = read(() => deadlines, cache.read('deadlines', _decodeList(Deadline.fromJson)));
     attendance =
         read(() => attendance, cache.read('attendance', _decodeList(CourseAttendance.fromJson)));
+    courseGrades = read(() => courseGrades, cache.read('courseGrades', _decodeList(CourseGrades.fromJson)));
     grades = read(
         () => grades, cache.read('grades', (j) => GradeReport.fromJson(j as Map<String, dynamic>)));
-    for (final box in [for (final f in MailFolder.values) (f, _mailbox[f]!)]) {
-      box.$2.list = read(() => box.$2.list, cache.read(_mailKey(box.$1), _decodeList(MailHeader.fromJson)));
+    eclassNotifications = read(
+        () => eclassNotifications, cache.read('notifications', _decodeList(EclassNotification.fromJson)));
+    for (final (f, box) in [for (final f in MailFolder.values) (f, _mailbox[f]!)]) {
+      final cached = cache.read(_mailKey(f), _decodeList(MailHeader.fromJson));
+      // Nothing but a refresh writes a folder, so the same fetch time means this
+      // is the list on screen, and it may have older pages loaded since.
+      if (reload && cached != null && cached.fetchedAt == box.list.data?.fetchedAt) continue;
+      box.list = read(() => box.list, cached);
+      if (reload) {
+        box.hasMore = true;
+        box.moreError = null;
+      }
     }
     mailUnread = read(() => mailUnread, cache.read('mailUnread', (j) => j as int));
   }
 
+  static final _noClassGroup = SetupNeeded('Choose your class group in Settings.');
+
   /// Picks up what the background refresh wrote while the app was away.
   Future<void> reloadFromCache() async {
-    if ([lessons, deadlines, attendance, grades, mailUnread, for (final f in _mailbox.values) f.list]
+    if ([lessons, deadlines, attendance, courseGrades, grades, eclassNotifications, mailUnread, for (final f in _mailbox.values) f.list]
         .any((s) => s.loading)) {
       return;
     }
     await cache.reload();
+    // A refresh in the other isolate may have finished after a sign-out here.
+    for (final s in Service.values) {
+      if (await _signedIn(s)) continue;
+      for (final key in _cacheKeys[s]!) {
+        await cache.remove(key);
+      }
+    }
     _readCache(reload: true);
     notifyListeners();
   }
@@ -206,7 +308,15 @@ class AppData extends ChangeNotifier {
   late Snapshot<List<Lesson>> lessons;
   late Snapshot<List<Deadline>> deadlines;
   late Snapshot<List<CourseAttendance>> attendance;
+  late Snapshot<List<CourseGrades>> courseGrades;
   late Snapshot<GradeReport> grades;
+
+  /// The newest items of eClass's bell menu.
+  late Snapshot<List<EclassNotification>> eclassNotifications;
+
+  /// The course's marks in eClass, or null before they have loaded.
+  CourseGrades? gradesOf(int courseId) =>
+      courseGrades.data?.value.where((g) => g.course.id == courseId).firstOrNull;
 
   final _mailbox = {for (final f in MailFolder.values) f: MailboxFolder()};
 
@@ -240,30 +350,70 @@ class AppData extends ChangeNotifier {
         refreshMail(),
       ]);
 
+  late String _timetableGroup;
+  late String _timetableAsked;
+
+  String _timetableQuestion() =>
+      '${prefs.classGroup}|${(prefs.excludedSubjects.toList()..sort()).join(',')}';
+
+  /// Loads the saved class group's lessons. A fetch already running for another
+  /// group or other hidden subjects answers the old question: it is dropped and
+  /// this one runs instead. Lessons of another group never stay on screen as
+  /// the student's own, and with no group chosen nothing is fetched at all.
   Future<void> refreshTimetable() async {
+    final asked = _timetableQuestion();
+    if (asked != _timetableAsked) {
+      _timetableAsked = asked;
+      _invalidate(Service.edupage);
+      if (prefs.classGroup != _timetableGroup) {
+        _timetableGroup = prefs.classGroup;
+        await cache.remove('lessons');
+        lessons = const Snapshot();
+        unawaited(onWidgetDataChanged?.call());
+      }
+    }
+    if (prefs.classGroup.isEmpty) {
+      lessons = Snapshot(data: lessons.data, error: _noClassGroup);
+      notifyListeners();
+      return;
+    }
     await _run<List<Lesson>>(
       get: () => lessons,
       set: (s) => lessons = s,
-      fetch: () => timetable.lessons(prefs.classGroup, excludeSubjects: prefs.excludedSubjects),
+      fetch: () => sync.step('Timetable', prefs.classGroup,
+          () => timetable.lessons(prefs.classGroup, excludeSubjects: prefs.excludedSubjects)),
       key: 'lessons',
       encode: _encodeList,
       service: Service.edupage,
     );
+    // Not a group this timetable has: what's cached can't be the student's.
+    if (lessons.error is UnknownClassGroup && lessons.data != null) {
+      await cache.remove('lessons');
+      lessons = Snapshot(error: lessons.error);
+      notifyListeners();
+    }
     await onReminderDataChanged?.call();
   }
 
-  /// Deadlines and attendance share one eClass login, so they refresh together.
+  /// The class groups EduPage knows, for a picker.
+  Future<List<String>> classGroups() => sync.step('Timetable', 'class groups', timetable.classGroups);
+
+  /// Deadlines, attendance and marks share one eClass login, so they refresh together.
   Future<void> refreshEclass() async {
     await _refreshEclassData();
     await onReminderDataChanged?.call();
   }
 
-  Future<void> _refreshEclassData() async {
+  Future<void> _refreshEclassData() => sync.span(() async {
+    // Asked for once, and only by a source that isn't already refreshing.
+    Future<List<Course>>? asked;
+    Future<List<Course>> courses() => asked ??= sync.step('eClass', 'course list', eclass.courses);
+    PartialRefresh? attendanceGaps, marksGaps;
     await Future.wait([
       _run<List<Deadline>>(
         get: () => deadlines,
         set: (s) => deadlines = s,
-        fetch: () async => _withSubmissions(await eclass.upcoming()),
+        fetch: () async => _withDismissals(await _withSubmissions(await _upcoming(courses))),
         key: 'deadlines',
         encode: _encodeList,
         service: Service.eclass,
@@ -271,15 +421,231 @@ class AppData extends ChangeNotifier {
       _run<List<CourseAttendance>>(
         get: () => attendance,
         set: (s) => attendance = s,
-        fetch: () async {
-          final courses = await eclass.courses();
-          return Future.wait(courses.map(eclass.attendance));
-        },
+        fetch: () async => _eachCourse(
+          await courses(),
+          (c) => sync.step('eClass', 'attendance for ${c.name}', () => eclass.attendance(c)),
+          (c) =>
+              attendance.data?.value.where((a) => a.course.id == c.id).firstOrNull ?? CourseAttendance(course: c),
+          (gaps) => attendanceGaps = gaps,
+        ),
+        warning: () => attendanceGaps,
         key: 'attendance',
         encode: _encodeList,
         service: Service.eclass,
       ),
+      _run<List<CourseGrades>>(
+        get: () => courseGrades,
+        set: (s) => courseGrades = s,
+        fetch: () async => _eachCourse(
+          await courses(),
+          (c) => sync.step('eClass', 'marks for ${c.name}', () => eclass.courseGrades(c)),
+          (c) => gradesOf(c.id) ?? CourseGrades(course: c, source: GradeSource.none),
+          (gaps) => marksGaps = gaps,
+        ),
+        warning: () => marksGaps,
+        key: 'courseGrades',
+        encode: _encodeList,
+        service: Service.eclass,
+      ),
+      _run<List<EclassNotification>>(
+        get: () => eclassNotifications,
+        set: (s) => eclassNotifications = s,
+        fetch: () => sync.step('eClass', 'notifications', eclass.notifications),
+        key: 'notifications',
+        encode: _encodeList,
+        service: Service.eclass,
+      ),
     ]);
+  });
+
+  /// The saved eClass session, logged in again if it has lapsed, for a WebView
+  /// to borrow. A refused login comes back as [LoginRequired].
+  Future<void> ensureEclassSession() async {
+    try {
+      await sync.step('eClass', 'session', eclass.ensureLoggedIn);
+    } on LoginRequired {
+      _check(Service.eclass, ok: false);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// One course's attendance and VOD rows, after watching one of its videos: a
+  /// few pages rather than all of eClass. An edit to the list, so it keeps its
+  /// fetch time, and a failure stays beside the old rows. The notification first
+  /// is for the row's "Continue from", which the player has just saved.
+  Future<void> refreshCourseAttendance(int? courseId) async {
+    notifyListeners();
+    // A refresh still running may have read this course before the student left:
+    // what it brings would overwrite the new percentage, so it lands first.
+    await _attendanceIdle();
+    final course = attendance.data?.value.where((a) => a.course.id == courseId).firstOrNull?.course;
+    if (course == null) return;
+    final generation = _generation[Service.eclass];
+    try {
+      final fresh = await sync.step('eClass', 'attendance for ${course.name}', () => eclass.attendance(course));
+      if (generation != _generation[Service.eclass] || !await _signedIn(Service.eclass)) return;
+      final list = attendance.data;
+      if (generation != _generation[Service.eclass] || list == null) return;
+      final written = await cache.write(
+          'attendance', [for (final a in list.value) a.course.id == course.id ? fresh : a], _encodeList,
+          at: list.fetchedAt);
+      if (generation != _generation[Service.eclass]) {
+        await cache.remove('attendance');
+        return;
+      }
+      attendance = Snapshot(data: written, error: attendance.error, loading: attendance.loading);
+      _check(Service.eclass, ok: true);
+      unawaited(onWidgetDataChanged?.call());
+    } catch (e) {
+      if (generation != _generation[Service.eclass]) return;
+      if (kDebugMode) debugPrint('attendance ${course.id} failed: ${_debugDescribe(e)}');
+      attendance = Snapshot(data: attendance.data, error: e, loading: attendance.loading);
+      if (e is LoginRequired) _check(Service.eclass, ok: false);
+    }
+    notifyListeners();
+    await onReminderDataChanged?.call();
+  }
+
+  Future<void> _attendanceIdle() {
+    if (!attendance.loading) return Future.value();
+    final idle = Completer<void>();
+    void check() {
+      if (attendance.loading) return;
+      removeListener(check);
+      idle.complete();
+    }
+
+    addListener(check);
+    return idle.future;
+  }
+
+  /// One fetch per course, all at once. A course that fails keeps [fallback],
+  /// and [gaps] hears which did; one bad page doesn't hold back the others. Only
+  /// a refused login, or every course failing, fails the whole list.
+  Future<List<T>> _eachCourse<T>(
+    List<Course> courses,
+    Future<T> Function(Course) fetch,
+    T Function(Course) fallback,
+    void Function(PartialRefresh) gaps,
+  ) async {
+    final failed = <String>[];
+    Object? first;
+    final out = await Future.wait(courses.map((c) async {
+      try {
+        return await fetch(c);
+      } on LoginRequired {
+        rethrow;
+      } catch (e) {
+        if (kDebugMode) debugPrint('course ${c.id} failed: ${_debugDescribe(e)}');
+        first ??= e;
+        failed.add(c.name);
+        return fallback(c);
+      }
+    }));
+    final cause = first;
+    if (cause != null) {
+      if (failed.length == courses.length) throw cause;
+      gaps(PartialRefresh(failed, cause));
+    }
+    return out;
+  }
+
+  /// Every upcoming event: the all-courses page, which stops after a fixed
+  /// number of events, merged with each course's own page. Each page is
+  /// optional: where one fails, the cache's events still to come stand in for
+  /// it, so a deadline past the cut isn't lost to a bad page. Only a refused
+  /// login, or nothing answering at all, fails the list.
+  Future<List<Deadline>> _upcoming(Future<List<Course>> Function() courses) async {
+    Object? firstError;
+    var answered = false;
+    var allPageFailed = false;
+    final failedCourses = <Course>{};
+    Future<List<Deadline>> page(String what, Future<List<Deadline>> Function() get, void Function() onFail) async {
+      try {
+        final events = await sync.step('eClass', what, get);
+        answered = true;
+        return events;
+      } on LoginRequired {
+        rethrow;
+      } catch (e) {
+        if (kDebugMode) debugPrint('$what failed: ${_debugDescribe(e)}');
+        firstError ??= e;
+        onFail();
+        return const [];
+      }
+    }
+
+    Future<List<List<Deadline>>> perCourse() async {
+      final List<Course> list;
+      try {
+        list = await courses();
+      } on LoginRequired {
+        rethrow;
+      } catch (e) {
+        firstError ??= e;
+        allPageFailed = true; // no way to tell which courses are covered
+        return const [];
+      }
+      return Future.wait([
+        for (final c in list)
+          page('deadlines for ${c.name}', () => eclass.upcomingIn(c), () => failedCourses.add(c)),
+      ]);
+    }
+
+    final allPage = page('upcoming deadlines', eclass.upcoming, () => allPageFailed = true);
+    final coursePages = perCourse();
+    await Future.wait<Object?>([allPage, coursePages]); // together, so neither failure goes unhandled
+    final (all, each) = (await allPage, await coursePages);
+    if (!answered) throw firstError ?? ParseError('eClass upcoming events');
+
+    final now = DateTime.now();
+    final kept = [
+      for (final d in deadlines.data?.value ?? const <Deadline>[])
+        if (d.end.isAfter(now) &&
+            (allPageFailed || failedCourses.any((c) => d.courseId == c.id || d.courseName == c.name)))
+          d,
+    ];
+    return _mergeEvents([all, ...each, kept]);
+  }
+
+  /// [pages] as one list without repeats, by start time. The first page to have
+  /// an event wins, so put the freshest first.
+  static List<Deadline> _mergeEvents(List<List<Deadline>> pages) {
+    final byEvent = <String, Deadline>{};
+    for (final page in pages) {
+      for (final d in page) {
+        byEvent.putIfAbsent('${d.moduleId}|${d.courseName}|${d.title}|${d.end.millisecondsSinceEpoch}', () => d);
+      }
+    }
+    final order = [...byEvent.values.indexed]..sort((a, b) {
+        final byTime = (a.$2.start ?? a.$2.end).compareTo(b.$2.start ?? b.$2.end);
+        return byTime != 0 ? byTime : a.$1.compareTo(b.$1);
+      });
+    return [for (final (_, d) in order) d];
+  }
+
+  List<Deadline> _withDismissals(List<Deadline> list) {
+    final marked = prefs.dismissedDeadlines;
+    return [for (final d in list) d.withDismissed(marked.contains(reminderStem(d)))];
+  }
+
+  /// Marks [d] done here, or takes that back. Its reminders follow, and it reads
+  /// as done everywhere, as [Deadline.dismissed].
+  Future<void> markDeadlineDone(Deadline d, {bool done = true}) async {
+    final stem = reminderStem(d);
+    final marked = prefs.dismissedDeadlines;
+    prefs.dismissedDeadlines = done ? {...marked, stem} : ({...marked}..remove(stem));
+    final list = deadlines.data;
+    if (list != null) {
+      deadlines = Snapshot(
+          data: await cache.write('deadlines', _withDismissals(list.value), _encodeList, at: list.fetchedAt),
+          error: deadlines.error,
+          loading: deadlines.loading);
+    }
+    notifyListeners();
+    unawaited(onWidgetDataChanged?.call());
+    await onReminderDataChanged?.call();
   }
 
   /// Marks each assignment and quiz handed in or not, from its own page.
@@ -293,7 +659,7 @@ class AppData extends ChangeNotifier {
     return Future.wait(fresh.map((d) async {
       if (d.kind != DeadlineKind.assignment && d.kind != DeadlineKind.quiz) return d;
       try {
-        final s = await eclass.submission(d);
+        final s = await sync.step('eClass', 'checking ${rowTitle(d.title)}', () => eclass.submission(d));
         return s == null ? d : d.withDone(s.done, s.at);
       } catch (e) {
         if (kDebugMode) debugPrint('submission ${d.moduleId} failed: ${_debugDescribe(e)}');
@@ -306,7 +672,7 @@ class AppData extends ChangeNotifier {
   Future<void> refreshGrades() => _run<GradeReport>(
         get: () => grades,
         set: (s) => grades = s,
-        fetch: ins.grades,
+        fetch: () => sync.step('INS', 'grades', ins.grades),
         key: 'grades',
         encode: (v) => v.toJson(),
         service: Service.ins,
@@ -320,7 +686,7 @@ class AppData extends ChangeNotifier {
         _run<int>(
           get: () => mailUnread,
           set: (s) => mailUnread = s,
-          fetch: mail.unreadCount,
+          fetch: () => sync.step('Mail', 'unread count', mail.unreadCount),
           key: 'mailUnread',
           encode: (v) => v,
           service: Service.mail,
@@ -334,7 +700,7 @@ class AppData extends ChangeNotifier {
       get: () => box.list,
       set: (s) => box.list = s,
       fetch: () async {
-        final page = await mail.folder(f, limit: mailPageSize);
+        final page = await sync.step('Mail', f.label, () => mail.folder(f, limit: mailPageSize));
         box.hasMore = page.length >= mailPageSize;
         box.moreError = null;
         return page;
@@ -348,8 +714,11 @@ class AppData extends ChangeNotifier {
   /// The drawer's counts. A failure keeps the last ones: the folder lists
   /// already show what went wrong.
   Future<void> refreshMailCounts() async {
+    final generation = _generation[Service.mail];
     try {
-      mailCounts = await mail.folderCounts();
+      final counts = await sync.step('Mail', 'folder counts', mail.folderCounts);
+      if (generation != _generation[Service.mail]) return;
+      mailCounts = counts;
       notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('mail counts failed: ${_debugDescribe(e)}');
@@ -360,6 +729,9 @@ class AppData extends ChangeNotifier {
   /// cookies first, so the login really runs) and records the result. On
   /// success the service's data is refreshed. Returns the error, or null.
   Future<Object?> testLogin(Service s) async {
+    // What is running now was asked with the login before this one.
+    _invalidate(s);
+    final generation = _generation[s];
     try {
       switch (s) {
         case Service.eclass:
@@ -372,10 +744,13 @@ class AppData extends ChangeNotifier {
           return null;
       }
     } catch (e) {
+      if (generation != _generation[s]) return e;
       if (e is LoginRequired) _check(s, ok: false);
+      _tellEmpty(s, e);
       notifyListeners();
       return e;
     }
+    if (generation != _generation[s]) return null;
     _check(s, ok: true);
     notifyListeners();
     unawaited(switch (s) {
@@ -387,9 +762,61 @@ class AppData extends ChangeNotifier {
     return null;
   }
 
+  /// A source with nothing to show and no refresh coming says why: without this,
+  /// a login refused right after another account's data went would leave the
+  /// tabs on their loading skeletons.
+  void _tellEmpty(Service s, Object e) {
+    Snapshot<T> told<T>(Snapshot<T> x) => x.data == null && !x.loading ? Snapshot(error: e) : x;
+    switch (s) {
+      case Service.eclass:
+        deadlines = told(deadlines);
+        attendance = told(attendance);
+        courseGrades = told(courseGrades);
+        eclassNotifications = told(eclassNotifications);
+      case Service.ins:
+        grades = told(grades);
+      case Service.mail:
+        for (final box in _mailbox.values) {
+          box.list = told(box.list);
+        }
+        mailUnread = told(mailUnread);
+      case Service.edupage:
+        lessons = told(lessons);
+    }
+  }
+
+  /// Which of a service's fetches still count: a fetch that started under an
+  /// older number drops its result. See [_invalidate].
+  final _generation = {for (final s in Service.values) s: 0};
+
+  /// Whatever [s] is fetching now no longer counts, and it stops showing as
+  /// loading, so a new refresh can start.
+  void _invalidate(Service s) {
+    _generation[s] = _generation[s]! + 1;
+    Snapshot<T> settled<T>(Snapshot<T> x) => x.loading ? Snapshot(data: x.data, error: x.error) : x;
+    switch (s) {
+      case Service.eclass:
+        deadlines = settled(deadlines);
+        attendance = settled(attendance);
+        courseGrades = settled(courseGrades);
+        eclassNotifications = settled(eclassNotifications);
+      case Service.ins:
+        grades = settled(grades);
+      case Service.mail:
+        for (final box in _mailbox.values) {
+          box.list = settled(box.list);
+        }
+        mailUnread = settled(mailUnread);
+      case Service.edupage:
+        lessons = settled(lessons);
+    }
+  }
+
   /// After signing out of [s]: drops its cached data and its account check,
-  /// so nothing from that account stays on the phone.
+  /// so nothing from that account stays on the phone, and a refresh still
+  /// running can't bring it back.
   Future<void> forget(Service s) async {
+    _invalidate(s);
     for (final key in _cacheKeys[s]!) {
       await cache.remove(key);
     }
@@ -399,6 +826,9 @@ class AppData extends ChangeNotifier {
       case Service.eclass:
         deadlines = const Snapshot();
         attendance = const Snapshot();
+        courseGrades = const Snapshot();
+        eclassNotifications = const Snapshot();
+        prefs.clearEclassMemory();
       case Service.ins:
         grades = const Snapshot();
       case Service.mail:
@@ -409,10 +839,11 @@ class AppData extends ChangeNotifier {
         lessons = const Snapshot();
     }
     notifyListeners();
+    await onSignedOut?.call(s);
   }
 
   static final _cacheKeys = {
-    Service.eclass: ['deadlines', 'attendance'],
+    Service.eclass: ['deadlines', 'attendance', 'courseGrades', 'notifications'],
     Service.ins: ['grades'],
     Service.mail: ['mailUnread', for (final f in MailFolder.values) _mailKey(f)],
     Service.edupage: ['lessons'],
@@ -483,17 +914,31 @@ class AppData extends ChangeNotifier {
     notifyListeners();
     try {
       final page = await mail.folder(f, limit: mailPageSize, offset: have.value.length);
-      final known = {for (final m in have.value) m.id};
-      box.hasMore = page.length >= mailPageSize;
-      box.list = Snapshot(
-          data: Cached([...have.value, ...page.where((m) => !known.contains(m.id))], have.fetchedAt),
-          error: box.list.error);
+      // A refresh that started meanwhile replaces the list: this page was cut
+      // from the old one. An edit (read, moved) keeps the fetch time and stays.
+      final now = box.list.data;
+      if (now != null && !box.list.loading && now.fetchedAt == have.fetchedAt) {
+        final known = {for (final m in now.value) m.id};
+        box.hasMore = page.length >= mailPageSize;
+        box.list = Snapshot(
+            data: Cached([...now.value, ...page.where((m) => !known.contains(m.id))], now.fetchedAt),
+            error: box.list.error);
+      }
     } catch (e) {
       box.moreError = e;
     }
     box.loadingMore = false;
     notifyListeners();
   }
+
+  /// The messages in [folder] matching [query], newest first. Not cached and not
+  /// kept here: the search screen holds its own results.
+  Future<List<MailHeader>> searchMail(String query,
+          {MailFolder folder = MailFolder.inbox, int offset = 0}) =>
+      mail.search(folder, query, limit: mailPageSize, offset: offset);
+
+  /// A message's attached file, by [MailAttachment.id].
+  Future<MailFile> mailAttachment(String id) => mail.attachment(id);
 
   /// Sets a message's read flag on the server, then in [folder]'s list and
   /// its counts here. Call it only when the flag actually changes.
@@ -531,15 +976,18 @@ class AppData extends ChangeNotifier {
     }
     notifyListeners();
     _refreshLoaded([to]);
-    return id == null
-        ? null
-        : MailHeader(
-            id: id, from: m.from, to: m.to, subject: m.subject, received: m.received, preview: m.preview, unread: m.unread);
+    return id == null ? null : m.withId(id);
   }
 
   /// Sends [m]. A sent draft leaves Drafts; Sent gets the copy.
   Future<void> sendMail(OutgoingMail m) async {
-    await mail.send(m);
+    try {
+      await mail.send(m);
+    } catch (_) {
+      // With files it was saved first, and what got that far is in Drafts.
+      if (m.attachments.isNotEmpty) _refreshLoaded([MailFolder.drafts]);
+      rethrow;
+    }
     if (m.kind == ComposeKind.draft) {
       await _editMailList(MailFolder.drafts, (list) => [for (final x in list) if (x.id != m.ref!.id) x]);
       notifyListeners();
@@ -573,6 +1021,10 @@ class AppData extends ChangeNotifier {
         loading: box.list.loading);
   }
 
+  /// Refreshes one source. [warning] is read once the fetch has worked: what
+  /// went wrong with part of it, kept as the source's error beside the new data.
+  /// A fetch overtaken by [_invalidate] (a sign-out, a new login, another class
+  /// group), or finishing with no login saved any more, leaves no trace.
   Future<void> _run<T>({
     required Snapshot<T> Function() get,
     required void Function(Snapshot<T>) set,
@@ -580,17 +1032,32 @@ class AppData extends ChangeNotifier {
     required String key,
     required Object? Function(T) encode,
     required Service service,
+    Object? Function()? warning,
   }) async {
     if (get().loading) return;
+    final generation = _generation[service];
     set(Snapshot(data: get().data, loading: true));
     notifyListeners();
     try {
       final value = await fetch();
-      set(Snapshot(data: await cache.write(key, value, encode)));
+      if (generation != _generation[service]) return;
+      if (!await _signedIn(service)) {
+        set(Snapshot(data: get().data));
+        notifyListeners();
+        return;
+      }
+      if (generation != _generation[service]) return;
+      final written = await cache.write(key, value, encode);
+      if (generation != _generation[service]) {
+        await cache.remove(key);
+        return;
+      }
+      set(Snapshot(data: written, error: warning?.call()));
       if (_widgetCacheKeys.contains(key)) unawaited(onWidgetDataChanged?.call());
       // Any fetch that got through is a working login (Settings shows when).
       if (service.needsLogin) _check(service, ok: true);
     } catch (e) {
+      if (generation != _generation[service]) return;
       if (kDebugMode) debugPrint('refresh $key failed: ${_debugDescribe(e)}');
       set(Snapshot(data: get().data, error: e));
       if (e is LoginRequired && service.needsLogin) _check(service, ok: false);
@@ -625,14 +1092,11 @@ String _debugDescribe(Object e) {
 /// Raw exception text never reaches the screen.
 String describeError(Object e, String service) {
   if (e is LoginRequired) return '$service sign-in needed.';
+  if (e is SetupNeeded) return e.message;
+  if (e is UnknownClassGroup) return "${e.name} isn't on the timetable. Choose your class group in Settings.";
+  if (e is PartialRefresh) return "Couldn't update ${e.courses.join(', ')} from $service.";
   if (e is ParseError) return "Couldn't read the $service page; it may have changed.";
-  if (e is DioException) {
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.connectionError ||
-        e.error is SocketException) {
-      return "Couldn't reach $service. Check the connection.";
-    }
-  }
+  if (isNetworkError(e)) return "Couldn't reach $service. Check the connection.";
+  if (isServerError(e)) return "Couldn't reach $service.";
   return "Couldn't load from $service.";
 }

@@ -24,6 +24,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:workmanager/workmanager.dart';
 
+import '../data/exams.dart' show MyExam;
 import '../models/models.dart';
 import 'notifier.dart';
 
@@ -34,12 +35,23 @@ class RefreshResult {
   final List<Deadline>? deadlines;
   final List<CourseAttendance>? attendance;
   final List<Lesson>? lessons;
+  final List<CourseGrades>? courseGrades;
+  final List<MyExam>? exams;
+  final List<EclassNotification>? notices;
 
   /// Ask WorkManager to retry soon with backoff (e.g. a network failure).
   /// Notifications from the data above are still delivered first.
   final bool retry;
 
-  const RefreshResult({this.deadlines, this.attendance, this.lessons, this.retry = false});
+  const RefreshResult({
+    this.deadlines,
+    this.attendance,
+    this.lessons,
+    this.courseGrades,
+    this.exams,
+    this.notices,
+    this.retry = false,
+  });
 }
 
 /// Fetches from the services, updates the cache, returns the data.
@@ -122,6 +134,9 @@ Future<bool> runRefreshTask({
       deadlines: result.deadlines,
       attendance: result.attendance,
       lessons: result.lessons,
+      courseGrades: result.courseGrades,
+      exams: result.exams,
+      notices: result.notices,
       now: clock?.call(),
     );
   } catch (e) {

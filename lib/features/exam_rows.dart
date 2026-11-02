@@ -36,9 +36,6 @@ const privacyNote = "For your privacy, the app doesn't include anyone's exam roo
 /// The same, as one line over a list of exams.
 const roomsLeftOut = "Rooms aren't included, for your privacy: tap an exam to set yours.";
 
-/// "The timetable lists 2 sittings; check which is yours."
-String sittingsLine(MyExam m) => 'The timetable lists ${m.sittings} sittings; check which is yours.';
-
 /// The hero for an exam: in progress, or the next thing today (DESIGN.md 7).
 /// The room is the big line; until the student sets it, that it isn't set.
 class ExamHero extends StatelessWidget {

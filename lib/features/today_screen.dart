@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -18,6 +19,7 @@ import 'details.dart';
 import 'exam_rows.dart';
 import 'exams_screen.dart';
 import 'mail_screen.dart';
+import 'notices_screen.dart';
 import 'rail_rows.dart';
 
 /// Answers "where do I need to be next, what's due, am I in trouble" as one
@@ -71,8 +73,8 @@ class _TodayScreenState extends State<TodayScreen> {
       onRefresh: data.refreshAll,
       child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
         const OfflineRow(),
-        SourceError(data.lessons, 'EduPage', onRetry: data.refreshTimetable),
-        SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
+        SourceError(data.lessons, 'EduPage', onRetry: data.refreshTimetable, coveredByOfflineRow: true),
+        SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass, coveredByOfflineRow: true),
         _staleLine(data),
         const SizedBox(height: 4),
         if (firstLoad) ...[NowRow(now, lineBelow: false), const SkeletonRows(count: 3)] else ..._rail(rail, att, exams, now),
@@ -80,6 +82,7 @@ class _TodayScreenState extends State<TodayScreen> {
         ..._exams(context, data, exams, now),
         _attendance(context, data, lessons, now),
         ..._mail(context, data),
+        ..._notices(context, data),
         _footer(context, data),
       ]),
     );
@@ -198,16 +201,15 @@ class _TodayScreenState extends State<TodayScreen> {
         if (limits[c.course.id] == null && c.count(AttendanceMark.absent) > 0) c,
     ]..sort((a, b) => b.count(AttendanceMark.absent).compareTo(a.count(AttendanceMark.absent)));
     final fine = limited - trouble.length;
-    final courses = fine == 1 ? 'course is' : 'courses are';
     final String? okLine;
     if (fine == 0) {
       okLine = null;
     } else if (trouble.isNotEmpty) {
-      okLine = 'The other $fine $courses within their limit.';
+      okLine = fine == 1 ? 'The other course is within its limit.' : 'The other $fine courses are within their limit.';
     } else if (fine == tracked.length) {
       okLine = fine == 1 ? 'The 1 course is within its limit.' : 'All $fine courses are within their limit.';
     } else {
-      okLine = '$fine $courses within their limit.';
+      okLine = fine == 1 ? '1 course is within its limit.' : '$fine courses are within their limit.';
     }
     final infoLine = unlimited.isEmpty
         ? null
@@ -228,7 +230,9 @@ class _TodayScreenState extends State<TodayScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 4),
                 child: Text(
-                    tracked.isEmpty ? 'No course takes attendance in eClass.' : 'No absences in ${tracked.length} courses.',
+                    tracked.isEmpty
+                        ? 'No course takes attendance in eClass.'
+                        : 'No absences in ${tracked.length} ${tracked.length == 1 ? 'course' : 'courses'}.',
                     style: t.textTheme.bodyMedium),
               ),
           ]),
@@ -237,14 +241,20 @@ class _TodayScreenState extends State<TodayScreen> {
     ]);
   }
 
+  /// The count is Exchange's and also covers mail older than the loaded page, so
+  /// it can be there with no row to show; a count lagging behind the rows never
+  /// reads lower than they do.
   List<Widget> _mail(BuildContext context, AppData data) {
     final t = Theme.of(context);
     final unread = (data.inbox.data?.value ?? const <MailHeader>[]).where((m) => m.unread).toList();
-    if (unread.isEmpty) return const [];
-    final total = data.mailUnread.data?.value ?? unread.length;
+    final total = math.max(data.mailUnread.data?.value ?? 0, unread.length);
+    if (total == 0) return const [];
+    final rows = unread.take(2).toList();
+    final more = total - rows.length;
     return [
-      SectionHeader('$total unread', source: data.inbox, staleAfter: const Duration(minutes: 30)),
-      for (final m in unread.take(2))
+      SectionHeader('$total unread',
+          source: data.inbox.data == null ? data.mailUnread : data.inbox, staleAfter: const Duration(minutes: 30)),
+      for (final m in rows)
         InkWell(
           onTap: () => openMail(context, m),
           child: ConstrainedBox(
@@ -263,17 +273,38 @@ class _TodayScreenState extends State<TodayScreen> {
             ),
           ),
         ),
-      if (total > 2)
+      if (more > 0)
         Align(
           alignment: Alignment.centerLeft,
           child: Padding(
             padding: const EdgeInsets.only(left: 8),
             child: TextButton(
               onPressed: () => widget.onOpenTab(4),
-              child: Text('${total - 2} more'),
+              child: Text(rows.isEmpty ? 'Open Mail' : '$more more'),
             ),
           ),
         ),
+    ];
+  }
+
+  /// The newest unread items of eClass's bell menu, and the way to all of them
+  /// with their text, where an item with no link of its own opens too.
+  List<Widget> _notices(BuildContext context, AppData data) {
+    final all = data.eclassNotifications.data?.value ?? const <EclassNotification>[];
+    if (all.isEmpty) return const [];
+    return [
+      SectionHeader('From eClass', source: data.eclassNotifications),
+      for (final n in all.where((n) => !n.read).take(4)) NoticeRow(n, onTap: () => openNotices(context)),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: TextButton(
+            onPressed: () => openNotices(context),
+            child: Text(all.length == 1 ? 'All 1 notification' : 'All ${all.length} notifications'),
+          ),
+        ),
+      ),
     ];
   }
 
@@ -306,7 +337,7 @@ class _TroubleRow extends StatelessWidget {
     final next = nextLesson(lessons, now, (l) => isLessonOf(l, c.course), off: classFree);
     final words = [
       switch (left) { > 0 => '$left left', 0 => 'At the limit', _ => 'Over the limit by ${-left}' },
-      if (next != null) 'next ${classWhen(next.day, next.lesson, now)}',
+      if (next != null) nextClassWhen(next.day, next.lesson, now),
     ].join(' · ');
     return InkWell(
       onTap: () => openCourse(context, c.course),

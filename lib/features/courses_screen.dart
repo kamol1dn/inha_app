@@ -5,6 +5,7 @@ import '../core/session.dart';
 import '../data/absence.dart';
 import '../data/app_data.dart';
 import '../data/rail.dart';
+import '../data/scores.dart';
 import '../models/models.dart';
 import '../ui/format/format.dart';
 import '../ui/theme/app_text.dart';
@@ -38,7 +39,9 @@ class CoursesScreen extends StatelessWidget {
         else if (data.attendance.data == null && data.attendance.error == null)
           const SkeletonRows(timeColumn: false)
         else
-          SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass),
+          SourceError(data.attendance, 'eClass', onRetry: data.refreshEclass, coveredByOfflineRow: true),
+        if (at != null && courses.isEmpty && data.attendance.error == null)
+          EmptyNote('eClass lists no courses for you.', checked: at),
         if (unset > 0)
           Padding(
             padding: const EdgeInsets.fromLTRB(gutter, 8, 8, 4),
@@ -87,6 +90,8 @@ class _CourseRow extends StatelessWidget {
     final t = Theme.of(context);
     final muted = t.textTheme.bodyMedium!.tnum.copyWith(color: t.colorScheme.onSurfaceVariant);
     final status = absence.status;
+    final marks = context.select<AppData, CourseGrades?>((d) => d.gradesOf(c.course.id));
+    final score = marks == null ? null : CourseScore.of(marks);
     final n = next;
     final when = n == null ? null : classWhen(n.day, n.lesson, now);
     final unwatched = c.vods.where((v) => !v.done).length;
@@ -124,12 +129,13 @@ class _CourseRow extends StatelessWidget {
                       status,
                       [
                         switch (absence.left!) { > 0 && final l => '$l left', 0 => 'At the limit', final l => 'Over by ${-l}' },
-                        if (when != null) 'next $when',
+                        if (n != null) nextClassWhen(n.day, n.lesson, now),
                       ].join(' · '),
                       padding: EdgeInsets.zero)
                 else if (plain.isNotEmpty)
                   Text(plain, style: muted),
                 if (vodLine != null) Text(vodLine, style: muted),
+                if (score != null) Text('Score ${score.line}', style: muted),
               ]),
             ),
             if (c.classes.isNotEmpty) ...[const SizedBox(width: 16), TallyCount(absence)],

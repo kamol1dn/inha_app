@@ -5,8 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/cache.dart';
 import '../core/session.dart';
 import '../data/app_data.dart';
-import '../data/services.dart';
+import '../services/edupage/timetable_parser.dart' show UnknownClassGroup;
 import '../ui/format/format.dart';
+import '../ui/theme/app_text.dart';
 import '../ui/theme/status_colors.dart';
 import 'settings_screen.dart';
 
@@ -129,6 +130,50 @@ DateTime? oldestData(AppData d) =>
     ([d.lessons, d.deadlines, d.attendance].map((s) => s.data?.fetchedAt).whereType<DateTime>().toList()..sort())
         .firstOrNull;
 
+/// What a refresh is doing, under the app bar, while one runs: a bar for how
+/// far it has got and a line naming what it is waiting on, "eClass: marks for
+/// Artificial Intelligence" and "5 of 24" (DESIGN.md 8, Loading).
+class SyncStrip extends StatelessWidget {
+  const SyncStrip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final sync = context.read<AppData>().sync;
+    final style = t.textTheme.bodySmall!.tnum.copyWith(color: t.colorScheme.onSurfaceVariant);
+    return AnimatedSize(
+      alignment: Alignment.topCenter,
+      duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 150),
+      child: ListenableBuilder(
+        listenable: sync,
+        builder: (context, _) {
+          if (!sync.active) return const SizedBox(width: double.infinity);
+          final current = sync.current;
+          final others = current == null ? const <String>[] : sync.others;
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+            LinearProgressIndicator(value: sync.total == 0 ? null : sync.done / sync.total),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 6, gutter, 6),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: Text(current ?? 'Syncing', maxLines: 1, overflow: TextOverflow.ellipsis, style: style)),
+                  if (sync.total > 1) ...[
+                    const SizedBox(width: 12),
+                    Text('${sync.done} of ${sync.total}', style: style),
+                  ],
+                ]),
+                if (others.isNotEmpty)
+                  Text('Also syncing ${others.join(', ')}', maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
+              ]),
+            ),
+            const Divider(height: 1),
+          ]);
+        },
+      ),
+    );
+  }
+}
+
 /// One row at the top of a tab while offline. Renders nothing otherwise.
 class OfflineRow extends StatelessWidget {
   const OfflineRow({super.key});
@@ -157,33 +202,41 @@ class OfflineRow extends StatelessWidget {
 }
 
 /// One row naming a failed service and what still works (DESIGN.md 8, Errors).
-/// Renders nothing while the source is healthy, and nothing for a network
-/// failure while the offline row already says so.
+/// Renders nothing while the source is healthy. A failure a student has to
+/// answer offers Sign in or Settings, since Retry would only fail again.
 class SourceError extends StatelessWidget {
   final Snapshot<Object?> source;
   final String serviceName;
   final VoidCallback? onRetry;
-  const SourceError(this.source, this.serviceName, {super.key, this.onRetry});
+
+  /// This screen has an [OfflineRow], so a network failure is left to that row
+  /// while the app is offline. Only the tabs that show one set this: elsewhere
+  /// the row would say nothing at all.
+  final bool coveredByOfflineRow;
+
+  /// What "Sign in" does, on a screen already on top of Settings. Opens Settings
+  /// otherwise.
+  final VoidCallback? onSignIn;
+  const SourceError(this.source, this.serviceName,
+      {super.key, this.onRetry, this.coveredByOfflineRow = false, this.onSignIn});
 
   @override
   Widget build(BuildContext context) {
     final e = source.error;
     if (e == null) return const SizedBox.shrink();
-    if (isNetworkError(e) && isOffline(context.watch<AppData>())) return const SizedBox.shrink();
+    if (coveredByOfflineRow && isNetworkError(e) && isOffline(context.watch<AppData>())) return const SizedBox.shrink();
     final at = source.data?.fetchedAt;
     final msg = describeError(e, serviceName);
-    final needsLogin = e is LoginRequired;
-    final text = at == null ? msg : '$msg Showing data from ${updatedAt(at)}.';
+    // Beside a partial refresh the data is fresh, apart from the courses it names.
+    final text = at == null || e is PartialRefresh ? msg : '$msg Showing data from ${updatedAt(at)}.';
     return Padding(
       padding: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
       child: Row(children: [
         Expanded(child: StatusLine(Status.danger, text)),
-        if (needsLogin)
-          TextButton(
-            onPressed: () =>
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
-            child: const Text('Sign in'),
-          )
+        if (e is LoginRequired)
+          TextButton(onPressed: onSignIn ?? () => openSettings(context), child: const Text('Sign in'))
+        else if (e is SetupNeeded || e is UnknownClassGroup)
+          TextButton(onPressed: () => openSettings(context), child: const Text('Settings'))
         else if (onRetry != null)
           TextButton(onPressed: onRetry, child: const Text('Retry')),
       ]),
@@ -191,19 +244,30 @@ class SourceError extends StatelessWidget {
   }
 }
 
-/// A plain sentence for an empty or signed-out state, with at most one
-/// action (DESIGN.md 8, Empty states).
+/// A plain sentence for an empty or signed-out state, an optional "Checked
+/// 08:41", and at most one action (DESIGN.md 8, Empty states).
 class EmptyNote extends StatelessWidget {
   final String text;
+  final DateTime? checked;
   final String? action;
   final VoidCallback? onAction;
-  const EmptyNote(this.text, {super.key, this.action, this.onAction});
+  const EmptyNote(this.text, {super.key, this.checked, this.action, this.onAction});
 
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(text, style: Theme.of(context).textTheme.bodyLarge),
+          if (checked case final at?)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text('Checked ${updatedAt(at)}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.tnum
+                      .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ),
           if (action != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -286,9 +350,23 @@ class _HeadingScaffoldState extends State<HeadingScaffold> {
   final _heading = GlobalKey();
   final _bar = GlobalKey();
   bool _shown = false;
+  bool _measuring = false;
 
+  /// Measured once the frame is done. A list can report a scroll during its own
+  /// layout, when a heading it is letting go of can't be asked where it is, and
+  /// when no screen may be rebuilt.
   bool _onScroll(ScrollNotification n) {
-    if (n.depth != 0) return false;
+    if (n.depth != 0 || _measuring) return false;
+    _measuring = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measuring = false;
+      if (mounted) _measure();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+    return false;
+  }
+
+  void _measure() {
     final heading = _heading.currentContext?.findRenderObject() as RenderBox?;
     final bar = _bar.currentContext?.findRenderObject() as RenderBox?;
     // A heading the list has already let go of is far above the app bar.
@@ -297,7 +375,6 @@ class _HeadingScaffoldState extends State<HeadingScaffold> {
         bar == null ||
         heading.localToGlobal(Offset(0, heading.size.height)).dy <= bar.localToGlobal(Offset(0, bar.size.height)).dy;
     if (under != _shown) setState(() => _shown = under);
-    return false;
   }
 
   @override
@@ -314,7 +391,10 @@ class _HeadingScaffoldState extends State<HeadingScaffold> {
         ),
         actions: widget.actions,
       ),
-      body: NotificationListener<ScrollNotification>(onNotification: _onScroll, child: widget.body(_heading)),
+      body: Column(children: [
+        const SyncStrip(),
+        Expanded(child: NotificationListener<ScrollNotification>(onNotification: _onScroll, child: widget.body(_heading))),
+      ]),
       bottomNavigationBar: widget.bottom,
     );
   }

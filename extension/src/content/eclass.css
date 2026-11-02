@@ -1,0 +1,127 @@
+/* Inside the shadow roots the content script adds to eClass. */
+
+:host { all: initial; font: 400 14px/20px var(--sans); color: var(--on-surface); }
+* { box-sizing: border-box; }
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+svg { width: 20px; height: 20px; display: block; flex: none; }
+.grow { flex: 1; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font: 400 12px/16px var(--sans); }
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.fg-ok { color: var(--ok); } .fg-warning { color: var(--warning); } .fg-danger { color: var(--danger); } .fg-info { color: var(--info); } .fg-primary { color: var(--primary); }
+.status { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0; }
+.status svg { width: 16px; height: 16px; margin-top: 2px; }
+.status.danger { color: var(--danger); } .status.ok { color: var(--ok); } .status.info { color: var(--info); } .status.warning { color: var(--warning); }
+.status a { color: inherit; }
+.stale { color: var(--warning); font: 400 12px/16px var(--sans); display: inline-flex; gap: 4px; align-items: center; }
+.stale svg { width: 14px; height: 14px; }
+.link { border: 0; background: none; padding: 0; color: var(--primary); cursor: pointer; text-align: left; }
+.link:hover { text-decoration: underline; }
+.link.h { color: inherit; font: inherit; }
+
+/* ---- Left menu section ---- */
+:host(#iut-menu) { display: block; }
+.menu-section { border-top: 1px solid var(--rule); margin-top: 8px; padding: 12px 0; }
+.mhead { padding: 0 20px 6px; font: 600 15px/20px var(--serif); color: var(--on-surface); }
+.mitem { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 36px; padding: 0 20px; border: 0; background: none; color: var(--muted); font: 500 13px/18px var(--sans); cursor: pointer; text-align: left; text-decoration: none; }
+.mitem.on { color: var(--primary); font-weight: 600; }
+.mitem:hover { background: var(--high); color: var(--on-surface); text-decoration: none; }
+.mitem svg { width: 18px; height: 18px; }
+.narrow .mhead { padding: 0; text-align: center; font-size: 12px; }
+.narrow .mitem { padding: 0; justify-content: center; position: relative; }
+.narrow .count { position: absolute; top: 2px; right: 6px; padding: 0 4px; font-size: 10px; }
+.count { font: 500 11px/16px var(--sans); background: var(--inverse); color: var(--on-inverse); border-radius: 8px; padding: 0 6px; font-variant-numeric: tabular-nums; }
+
+/* ---- Facts on a course in the list: fixed columns at the row's right. moodle.css,
+   which can measure the row, sets these variables on the host where there is less room. ---- */
+:host([id^="iut-course-"]) { display: block; flex: none; }
+.facts { display: grid; grid-template-columns: var(--facts-columns, 112px 56px 56px 32px 168px); gap: var(--facts-gap, 16px); align-items: center; padding: var(--facts-padding, 0 16px 0 8px); font: 400 13px/18px var(--sans); }
+.fact.next { display: var(--facts-next, flex); grid-column: var(--facts-next-column, auto); }
+.fact.next:empty { display: none; }
+.fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; color: var(--on-surface); text-decoration: none; }
+a.fact:hover .k { text-decoration: underline; }
+.fact .n { font: 600 17px/22px var(--serif); font-variant-numeric: tabular-nums; }
+.fact .k { font: 400 12px/16px var(--sans); color: var(--muted); }
+.fact.abs { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: baseline; }
+.fact.abs .tally { grid-column: 1 / -1; }
+.fact.grade { font: 600 19px/24px var(--serif); text-align: center; }
+.fact.next a { display: flex; flex-direction: column; gap: 2px; color: var(--on-surface); text-decoration: none; min-width: 0; }
+.fact.next a .ellipsis { font: 500 13px/18px var(--sans); }
+.fact.next a[class*="fg-"] .k { color: inherit; font-weight: 600; }
+.tally { display: block; flex: none; max-width: 100%; }
+.tally:not([class*="fg-"]) { color: var(--on-surface); }
+
+/* ---- Side blocks ---- */
+:host(#iut-side) { display: block; }
+.side { padding: 0 20px; }
+.sblock { padding: 16px 0; border-bottom: 1px solid var(--rule); }
+.sblock h2 { margin: 0 0 8px; font: 600 17px/22px var(--serif); color: var(--on-surface); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.sblock .label { font: 600 13px/18px var(--sans); }
+.sblock .room { font: 600 40px/44px var(--display); letter-spacing: -0.5px; margin: 2px 0; font-variant-numeric: tabular-nums; }
+.sblock .course { font: italic 400 17px/22px var(--serif); }
+.later { margin-top: 12px; border-top: 1px solid var(--rule); padding-top: 8px; }
+.lrow { display: flex; gap: 10px; padding: 4px 0; font: 400 13px/18px var(--sans); }
+.lrow .t, .drow .t { font: 400 14px/20px var(--serif); font-variant-numeric: tabular-nums; width: 40px; flex: none; text-align: right; }
+.drow, .mrow { display: flex; gap: 10px; padding: 8px 0; color: var(--on-surface); text-decoration: none; align-items: flex-start; }
+.drow:hover, .mrow:hover { background: var(--low); text-decoration: none; }
+.drow .grow, .mrow .grow { display: flex; flex-direction: column; }
+.dt { font: 600 13px/18px var(--sans); }
+.mrow { width: 100%; }
+
+/* ---- Course strip and activity banner ---- */
+:host(#iut-course), :host(#iut-due) { display: block; }
+.strip { border-bottom: 1px solid var(--rule); padding: 0 0 16px; margin-bottom: 8px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 48px; }
+.strip .cell { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; }
+.strip a.cell:hover .label { text-decoration: underline; }
+.strip .label { font: 500 12px/16px var(--sans); color: var(--muted); }
+.strip .big { font: 600 24px/30px var(--serif); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 12px; }
+.strip .due { flex: 1 1 320px; display: flex; flex-direction: column; }
+.strip .due a { display: flex; gap: 12px; padding: 2px 0; color: var(--on-surface); text-decoration: none; }
+.strip .due a:hover .grow { text-decoration: underline; }
+.strip .due a .t { font: 400 15px/20px var(--serif); font-variant-numeric: tabular-nums; width: 44px; text-align: right; }
+.banner { display: flex; align-items: baseline; gap: 16px; padding: 12px 16px; margin: 0 0 16px; background: var(--high); }
+.banner .when { font: 600 19px/24px var(--serif); font-variant-numeric: tabular-nums; }
+
+/* ---- The extension's views: its own page, in a frame (view.tsx). The frame's
+   color-scheme is what its System theme reads, so it follows the setting here. ---- */
+:host(#iut-view) { display: block; position: sticky; top: 68px; }
+iframe { display: block; width: 100%; height: calc(100vh - 68px); border: 0; background: var(--surface); color-scheme: light; }
+@media (prefers-color-scheme: dark) { :host(:not([data-theme="light"])) iframe { color-scheme: dark; } }
+:host([data-theme="dark"]) iframe { color-scheme: dark; }
+.frame-failed { padding: 16px 0; }
+
+/* ---- Classic eClass: the way back ---- */
+.classic-back { position: fixed; right: 16px; bottom: 16px; z-index: 2147483000; border: 0; border-radius: 8px; min-height: 40px; padding: 0 16px; background: var(--primary); color: var(--on-primary); font: 600 15px/20px var(--sans); cursor: pointer; }
+
+/* ---- Sign-in page ---- */
+.signin { position: fixed; inset: 0; z-index: 2147483000; background: var(--surface); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); overflow-y: auto; }
+.signin .side { border-right: 1px solid var(--rule); padding: 48px 64px; display: flex; flex-direction: column; justify-content: space-between; }
+.signin .side h1 { font: 600 60px/64px var(--display); letter-spacing: -1px; margin: 0; }
+.signin .side p { font: italic 400 20px/26px var(--serif); color: var(--muted); margin: 12px 0 0; max-width: 420px; }
+.signin .side .foot { font: 400 12px/16px var(--sans); color: var(--muted); }
+.signin .form { padding: 48px 64px; display: flex; flex-direction: column; justify-content: center; max-width: 520px; }
+.signin h2 { font: 600 24px/30px var(--serif); margin: 0 0 4px; }
+.signin .sub { color: var(--muted); margin: 0 0 24px; }
+.continue { display: flex; align-items: center; gap: 16px; width: 100%; padding: 16px; border: 1px solid var(--outline); border-radius: 8px; background: var(--lowest); cursor: pointer; text-align: left; }
+.continue:hover { background: var(--low); }
+.continue .who { flex: 1; display: flex; flex-direction: column; }
+.continue .who b { font: 600 16px/22px var(--sans); }
+.continue .who span { color: var(--muted); }
+.continue .arrow { color: var(--primary); font: 600 15px/20px var(--sans); }
+.avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary-container); color: var(--on-primary-container); display: grid; place-items: center; font: 600 16px/1 var(--serif); }
+.or { display: flex; align-items: center; gap: 12px; color: var(--muted); margin: 24px 0 8px; font: 500 12px/16px var(--sans); }
+.or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
+.field { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+.field label { font: 500 12px/16px var(--sans); color: var(--muted); }
+.input { min-height: 44px; padding: 10px 12px; border: 1px solid var(--outline); border-radius: 8px; background: var(--lowest); width: 100%; font: 400 16px/22px var(--sans); }
+.check { display: flex; align-items: center; gap: 10px; margin: 8px 0 16px; cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: var(--primary); }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 12px; border-radius: 8px; border: 0; background: none; color: var(--primary); font: 600 15px/20px var(--sans); cursor: pointer; text-decoration: none; }
+.btn:hover { background: var(--primary-container); text-decoration: none; }
+.btn.filled { background: var(--primary); color: var(--on-primary); padding: 0 24px; width: 100%; }
+.btn:disabled { opacity: .5; cursor: default; }
+.links { display: flex; justify-content: space-between; margin-top: 16px; }
+@media (max-width: 860px) { .signin { grid-template-columns: 1fr; } .signin .side { border-right: 0; border-bottom: 1px solid var(--rule); padding: 32px 24px; } .signin .side h1 { font-size: 40px; line-height: 44px; } .signin .form { padding: 32px 24px; } }

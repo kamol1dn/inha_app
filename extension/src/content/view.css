@@ -1,0 +1,8 @@
+/* The extension's page as the frame inside eClass's content area (content/view.tsx):
+   no shell of its own, since eClass's header and left menu are around it. */
+
+body.inline .shell { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+body.inline .nav { display: none; }
+body.inline .bar { padding: 0 0 0 4px; }
+body.inline .page { padding: 8px 0 48px 4px; max-width: none; }
+body.inline .bar:has(+ .mail) { padding: 0 24px; }

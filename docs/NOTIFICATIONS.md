@@ -18,14 +18,22 @@ Tests: `flutter test test/notification_rules_test.dart test/notification_setting
 | Unwatched VOD (no progress data counts as unwatched) | 48 h and 6 h before the watch window closes | VOD windows (high) | Yes |
 | Assignment, quiz, other eClass event | 24 h and 3 h before the deadline | Deadlines (high) | Yes |
 | New absence (dated within the last 21 days) | Once, right away | Attendance (high) | Yes |
+| New or changed mark in eClass (not attendance marks) | Once, right away | Grades (high) | Yes |
 | Lesson today | 15 min before it starts | Classes (default) | No (DESIGN.md 11) |
+| One of the student's exams (`AppData.exams`) | The evening before at 20:00, and 1 h before, with the room: `Exam at 14:00: Database`, `Thu 29 Oct, 14:00 · Room not set: B209 or B210` | Exams (high) | Yes |
+| New unread item in eClass's bell menu (dated within the last 21 days) | Once, right away | eClass notifications (default) | Yes |
 
 Thresholds are constants at the top of `rules.dart`.
 
 **Settings.** Each channel has a switch in the app's Settings, and so do quiet hours. They are stored in
 shared_preferences (`notify.on.<channel>`, `notify.quietHours`) and read on every pass, so the background
 isolate follows them. Turning a channel off cancels its scheduled reminders at once. Absences are still
-recorded while Attendance is off, so turning it back on does not announce them.
+recorded while Attendance is off, so turning it back on does not announce them, and an absence or mark waiting for the morning
+is cancelled when its channel goes off. A channel the student has never set follows its default.
+
+**Marked done.** The student can mark a deadline done in the app when eClass can't track it (handed in on paper, a plain
+calendar event). It is kept by its reminder stem (`deadlines.dismissed`) and comes back on each refresh as `Deadline.dismissed`,
+apart from eClass's own `done`. Its reminders stop like those of work handed in.
 
 **No first-run flood.** The first time a course's attendance is seen with any sessions in it (a first install,
 a new semester), its absences are recorded as sent without a notification; only absences that appear after
@@ -33,19 +41,52 @@ that are announced. Seen course ids are kept under `notify.seenCourses.v1`. This
 notification permission has not been granted yet. (Milestone 1 posted one notification per absence of the
 last 21 days on a first install.)
 
+**Marks** work the same way, but compare against the last mark announced for each item (`notify.seenGrades.v1`)
+rather than a date, so one is never announced twice however long ago it was. A course seen for the first time is
+a baseline, unless it has nothing to show yet: a mark appearing on a page that was closed until then is news. A
+mark that could not be delivered, or is waiting for 07:30, stays new until it has gone out. "Attendance book" and
+anything else with attendance in its name or category is shown but never announced: it changes after every class,
+and absences have their own channel. The quiz list writes a mark `37.00/100.00` and the grades page `37.00` or `0.37`, so marks only
+compare within one source: `notify.seenGradeSources.v1` holds each course's, and when a grades page opens or closes the course's
+known items move to the new reading silently. An item never seen before is still news then.
+
+**The bell menu** is a baseline the first time it is read (`notify.noticesSeen.v1`), so a first run doesn't repeat it; after that an
+unread item is announced once, or recorded silently while the channel is off.
+
+**Signing out of eClass** removes everything that came from it, shown or scheduled, whether or not notifications are allowed
+(`Notifier.forgetEclass`, through `AppData.onSignedOut`), and forgets the marks and courses seen and the deadlines marked done, so
+another account starts from its own baseline. A refresh still running when the student signs out drops its result
+(`AppData.forget`), and one in the background isolate looks for a saved login before writing. Saving another student's ID in the
+login sheet does all of this too, before the new login is tried.
+
 **Quiet hours, 23:00 to 07:30** (on by default). A reminder that falls inside them waits until 07:30 if the
 item is still open at least an hour after that. Otherwise it goes out at 22:00 the evening before, and if
 that has passed too (the item was found during the night), it is posted without sound or vibration. A new
-absence found at night waits for 07:30.
+absence or mark found at night waits for 07:30.
 
 **Tapping** a notification opens its item on top of the tab that owns it: a deadline or VOD opens its sheet
-over Deadlines, an absence opens the course, a class reminder opens Schedule on that day. An item that is
+over Deadlines, an absence opens the course, a mark opens the course's scores, a class reminder opens Schedule
+on that day, an exam reminder opens Exams, a bell-menu item opens From eClass (every item with its text) over Today. An item that is
 gone opens its tab. While the app runs the tap arrives through `onDidReceiveNotificationResponse`; a tap
 that starts the app is read from `getNotificationAppLaunchDetails`.
 
 A reminder whose time has passed while the item is still open (phone off, item just appeared) goes out right away. Only the most urgent missed reminder is sent, and it is skipped if the next reminder for the same item is less than an hour away.
 
-Every notification has a stable key (e.g. `vod:multimedia computing|week 8 ...|20261025T1859Z|6h`). The notification id is a 31-bit FNV-1a hash of that key. Sent keys are stored in shared_preferences under `notify.records.v1` and kept for 60 days. A key scheduled for later only counts as sent once its time has passed. Until then each pass schedules it again, which replaces the alarm, updates its text (e.g. "45% watched") and cancels it if it is no longer needed (VOD watched, deadline moved or removed).
+Every notification has a stable key (e.g. `vod:multimedia computing|week 8 ...|20261025T1859Z|6h`). Sent keys are stored in shared_preferences under `notify.records.v1` and kept for 60 days. A key scheduled for later only counts as sent once its time has passed. Until then each pass schedules it again, which replaces the alarm, updates its text (e.g. "45% watched") and cancels it if it is no longer needed (VOD watched, deadline moved or removed, absence corrected). Each save re-reads the store and applies only what that pass changed, so the app and the background task don't drop each other's keys.
+
+The notification id is a 31-bit FNV-1a hash. For a deadline, VOD or exam it is the hash of the item's stem, the key without the lead, so the 3 h reminder replaces the 24 h one in the tray. Android keeps one alarm per id, though, so only the item's next reminder has the stem's id; a later one keeps the hash of its own key until a pass finds it next and moves it over. If it fires before any pass ran, it stands beside the earlier one rather than being lost. Tapping still carries the full key.
+
+A reminder already in the tray is withdrawn on the next pass once its item is finished (handed in, watched, marked done). An alarm can't check anything when it fires, so work handed in elsewhere since the last pass can still get its reminder; a pass runs on every refresh, about every 3 h in the background.
+
+## In the browser extension
+
+`extension/src/data/rules.ts` is a port of `rules.dart`, and `extension/src/background/notify.ts` does the notifier's job: the same rules, switches, quiet hours and keys, with these differences.
+
+- It posts what is due on each pass and sets one alarm for the next reminder, so nothing is scheduled ahead. A reminder in the tray is withdrawn on the next pass once its item is finished or marked done.
+- New mail (`notify.seenMail`) is an extra channel, as is a new unread item in eClass's bell menu (`notify.seenNotices`). The first look only learns what is there. In quiet hours an item stays unseen, and the first look after 07:30 announces it. One that can't be posted is tried again.
+- Clicking opens the view inside eClass, or the extension's own page with New look off, and brings the window forward. A bell-menu item opens its eClass link when it has one, else Today; in the app it opens From eClass, where its row has the link.
+- Passes run one at a time, and the course baseline and the sent keys are saved together, so overlapping passes can't announce old absences.
+- Signing out of eClass forgets the seen courses, marks and bell-menu items, the sent keys of that account and what was marked done.
 
 ## Installed versions (from pubspec.lock)
 
@@ -176,6 +217,6 @@ icon) from R8's resource shrinking, which can't see names used only from Dart.
 - **Inexact timing.** Android may deliver an inexact alarm late: up to 1 hour on Android 12+, usually a few minutes. On Android 7 to 11 the delay can be up to 75% of the time until the alarm. Re-scheduling on every pass narrows this. For VOD and deadline reminders a short delay does not matter. For the 15-minute class reminder it can. If that becomes a problem, construct `Notifier(scheduleMode: AndroidScheduleMode.exactAllowWhileIdle)`, add `SCHEDULE_EXACT_ALARM`, and call `requestExactAlarmsPermission()` (the user grants it on Android 14+). Avoid `USE_EXACT_ALARM`: Play allows it only for alarm and calendar apps.
 - **Background runs are best-effort.** WorkManager runs about every 3 h when there is a network, but Doze and OEM battery savers (Xiaomi, Huawei, some Samsung) can delay or block it (see dontkillmyapp.com). Class reminders are planned for today only, so the first class of the day depends on a pass after midnight or the app being opened.
 - **Submitted work** (an assignment handed in, a quiz attempted) gets no reminders: each refresh reads the item's own eClass page and sets `Deadline.done`, and the pending reminders are cancelled. If that page fails to load, the last known state is kept; an item never checked counts as not submitted, which is the safe failure.
-- **VOD matching is by course name and title** (case and whitespace ignored). If eClass's upcoming-events titles differ from the progress-page titles, a watched VOD looks unwatched and still gets reminders. That is the safe failure, but noisy. The eClass client should produce matching titles.
+- **VOD matching** finds the course by the id the event links to, else by name as the screens do (`courseFor`), and the VOD by module id, else by title (case and whitespace ignored). The module id comes from an optional page, so title matching remains: if the titles differ there, a watched VOD looks unwatched and still gets reminders. That is the safe failure, but noisy.
 - **Absences older than 21 days are never announced,** even for a course seen before.
 - **Grouping.** Android groups the app's notifications itself once several are showing; the app sets no group.

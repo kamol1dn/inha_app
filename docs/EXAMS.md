@@ -103,11 +103,11 @@ A period shows from 21 days before its first exam until its last one ends.
 - **Course detail:** a section with the course's sitting, or "No midterm on the timetable for this course."
 - **The exam sheet:** the time, the room the student set or the privacy note and the rooms the exam uses with their
   seats, the cell as printed and its slot, "Set my room", and the course.
+- **Reminders:** the Exams channel, on by default: the evening before at 20:00 and an hour before, with the room the student
+  set or the rooms the exam uses (`lib/notifications/rules.dart`). The background refresh reads the sheets too.
 
 ## Not yet
 
-- Reminders: an "Exams" channel (the evening before, and an hour before with the room) would follow the Classes
-  reminder's pattern in `lib/notifications/rules.dart`.
 - The home-screen widgets and the AppFunctions (`android/.../campus/`) skip exam-week classes but don't show exams:
   the Kotlin side would need the bundled JSON from the APK's `flutter_assets` and the matching ported, as the rail
   was.

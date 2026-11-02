@@ -37,6 +37,12 @@ String duration(Duration d) {
   return '$h h $m min';
 }
 
+/// 23:10 / 1:05:09: a place in a video, from its seconds.
+String playPosition(int seconds) {
+  final h = seconds ~/ 3600, m = seconds ~/ 60 % 60, s = seconds % 60;
+  return h == 0 ? '$m:${_pad(s)}' : '$h:${_pad(m)}:${_pad(s)}';
+}
+
 /// now / in 25 min / in 2 h 15 min / in 6 h / Sat 23:59 / 3 Nov 23:59 / Overdue 2 h
 String relative(DateTime t, {DateTime? now}) {
   final n = now ?? DateTime.now();
@@ -52,6 +58,13 @@ String relative(DateTime t, {DateTime? now}) {
   if (d.inHours < 24) return 'in ${d.inHours} h';
   if (d.inDays < 7) return '${_wd[t.weekday - 1]} ${clock(t)}';
   return '${t.day} ${_mon[t.month - 1]} ${clock(t)}';
+}
+
+/// 21 min ago / 2 h ago / 3 d ago
+String ago(DateTime t, {DateTime? now}) {
+  final p = (now ?? DateTime.now()).difference(t);
+  if (p.inHours >= 24) return '${p.inDays} d ago';
+  return p.inMinutes < 60 ? '${p.inMinutes} min ago' : '${p.inHours} h ago';
 }
 
 /// For lists of past items (mail): 14:07 today, Wed 14:07 within the week,

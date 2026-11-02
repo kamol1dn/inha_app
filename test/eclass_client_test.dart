@@ -34,9 +34,21 @@ class FakeCredentials implements CredentialStore {
   @override
   Future<Credentials?> read(Service s) async => saved;
   @override
-  Future<void> write(Service s, Credentials c) async => saved = c;
+  Future<void> write(Service s, Credentials c) async {
+    saved = c;
+    refused.remove(s);
+  }
+
   @override
   Future<void> clear(Service s) async => saved = null;
+
+  /// The last login refused, by service, as the real store remembers it.
+  final refused = <Service, Credentials>{};
+  @override
+  Future<void> markRefused(Service s, Credentials c) async => refused[s] = c;
+  @override
+  Future<bool> isRefused(Service s, Credentials c) async =>
+      refused[s]?.username == c.username && refused[s]?.password == c.password;
 }
 
 /// A tiny eClass behind Dio: one live session cookie at a time, the login
@@ -178,6 +190,39 @@ void main() {
       final events = await client.upcoming();
       expect(events, hasLength(10));
       expect(server.log, ['GET /calendar/view.php?view=upcoming']);
+    });
+
+    const course = Course(id: 2626, name: 'Artificial Intelligence', code: 'SOC4040');
+
+    test('courseGrades() reads the grades page when the course has one', () async {
+      server.pages['/grade/report/user/index.php?id=2626'] = fixture('eclass_grades.html');
+      final g = await client.courseGrades(course);
+      expect((g.source, g.percent, g.course.id), (GradeSource.gradebook, 28.5, 2626));
+      expect(server.log, ['GET /grade/report/user/index.php?id=2626']);
+    });
+
+    test('courseGrades() falls back on the assignment and quiz lists when it is closed', () async {
+      server.pages['/mod/assign/index.php?id=2626'] = fixture('eclass_assign_index.html');
+      server.pages['/mod/quiz/index.php?id=2626'] = fixture('eclass_quiz_index.html');
+      server.pages['/mod/assign/view.php?id=9001'] = '<body id="page-mod-assign-view"><a href="/login/logout.php">x</a>'
+          '<div class="feedback"><table><tr><td>Grade</td><td>85.00 / 100.00</td></tr></table></div></body>';
+      final g = await client.courseGrades(course);
+      expect(g.source, GradeSource.activities);
+      expect(g.items.map((i) => i.name), ['Assignment 1', 'Assignment 2', 'Quiz 1', 'Quiz 2']);
+      expect(g.items.first.score, '85 / 100'); // the maximum from the assignment's own page
+      expect(server.log.where((l) => l.contains('view.php')), ['GET /mod/assign/view.php?id=9001']); // marked only
+    });
+
+    test('courseGrades() keeps a mark when its assignment page fails', () async {
+      server.pages['/mod/assign/index.php?id=2626'] = fixture('eclass_assign_index.html');
+      final g = await client.courseGrades(course);
+      expect(g.items.first.score, '85');
+    });
+
+    test('courseGrades() with nothing anywhere is an empty answer, not an error', () async {
+      final g = await client.courseGrades(course);
+      expect(g.source, GradeSource.none);
+      expect(g.items, isEmpty);
     });
 
     test('ensureLoggedIn() does nothing when the session is alive', () async {

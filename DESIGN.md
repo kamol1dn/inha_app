@@ -148,7 +148,7 @@ course names, and the numbers people scan (times on the rails, absence counts, g
 titles, secondary lines, buttons, settings, mail.
 
 - **Bundled, never fetched.** The fonts live in `assets/fonts/` with their OFL licence files. The app promises it only talks to IUT
-  services, so there is no `google_fonts` and no runtime download.
+  services (and GitHub, for the newest version's number), so there is no `google_fonts` and no runtime download.
 - **Static instances.** `tool/make_fonts.py` cuts static TTFs from the upstream variable fonts (google/fonts, `ofl/fraunces` and
   `ofl/publicsans`): Fraunces at optical size 20 in Regular, SemiBold and Italic; "Fraunces Display" at optical size 72 in SemiBold for
   the room; Public Sans Regular, Medium and SemiBold. Fraunces keeps its defaults (SOFT 0, WONK 1).
@@ -257,7 +257,7 @@ its icon filled and its label 600; the others are `onSurfaceVariant`, outlined, 
 | Schedule | `calendar_view_day` | The day's classes and rooms | One day at a time on a rail, using the week strip or a swipe |
 | Deadlines | `assignment` | Everything due, eClass VOD windows included | Grouped by day |
 | Courses | `school` | Attendance, VOD progress and grades by course | App bar action "Grades" opens INS grades |
-| Mail | `mail` | What the university wrote | Last. The inbox unread count is a `Badge` on the icon. The menu button (where Back would be) opens the folders; New writes a message |
+| Mail | `mail` | What the university wrote | Last. The inbox unread count is a `Badge` on the icon. The menu button (where Back would be) opens the folders; New writes a message. App bar action: search (magnifier) |
 
 - **The unread badge is ink** (`inverseSurface` with `onInverseSurface` text): a count, not an alarm.
 - **Settings is a pushed screen, not a tab,** reached only from the gear on Today (tooltip "Settings"). Today's mail rows open the
@@ -265,6 +265,8 @@ its icon filled and its label 600; the others are `onSurfaceVariant`, outlined, 
 - **Each tab keeps its own scroll position** (`IndexedStack`).
 - **Back** from another tab goes to Today; back on Today exits.
 - **Tapping a notification** opens the item's detail on top of the tab that owns it.
+- **The extension's toolbar popup** has these destinations in a row at its foot, under the same 1dp rule, with Grades and, during an
+  exam period, Exams beside them. Mail shows one pane at a time there, with Back in the bar. Settings, the gear, opens in a tab.
 
 ## 7. Today screen
 
@@ -339,7 +341,9 @@ Updated 13:18                                                    bodySmall, mute
 5. **Unread mail:** shown only when there is unread mail, headed by the count (`8 unread`). Two rows (subject, then date), then
    `6 more`. Room changes often arrive by mail. When Exchange fails, this section gets only the stale marker; the error row is on the
    Mail screen.
-6. **Footer:** `Updated 08:41`, or `Updating…` during a refresh.
+6. **From eClass:** shown only when eClass's bell menu has something: up to four of its newest unread items (subject, then date), then
+   `All 20 notifications`.
+7. **Footer:** `Updated 08:41`, or `Updating…` during a refresh.
 
 **Rail rows by kind:**
 - **Class:** time column start and end; course in `titleMedium` (one line), `B202 · Lecture` in muted `bodyMedium`.
@@ -414,13 +418,15 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
 - **Filters** first: a course chip and kind chips in one scrolling row, then "Show done" as a checkbox on its own line under them
   (the whole line is the target).
 - **Grouping:** day sections with rules and `titleMedium` headers. `Overdue` comes first, in danger `fg` with its icon, only when
-  something is overdue. Then `Today`, `Tomorrow`, `Sat 25 Oct`. Empty days are omitted.
+  something is still owed: done work and class periods stay under their day, and a class period has no due wording. Then `Today`,
+  `Tomorrow`, `Sat 25 Oct`. Empty days are omitted. Anything more than 24 h past is left out: the upcoming page no longer lists it.
 - **Row:** the rail's deadline row without the line: the due time in `numeral` on the left, the title, then state and course.
 - **Done items** show by default and carry an ok `StatusLine`: `Submitted Tue 21:14`. Unticking "Show done" hides them, and counts as
   a filter for the "Nothing matches these filters" note.
 - **Tapping a row** opens the deadline sheet: the kind (icon and word), eClass's full title in `headlineSmall`, the course, a rule, the due time or
   watch window, the status, submission or watch progress (a 4dp `onSurface` bar on `outlineVariant`), and a `FilledButton`
-  "Open in eClass", with "Course attendance and grade" as a `TextButton` below.
+  "Open in eClass" ("Watch" for a VOD that can be watched, with "Open in eClass" as a text button: VOD player, below), with "Course
+  attendance and grade" as a `TextButton` below.
 
 **Courses (attendance and VOD).**
 - **Order:** danger, then warning, then everything else in timetable order. This tab exists to answer "am I in trouble".
@@ -442,49 +448,119 @@ The absence allowance comes from the limit the student sets. **Never hardcode or
     scrolled under it, the name fades in there (section 12).
   - The absence count in `headlineMedium` (`6 of 8`) with the large tally, a `StatusLine` for what is left, and the classes held so
     far. Then "Open in eClass" and "Set absence limit" / "Change limit" as text buttons.
-  - The course's deadlines, then the INS grade: both short, so they come before the long lists.
-  - VOD lectures, each with `Week 7 · 38 / 75 min` and a 4dp bar in `onSurface` on `outlineVariant`.
+  - The course's deadlines, its eClass score (a row leading to Scores), the INS grade, then `In the timetable`, its weekly classes as
+    ruled rows that open Schedule on that day: all short, so they come before the long lists.
+  - VOD lectures, each with `Week 7 · 38 / 75 min`, a 4dp bar in `onSurface` on `outlineVariant`, and a trailing text button (VOD
+    player, below).
   - A ruled list of the eClass attendance sessions held so far, newest first: date plus Present, Absent, Late or Other, each as icon
     and word. eClass also lists the semester's future sessions; they are not shown.
 - **A class with no eClass course** (Mental Education) opens a sheet with its time, room and teacher, and says there is no
   attendance record for it.
+
+**VOD player** (`lib/features/vod_player_screen.dart`, Android only). eClass's own player page in a full-screen WebView, on the app's
+eClass session. The page does the tracking, so progress counts exactly as it does on the website; the app never reports any itself.
+- **The way in** depends on the video. On a VOD row, a `TextButton`; on the deadline sheet, the one `FilledButton`, with "Open in
+  eClass" moving to a `TextButton` below it.
+
+  | The video | Row or sheet offers | Line on the row |
+  |---|---|---|
+  | In its window, module id known | "Watch" | `Continue from 23:10` once a place is saved |
+  | Fully watched, in its window | "Watch again", from the start | |
+  | No module id, window open | "Open in eClass", the course page | |
+  | Window closed | "Open in eClass" when the module id is known, else nothing | `Closed Thu 23 Oct 23:59`, unless watched |
+  | Not open yet | Nothing | `Opens Mon 26 Oct 09:00` |
+
+- **The screen:** the video's title in the app bar, one line, with `open_in_browser` ("Open in eClass") as its action. Under it a
+  2dp bar and `Opening the video in eClass.` on paper until the page has loaded, or for 15 s at most. The player's fullscreen button
+  hides the bar and the system bars and turns the phone to landscape; Back leaves fullscreen first.
+- **eClass's login form never shows.** If eClass answers with its login page: `eClass sign-in needed.` with "Sign in", and the player
+  tries again on the way back from Settings. A failed session check or page says so with "Retry". Both offer "Open in eClass".
+- **Leaving** (Back, in the bar or the system's) pauses the video and waits about a second under the 2dp bar, so the pause's tracking
+  request goes out, then closes the page. The course's rows then refresh, so its percentage is new when the screen appears.
+- **The place** is read from the video every 3 s and kept on this phone only, by module id, and forgotten on sign-out. eClass's player
+  may go back to its own record of the place by itself; the app seeks only if the player stays in the first 15 s. A place in the last
+  30 s of the video is dropped: there is nothing to continue.
+- **The app going to the background** pauses the video, since a WebView would play on with the sound. Coming back doesn't resume it.
+- **What eClass says with `alert()`,** such as a tracking failure, shows above the video as a warning `StatusLine`,
+  `eClass says: …`, with "Dismiss", so it never holds the video up. A `confirm()` is asked in a dialog, in its own words.
+- **Links:** eClass stays in the player; a top-level link to anywhere else opens in the browser. The player's own media and frames load
+  from whatever hosts they need.
 
 **Mail.**
 - **Folders:** Inbox, Drafts, Sent, Deleted, Junk, Notes, in a drawer behind the menu button: paper with a rule on its open edge, no
   shadow. The selected folder is marked like the selected tab (`primary`, filled icon, 600). Inbox and Junk show their unread count,
   Drafts how many are waiting. The app bar title is the folder's name.
 - **New** is the one floating button in the app: ink (`inverseSurface`) like the badge, radius 8, elevation 0, only on the Mail tab.
-- **List:** in Sent and Drafts the first line is `To <recipients>` instead of the sender. A draft opens in the composer. ruled rows: the sender in muted `bodyMedium` with the time on the right, the subject (`titleSmall` when unread, `bodyLarge`
-  when read), and a one-line preview. No unread dot: weight carries it.
+- **List:** ruled rows: the sender in muted `bodyMedium` with the time on the right, the subject (`titleSmall` when unread, `bodyLarge`
+  when read), and a one-line preview. In Sent and Drafts the first line is `To <recipients>` instead of the sender. A draft opens in the composer. No unread dot: weight carries it. A 16dp paperclip before the time says it has attachments.
+  The list has no header, so past 30 min its stale marker is a line of its own at the top: `Inbox as of Tue 18:04`.
+- **Search:** a boxless `Search Inbox` field for the folder on show, in the app bar on its own screen in the app (the magnifier opens it,
+  and the keyboard's search key asks) and ruled above the list in the extension. Exchange does the finding, so results are not cached.
+  Nothing found says `No mail matches "lab report" in Inbox.`
 - **Message:** the subject in `headlineSmall` (it fades into the empty app bar once scrolled away), the sender in `titleSmall` and the
-  time, attachments (name and size), a rule, then the body in `bodyLarge` with tappable links. App bar: "Mark as unread" and Delete
-  (in Deleted, "Move to Inbox"); in Inbox and Junk a menu moves it to Junk or back ("Not junk"). Under a rule at the foot: Reply,
+  time, attachments, a rule, then the body in `bodyLarge` with tappable links. An attachment is a 48dp row with its name and size: a tap
+  fetches it, with a small spinner, and opens it in an app on the phone. Only the file last opened stays on the phone, in the app's
+  cache, until signing out of mail. A failure names the file in a snack bar; an attached message opens only in webmail. App bar: "Mark as unread" and Delete
+  (in Deleted, "Move to Inbox", or "Move to Drafts" for a draft); in Inbox and Junk a menu moves it to Junk or back ("Not junk"). Under a rule at the foot: Reply,
   Reply all (only when someone besides the sender got it) and Forward; Sent mail gets only Forward. Every move says so in a snack bar
   with Undo. Nothing is deleted for good: Delete moves to Deleted, as Outlook does.
 - **Composer:** plain text. Header lines (To, Cc and Bcc behind "Cc, Bcc", Subject) are label-and-field rows between rules, the fields
-  without boxes; the body below. Typing three letters of a name lists matching people and lists from the university directory under
-  the line. A reply shows its recipients and `RE:` subject as fixed lines, since Exchange sets them, and says the original is quoted
-  under what you write. Send is the app bar's icon; leaving with anything written asks "Keep this as a draft?" (Discard, Save draft).
+  without boxes and as tall as their line; the body below. Typing three letters of a name lists matching people and lists from the
+  university directory under the line. A reply shows its recipients and `RE:` subject as fixed lines, since Exchange sets them, and says
+  the original is quoted under what you write. "Attach file" and Send are the app bar's icons. Files sit as ruled rows above the body,
+  name and size with a Remove button, up to 25 MB of new ones on a message; a draft's saved files are listed without one. Leaving with
+  anything written asks "Keep this as a draft?" (Discard, Save draft). Back waits while a send or save is running, so a failure can't
+  lose the writing. After a failed send with files, the snack bar says a copy may be in Drafts.
+  The 25 MB is checked before anything is uploaded. In the extension Send, Save draft and Attach file sit under the text, and the toolbar popup sends you to a tab to attach,
+  since a file dialog closes it.
 
-**Grades.** The GPA first, as a plain line: `3.87` in `headlineMedium` with `GPA of 4.5 · 98 credits · year 3` beside it. Then each term,
-newest first, under a `titleMedium` header: ruled rows with the course in `bodyLarge`, its credits in muted `bodyMedium`, and the letter
-in `titleMedium` on the right ("Not graded" in muted `bodyMedium`). The letter is the answer, so it is the Fraunces part.
+**Grades.** The GPA first, as a plain line: `3.87` in `headlineMedium` with `GPA of 4.5 · 98 credits · year 3` beside it. Then "Credits
+by category", a ruled row per INS category counted from the graded rows, with INS's own required-credit totals in one muted line under
+them. Then "Scores this semester", a ruled row per course leading to its Scores. Then each term, newest first, under a `titleMedium`
+header with `GPA 3.81 · 18 credits` muted below it (the credits alone until the term has a letter that counts, or when a points figure
+can't be trusted): ruled rows with the course in `bodyLarge`, its credits and category in muted `bodyMedium`, and the letter in
+`titleMedium` on the right ("Not graded" in muted `bodyMedium`). The letter is the answer, so it is the Fraunces part.
+
+**Scores** (one course's marks from eClass; "grade" stays the INS letter).
+- **The total first,** like the GPA: `28.5` in `headlineMedium` with `of 100 so far` beside it, then what is marked, what is still open and
+  the best still possible, in muted `bodyMedium`.
+- **Each category** under a `titleMedium` header with what it is worth, `Assign · 20 points`. A marked row has its mark in `titleMedium`
+  on the right and `8.5 of 10 points` below its name. A row whose item is an eClass activity opens it, for the feedback; the row's what-if
+  field stays out of that tap.
+- **The calculator is the rows still open:** each has a small number field where the mark would go, out of its range, or as a % for a
+  category with nothing posted yet. `8,5` counts as 8.5, since a phone keyboard may offer only the comma. The total never moves;
+  `With these scores: 48.5 of 100`, with Clear, is pinned above the list, so it stays in sight above the keyboard. What-if scores are
+  not saved.
+- **Items that add nothing** (a weight of 0) sit last under "Not counted in the total", so a mark is never missing and never pretends.
+- **The total is eClass's own course total** (its Percentage, or Grade over Range). A course that hides its category weights still has one: `26 of 100`
+  then one sentence saying its marks can't be turned into points, and the marks by category. The contribution column is never added up: on such a course
+  it treats each category as the whole course (157.25).
+- **No weights published, or the grades page closed:** the marks as they are, with one sentence saying why there is no total.
+
+**A new version.** No store carries the app, so at start it asks GitHub for the newest release that holds an APK. If that is newer, one
+dialog says so, "Version 1.4.0 is out. You have 1.3.0.", with **Later** and **Open releases**, which opens the releases page in the browser:
+the student downloads and installs it, and the app fetches nothing itself. It asks once per version, and says nothing when GitHub can't
+be reached. **Check for updates** in Settings runs the same check and always answers. Debug builds don't ask at start.
 
 **Settings.**
-- **Sections:** Accounts, Notifications, Courses, Timetable, Appearance, About (the open-source licences, the fonts' OFL included),
-  each under a ruled `titleMedium` header.
+- **Sections:** Accounts, Notifications, Courses, Timetable, Appearance, About (`Version 1.3.0 (4)`, **Check for updates**, and the open-source licences, the fonts' OFL included), each under a ruled `titleMedium` header.
 - **One row per service that needs a login:** eClass, INS, University mail. The subtitle carries the status:
   `Signed in as U… · checked 08:41`, `Sign-in rejected · checked 08:41` (a danger `StatusLine`), `U… · not checked yet`
   or `Not set up`. Every refresh updates it.
 - **Tapping a row** opens a sheet: the service in `headlineSmall`, username, password (obscured, with a show toggle) and a
   `FilledButton` "Save and test". The result appears inline: `Signed in` or `eClass rejected this username or password.`
 - **Never display a saved password.**
+- **Another student's ID** in the sheet needs its own password, and saving it drops the last account's data and memory as Sign out does.
 - **Sign out** is a `TextButton` in `error` color, behind a confirm dialog. It removes the saved login, the service's cookies and
-  cached data, and (for eClass) the reminders planned from that data.
+  cached data, and (for eClass) the reminders planned from that data and what the notifier remembers about the account. The tabs then
+  say "Sign in", not a loading skeleton.
 - **Notifications:** a switch per channel and one for quiet hours.
 - **Appearance:** Theme, with System, Light and Dark in a dialog.
 - **Absence limits** is its own screen: every eClass course that takes attendance, ruled, with its limit or `Not set`; tapping one asks
   for the number (empty clears it).
+
+**From eClass.** Today lists the newest unread items of eClass's bell menu; "All 20 notifications" opens a view of all of them
+with their text, newest first, as ruled rows, which is also where a bell-menu notification leads in the app. A row opens its link only when that link stays on eClass.
 
 **Empty states.** One left-aligned `bodyLarge` sentence stating the fact, an optional `Checked 08:41`, and at most one `TextButton`.
 - `No classes on Sunday. Next: Mon 27 Oct, 09:00 Multimedia Computing, B-305.`
@@ -494,10 +570,13 @@ in `titleMedium` on the right ("Not graded" in muted `bodyMedium`). The letter i
 
 **Loading.**
 - **Cache first.** Never replace visible data with a loader.
-- **Background refresh:** a 2dp `LinearProgressIndicator` in `primary` under the app bar rule, and `Updating…` in the footer.
+- **Background refresh:** a strip under the app bar for as long as it runs: a 2dp `LinearProgressIndicator` in `primary` for how far it has
+  got, and a muted `bodySmall` line for what it is waiting on and the count, `eClass: marks for Artificial Intelligence` and `5 of 24`, with
+  `Also syncing Mail, INS` when other services are at it too. `Updating…` in the footer.
 - **First run with no cache:** a static skeleton that mirrors the real rows (`surfaceContainerHighest` blocks, radius 4, no shimmer):
   the rail's time column and two lines of text per row.
-- **Spinners:** never a full-screen `CircularProgressIndicator`. A small spinner is allowed only inside a button whose action is running.
+- **Spinners:** never a full-screen `CircularProgressIndicator`. A small spinner is allowed only inside a button or a mail attachment's
+  row whose action is running.
 - **Timeout:** 15 s per service.
 
 **Errors.** One row per failed service, in the form `<what happened>. <what you are seeing>.` plus one action. Raw exceptions and HTTP
@@ -519,7 +598,8 @@ codes never reach the screen.
 - **Detection:** failed requests. The app counts as offline when both EduPage and eClass failed with a network error on their last
   refresh: two different hosts failing together means the connection, not a service.
 - **Display:** one row at the top of Today, Schedule, Deadlines and Courses: `cloud_off_outlined` plus
-  `Offline. Showing data from 08:12.` on `surfaceContainerHigh`, with "Retry". It replaces those services' own network error rows.
+  `Offline. Showing data from 08:12.` on `surfaceContainerHigh`, with "Retry". It replaces those services' own network error rows on
+  those four tabs. Every other screen keeps its own row, so none goes blank.
 - **Recovery:** the next refresh (pull, Retry, or returning to the app) clears it. "Open in eClass" stays enabled.
 
 ## 9. Time and number formats
@@ -564,13 +644,18 @@ success, re-engagement, greetings, errors that recover on their own, or anything
 | Deadlines | DEFAULT | 24 h and 3 h before a deadline that isn't submitted | On |
 | VOD windows | DEFAULT | 48 h and 6 h before a window closes while the VOD isn't fully watched | On |
 | Attendance | DEFAULT | A new absence is recorded | On |
+| Grades | DEFAULT | A new or changed mark appears in eClass | On |
 | Classes | LOW | 15 min before each class, with the room in the title | Off |
+| Exams | DEFAULT | The evening before and 1 h before an exam, with the room | On |
+| eClass notifications | DEFAULT | A new unread item in eClass's notification menu | On |
 
 - **Wording:** title at most 30 characters, body at most 40. The most important fact goes first and the course name goes in the body.
   No app name, no emoji, no exclamation marks.
 - **One notification per item,** with a stable id, so the 3 h reminder replaces the 24 h one.
-- **Check before posting.** Re-sync first; if that sync fails, use the last known status. Never notify about something already
-  submitted or watched.
+- **Check on every pass.** Each refresh, in the app or the background about every 3 h, plans again from the newest data: it cancels
+  what is no longer due and withdraws what is in the tray for work now submitted, watched or marked done. A scheduled alarm can't
+  check anything when it fires on Android, so that pass is the check. Never plan a notification for something already submitted or
+  watched.
 - **Quiet hours:** 23:00–07:30. If a deadline falls inside them, its last reminder goes out at 22:00.
 - **The status-bar icon** (`ic_stat_notify`) is white on transparent; Android tints it.
 - **Tapping** opens the item's detail.

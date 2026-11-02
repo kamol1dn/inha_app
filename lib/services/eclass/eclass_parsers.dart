@@ -6,6 +6,8 @@
 /// the right one but simply has nothing in it.
 library;
 
+import 'dart:convert';
+
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
 
@@ -50,6 +52,9 @@ List<Course> parseCourses(String html) {
 /// Times come from the `time=<unix>` parameter of the date links, never from
 /// the visible "Today"/"Tomorrow" text. One link is the due time; two are the
 /// start and end of a window (VODs). Returned [DateTime]s are local time.
+///
+/// A quiz with a long window has two events, "(Quiz opens)" and "(Quiz closes)".
+/// The opening isn't something due, so it is left out.
 List<Deadline> parseUpcoming(String html) {
   final doc = html_parser.parse(html);
   var events = doc.querySelectorAll('.eventlist .event');
@@ -67,6 +72,7 @@ List<Deadline> parseUpcoming(String html) {
     final titleEl = referer ?? e.querySelector('h3.name') ?? e.querySelector('h3');
     final title = _text(titleEl);
     if (title.isEmpty) throw ParseError('eClass upcoming event title');
+    if (_opensEvent.hasMatch(title)) continue;
 
     final href = referer?.querySelector('a[href]')?.attributes['href'];
     final mod = href == null ? null : _modulePattern.firstMatch(href);
@@ -90,6 +96,7 @@ List<Deadline> parseUpcoming(String html) {
     out.add(Deadline(
       title: title,
       courseName: _text(e.querySelector('.course')),
+      courseId: _intParam(e.querySelector('.course a[href]')?.attributes['href'], 'id'),
       kind: kind,
       start: times.length >= 2 ? times.first : null,
       end: times.last,
@@ -155,6 +162,10 @@ List<AttendanceEntry> parseAttendance(String html) {
 /// The Week cell spans all of a week's rows, so later rows have one cell
 /// fewer. Weeks without VODs show an empty row and are skipped. A course
 /// without progress-managed VODs has no table and gives an empty list.
+///
+/// Each row's Details button carries the watch window (`data-sterm`,
+/// `data-eterm`, unix seconds). Its `data-modid` is the VOD's instance id, not
+/// a course module id, so [VodProgress.moduleId] comes from [parseVodModules].
 List<VodProgress> parseVodProgress(String html) {
   final doc = html_parser.parse(html);
   final table = doc.querySelector('table.user_progress');
@@ -181,14 +192,48 @@ List<VodProgress> parseVodProgress(String html) {
         _firstInt(weekCell.querySelector('[title]')?.attributes['title'] ?? '');
     if (week == null) throw ParseError('eClass VOD progress week');
 
+    final window = cells.map((c) => c.querySelector('[data-eterm]')).nonNulls.firstOrNull;
     out.add(VodProgress(
       week: week,
       title: title,
       length: _parseClock(_text(cells[2])),
       percent: _parsePercent(_text(cells.last)),
+      opens: _unixTime(window?.attributes['data-sterm']),
+      closes: _unixTime(window?.attributes['data-eterm']),
     ));
   }
   return out;
+}
+
+/// A course's VOD list, `GET /mod/vod/index.php?id=<course>`: each VOD's name and
+/// course module id, from its `view.php?id=<module>` link, in page order. The
+/// page is an extra, so anything unexpected gives an empty list, never an error.
+List<(String, int)> parseVodModules(String html) {
+  final doc = html_parser.parse(html);
+  final root = doc.querySelector('#region-main') ?? doc.body;
+  return [
+    for (final a in root?.querySelectorAll('a[href]') ?? const <Element>[])
+      if (RegExp(r'^(?:view\.php|.*/mod/vod/view\.php)\?').hasMatch(a.attributes['href']!.trim()))
+        if (_intParam(a.attributes['href'], 'id') case final id? when _text(a).isNotEmpty) (_text(a), id),
+  ];
+}
+
+/// Fills in [VodProgress.moduleId] from [parseVodModules], matching on the name
+/// with case and spacing ignored. A repeated name takes the links in order; a
+/// row with no link stays without an id.
+List<VodProgress> withVodModules(List<VodProgress> vods, List<(String, int)> modules) {
+  String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+  final byName = <String, List<int>>{};
+  for (final (name, id) in modules) {
+    (byName[norm(name)] ??= []).add(id);
+  }
+  return [
+    for (final v in vods)
+      switch (byName[norm(v.title)]) {
+        final ids? when ids.isNotEmpty => v.withModuleId(ids.removeAt(0)),
+        _ => v,
+      },
+  ];
 }
 
 /// Whether an assignment is handed in, from `GET /mod/assign/view.php?id=`.
@@ -236,15 +281,191 @@ List<VodProgress> parseVodProgress(String html) {
   var done = false;
   DateTime? at;
   for (final row in doc.querySelectorAll('table.quizattemptsummary tbody tr')) {
-    final cell = row.querySelector('td');
-    if (cell == null) continue;
-    final text = _text(cell);
-    if (!RegExp(r'^(Finished|종료)', caseSensitive: false).hasMatch(text)) continue;
-    done = true;
-    final when = _parseDateTime(text);
-    if (when != null && (at == null || when.isAfter(at))) at = when;
+    // Any cell: a quiz allowing more than one attempt starts with an Attempt column.
+    for (final cell in row.querySelectorAll('td')) {
+      final text = _text(cell);
+      if (!RegExp(r'^(Finished|종료)', caseSensitive: false).hasMatch(text)) continue;
+      done = true;
+      final when = _parseDateTime(text);
+      if (when != null && (at == null || when.isAfter(at))) at = when;
+      break;
+    }
   }
   return (done: done, at: at);
+}
+
+/// A course's grades page, `GET /grade/report/user/index.php?id=<course>`, or
+/// null when the page has no table.
+///
+/// The column classes hold whatever language the page is in. A row is a
+/// category heading, an item (`th.item`) or a category's total (`th.baggt`),
+/// which comes after the category's items and is the row carrying its weight;
+/// the course's own total is that row at level 1. Nested categories multiply.
+CourseGrades? parseGradeBook(String html, Course course) {
+  final doc = html_parser.parse(html);
+  final table = doc.querySelector('table.user-grade');
+  if (table == null) {
+    if (doc.body?.id == 'page-grade-report-user-index') return null;
+    throw ParseError('eClass grades');
+  }
+
+  final open = <int, _GradeCategoryRows>{}; // the category being read at each level
+  final rows = <(Element, _GradeCategoryRows?)>[];
+  final categories = <_GradeCategoryRows>[];
+  double? percent;
+  for (final tr in table.querySelectorAll('tbody tr')) {
+    final th = tr.querySelector('th.column-itemname');
+    if (th == null) continue;
+    final level = int.tryParse(RegExp(r'\blevel(\d+)\b').firstMatch(th.className)?.group(1) ?? '');
+    if (level == null) throw ParseError('eClass grades row');
+
+    if (th.classes.contains('item')) {
+      rows.add((tr, open[level - 1]));
+    } else if (th.classes.contains('baggt') || th.classes.contains('baggb')) {
+      if (level == 1) {
+        percent = _courseTotalPercent(tr);
+      } else {
+        open[level]?.weight = _gradeNumber(_gradeCell(tr, 'weight'));
+      }
+    } else {
+      final c = _GradeCategoryRows(_text(th), open[level - 1]);
+      open[level] = c;
+      if (level > 1) categories.add(c);
+    }
+  }
+
+  return CourseGrades(
+    course: course,
+    source: GradeSource.gradebook,
+    percent: percent,
+    // A category holding categories is already counted through them.
+    categories: [
+      for (final c in categories)
+        if (!categories.any((o) => o.parent == c)) GradeCategory(c.name, c.courseWeight),
+    ],
+    items: [
+      for (final (tr, category) in rows) _gradeItem(tr, category),
+    ],
+  );
+}
+
+GradeItem _gradeItem(Element tr, _GradeCategoryRows? category) {
+  final th = tr.querySelector('th.column-itemname')!;
+  final id = RegExp(r'^row_(\d+)').firstMatch(th.id)?.group(1);
+  final link = th.querySelector('a.gradeitemheader[href]')?.attributes['href'];
+  final mod = link == null ? null : _modulePattern.firstMatch(link);
+  final moduleId = mod == null ? null : int.tryParse(mod.group(2)!);
+  if (id == null && moduleId == null) throw ParseError('eClass grades item');
+  final mark = _gradeCell(tr, 'grade');
+  return GradeItem(
+    key: moduleId != null ? 'm$moduleId' : 'g$id',
+    name: _text(th.querySelector('.gradeitemheader') ?? th),
+    category: category == null || category.parent == null ? '' : category.name,
+    mark: mark,
+    grade: _gradeNumber(mark),
+    max: _rangeMax(_gradeCell(tr, 'range')),
+    weight: _gradeNumber(_gradeCell(tr, 'weight')),
+    categoryWeight: category?.parent == null ? 100 : category!.courseWeight,
+    contribution: _gradeNumber(_gradeCell(tr, 'contributiontocoursetotal')),
+    moduleId: moduleId,
+    moduleType: mod?.group(1),
+  );
+}
+
+/// The course total's row, as %. Not its contribution column, which adds up
+/// marks as if every category were worth the whole course: 157.25 on a page
+/// whose total is 26 of 100. Some courses hide the Percentage column; Grade over
+/// Range is the same.
+double? _courseTotalPercent(Element tr) {
+  final shown = _gradeNumber(_gradeCell(tr, 'percentage'));
+  if (shown != null) return shown;
+  final grade = _gradeNumber(_gradeCell(tr, 'grade'));
+  final max = _rangeMax(_gradeCell(tr, 'range'));
+  return grade != null && max != null && max > 0 ? grade / max * 100 : null;
+}
+
+/// "0–100" → 100; a scale has no number.
+double? _rangeMax(String s) {
+  final m = RegExp(r'[–-]\s*(\d+(?:\.\d+)?)\s*$').firstMatch(s);
+  return m == null ? null : double.parse(m.group(1)!);
+}
+
+String _gradeCell(Element tr, String column) => _text(tr.querySelector('td.column-$column'));
+
+/// "100.00 %" → 100, "8.50" → 8.5; "-", a letter or a word → null.
+double? _gradeNumber(String s) {
+  final m = RegExp(r'^(-?\d+(?:\.\d+)?)\s*%?$').firstMatch(s.trim());
+  return m == null ? null : double.parse(m.group(1)!);
+}
+
+/// A category while its rows are read. The course itself is the root, with no
+/// parent. Its weight comes from its total row, after its items.
+class _GradeCategoryRows {
+  final String name;
+  final _GradeCategoryRows? parent;
+  double? weight;
+  _GradeCategoryRows(this.name, this.parent);
+
+  /// % of the course total; null when eClass shows "-" here or above.
+  double? get courseWeight {
+    final up = parent;
+    if (up == null) return 100;
+    final w = weight, above = up.courseWeight;
+    return w == null || above == null ? null : w * above / 100;
+  }
+}
+
+/// A course's assignment or quiz list, `GET /mod/<type>/index.php?id=<course>`,
+/// the marks of a course with its grades page closed. Quizzes read
+/// `37.00/100.00`; assignments give the mark alone, or `-`. A course with none
+/// has no table. [type] is `assign` or `quiz`.
+List<GradeItem> parseActivityGrades(String html, String type) {
+  final doc = html_parser.parse(html);
+  final table = doc.querySelector('#region-main table.generaltable');
+  if (table == null) {
+    if (doc.body?.id == 'page-mod-$type-index') return const [];
+    throw ParseError('eClass $type list');
+  }
+  final headers = table.querySelectorAll('thead th').map(_text).toList();
+  final found = headers.indexWhere((h) => h == 'Grade' || h == '성적');
+  final gradeColumn = found >= 0 ? found : headers.length - 1;
+
+  final out = <GradeItem>[];
+  for (final tr in table.querySelectorAll('tbody tr')) {
+    final cells = tr.querySelectorAll('td');
+    final link = tr.querySelector('a[href*="view.php"]');
+    if (link == null || gradeColumn < 0 || cells.length <= gradeColumn) continue; // the spacer between weeks
+    final id = _intParam(link.attributes['href'], 'id');
+    if (id == null) throw ParseError('eClass $type list row');
+    final text = _text(cells[gradeColumn]);
+    final outOf = RegExp(r'^(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)$').firstMatch(text);
+    out.add(GradeItem(
+      key: 'm$id',
+      name: _text(link),
+      category: type == 'assign' ? 'Assignments' : 'Quizzes',
+      mark: text,
+      grade: outOf != null ? double.parse(outOf.group(1)!) : _gradeNumber(text),
+      max: outOf == null ? null : double.parse(outOf.group(2)!),
+      moduleId: id,
+      moduleType: type,
+    ));
+  }
+  return out;
+}
+
+/// The maximum in the Feedback box of `GET /mod/assign/view.php?id=`, whose
+/// Grade row reads `85.00 / 100.00`. Null before there is a mark, or on a
+/// grading scale.
+double? parseAssignMax(String html) {
+  final doc = html_parser.parse(html);
+  if (doc.body?.id != 'page-mod-assign-view') throw ParseError('eClass assignment');
+  for (final row in doc.querySelectorAll('.feedback tr')) {
+    final cells = row.querySelectorAll('td, th');
+    if (cells.length < 2 || !RegExp(r'^(Grade|성적)$').hasMatch(_text(cells.first))) continue;
+    final m = RegExp(r'/\s*(\d+(?:\.\d+)?)\s*$').firstMatch(_text(cells[1]));
+    return m == null ? null : double.parse(m.group(1)!);
+  }
+  return null;
 }
 
 /// The first "2026-10-21 21:14" in [s], in device time (eClass shows times in
@@ -273,7 +494,59 @@ String? extractSesskey(String html) {
   return RegExp(r'[?&]sesskey=([A-Za-z0-9]+)').firstMatch(html)?.group(1);
 }
 
+/// The student's id in the `/user/edit.php?id=<id>` link of any logged-in page.
+int? parseUserId(String html) {
+  for (final a in html_parser.parse(html).querySelectorAll('a[href*="/user/edit.php"]')) {
+    final id = _intParam(a.attributes['href'], 'id');
+    if (id != null) return id;
+  }
+  final m = RegExp(r'''/user/edit\.php\?(?:[^"'#]*&(?:amp;)?)?id=(\d+)''').firstMatch(html);
+  return m == null ? null : int.parse(m.group(1)!);
+}
+
+/// The reply of `message_popup_get_popup_notifications` through
+/// `/lib/ajax/service.php`: `[{"error": false, "data": {"notifications": [...]}}]`.
+/// Moodle's fields are `id`, `subject`, `smallmessage` (else `fullmessage`),
+/// `contexturl`, `timecreated` (seconds) and `read`. A Moodle error reply
+/// (`"error": true`, e.g. an expired sesskey) is a [ParseError].
+List<EclassNotification> parseNotifications(String json) {
+  const what = 'eClass notifications';
+  final Object? body;
+  try {
+    body = jsonDecode(json);
+  } on FormatException {
+    throw ParseError(what);
+  }
+  final first = body is List && body.isNotEmpty ? body.first : body;
+  if (first is! Map || first['error'] == true) throw ParseError(what);
+  final data = first['data'];
+  final list = data is Map ? data['notifications'] : null;
+  if (list is! List) throw ParseError(what);
+  return [
+    for (final n in list.whereType<Map>())
+      if (n['id'] case final num id)
+        EclassNotification(
+          id: id.toInt(),
+          subject: _plain('${n['subject'] ?? ''}'),
+          text: _plain(switch (n['smallmessage']) {
+            final String small when small.isNotEmpty => small,
+            _ => '${n['fullmessage'] ?? ''}',
+          }),
+          url: switch (n['contexturl']) {
+            final String url when url.isNotEmpty => url,
+            _ => null,
+          },
+          time: DateTime.fromMillisecondsSinceEpoch(((n['timecreated'] as num?) ?? 0).toInt() * 1000),
+          read: n['read'] == true,
+        ),
+  ];
+}
+
 // ---------------------------------------------------------------------------
+
+/// An event that only says when something opens: "(Quiz opens)", "(Assignment
+/// opens)". Nothing is due then.
+final _opensEvent = RegExp(r'\((?:[^()]*\s)?opens\)\s*$', caseSensitive: false);
 
 /// Course-level class-period events: "Artificial Intelligence[001]-1교시".
 final _classPeriodTitle = RegExp(r'\[\d+\]\s*-\s*\d+\s*교시\s*$');
@@ -283,6 +556,17 @@ final _modulePattern = RegExp(r'/mod/([a-z0-9_]+)/view\.php\?(?:[^#]*&)?id=(\d+)
 /// Element text with whitespace (including &nbsp;) collapsed.
 String _text(Element? e) =>
     e == null ? '' : e.text.replaceAll(' ', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+
+/// Text of an HTML snippet: Moodle sends some notification fields as HTML.
+String _plain(String s) => s.contains('<') || s.contains('&')
+    ? (html_parser.parseFragment(s).text ?? '').replaceAll(RegExp(r'\s+'), ' ').trim()
+    : s.trim();
+
+/// A time in unix seconds; null when missing or zero.
+DateTime? _unixTime(String? s) => switch (int.tryParse(s ?? '')) {
+      final t? when t > 0 => DateTime.fromMillisecondsSinceEpoch(t * 1000),
+      _ => null,
+    };
 
 int? _intParam(String? href, String name) {
   if (href == null) return null;

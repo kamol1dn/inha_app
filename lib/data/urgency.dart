@@ -12,19 +12,37 @@ String _norm(String s) => s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim()
 /// Kinds that are something due. Class periods are only shown on request.
 bool isDue(Deadline d) => d.kind != DeadlineKind.classPeriod;
 
-/// Nothing left to do: handed in, attempted, or (a VOD) fully watched.
-bool isDone(Deadline d, List<CourseAttendance> att) => d.done || vodWatched(d, att) == true;
+/// Nothing left to do: handed in, attempted, (a VOD) fully watched, or marked
+/// done by the student.
+bool isDone(Deadline d, List<CourseAttendance> att) => d.done || d.dismissed || vodWatched(d, att) == true;
 
-/// The course's attendance record for a calendar event. Calendar course names
-/// can be cut short, so match on prefix either way.
+/// The course's attendance record for a name from another source. Calendar
+/// course names can be cut short, so after an exact match it tries a prefix
+/// either way: the longest course name the given one starts with, or the one
+/// course that starts with it. Several courses starting with it can't be told
+/// apart, so that is no match.
 CourseAttendance? courseFor(String courseName, List<CourseAttendance> all) {
   final n = _norm(courseName);
   if (n.isEmpty) return null;
+  CourseAttendance? shorter;
+  final longer = <CourseAttendance>[];
   for (final c in all) {
     final m = _norm(c.course.name);
-    if (m == n || m.startsWith(n) || n.startsWith(m)) return c;
+    if (m == n) return c;
+    if (m.isEmpty) continue;
+    if (m.startsWith(n)) longer.add(c);
+    if (n.startsWith(m) && m.length > (shorter == null ? 0 : _norm(shorter.course.name).length)) shorter = c;
   }
-  return null;
+  if (longer.isEmpty) return shorter;
+  return shorter == null && longer.length == 1 ? longer.single : null;
+}
+
+/// The course a calendar event belongs to: by the id it links to, else (an old
+/// cache, an event with no course link) by name.
+CourseAttendance? courseOfDeadline(Deadline d, List<CourseAttendance> all) {
+  final id = d.courseId;
+  final byId = id == null ? null : all.where((c) => c.course.id == id).firstOrNull;
+  return byId ?? courseFor(d.courseName, all);
 }
 
 /// A course's own calendar items: due ones only, not more than a day overdue,
@@ -34,7 +52,7 @@ List<Deadline> courseDeadlines(Course course, List<Deadline> all, List<CourseAtt
         .where((d) =>
             isDue(d) &&
             d.end.isAfter(now.subtract(const Duration(hours: 24))) &&
-            courseFor(d.courseName, att)?.course.id == course.id)
+            courseOfDeadline(d, att)?.course.id == course.id)
         .toList()
       ..sort((a, b) => a.end.compareTo(b.end));
 
@@ -48,11 +66,18 @@ GradeRecord? gradeFor(Course course, GradeReport? report) {
   return matches.reduce((a, b) => a.termKey >= b.termKey ? a : b);
 }
 
-/// The progress row for a VOD-window event, or null if unknown.
+/// The progress row for a VOD-window event, or null if unknown: by module id,
+/// else by title.
 VodProgress? vodFor(Deadline d, List<CourseAttendance> all) {
   if (d.kind != DeadlineKind.vod) return null;
-  final course = courseFor(d.courseName, all);
+  final course = courseOfDeadline(d, all);
   if (course == null) return null;
+  final id = d.moduleId;
+  if (id != null) {
+    for (final v in course.vods) {
+      if (v.moduleId == id) return v;
+    }
+  }
   final t = _norm(d.title);
   for (final v in course.vods) {
     if (_norm(v.title) == t) return v;
@@ -83,9 +108,9 @@ List<Deadline> needsAttention(List<Deadline> all, List<CourseAttendance> att, Da
     if (!isDue(d)) return false;
     final left = d.end.difference(now);
     if (d.kind == DeadlineKind.vod) {
-      return !left.isNegative && left <= vodTodayWindow && vodWatched(d, att) != true;
+      return !d.dismissed && !left.isNegative && left <= vodTodayWindow && vodWatched(d, att) != true;
     }
-    return !d.done && left > const Duration(hours: -24) && left <= deadlineTodayWindow;
+    return !d.done && !d.dismissed && left > const Duration(hours: -24) && left <= deadlineTodayWindow;
   }).toList()
     ..sort((a, b) => a.end.compareTo(b.end));
   return out;

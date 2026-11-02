@@ -94,7 +94,7 @@ void main() {
       expect(xml, contains('<t:FieldURI FieldURI="message:IsRead"/>'));
       expect(xml, contains('MaxEntriesReturned="10" Offset="20"'));
       expect(xml, contains('<t:RequestServerVersion Version="Exchange2010_SP2"/>'));
-      expect(readSoap(xml).find('AdditionalProperties')!.elements, hasLength(5));
+      expect(readSoap(xml).find('AdditionalProperties')!.elements, hasLength(6));
     });
 
     test('GetItem: header fields, attachments and text body of the exact id', () {
@@ -531,8 +531,19 @@ class FakeCredentials implements CredentialStore {
   Future<Credentials?> read(Service s) async => s == Service.mail ? saved : null;
 
   @override
-  Future<void> write(Service s, Credentials c) async => saved = c;
+  Future<void> write(Service s, Credentials c) async {
+    saved = c;
+    refused.remove(s);
+  }
 
   @override
   Future<void> clear(Service s) async => saved = null;
+
+  /// The last login refused, by service, as the real store remembers it.
+  final refused = <Service, Credentials>{};
+  @override
+  Future<void> markRefused(Service s, Credentials c) async => refused[s] = c;
+  @override
+  Future<bool> isRefused(Service s, Credentials c) async =>
+      refused[s]?.username == c.username && refused[s]?.password == c.password;
 }

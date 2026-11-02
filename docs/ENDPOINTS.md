@@ -16,11 +16,16 @@ the login form, keeps the cookie, and parses HTML.
 | Login | `POST /login/index.php` form: `username`, `password` | No `logintoken`. Success = redirect away from `/login/`, `MoodleSession` cookie set. Failure = the login page again (look for the form / an error box). |
 | Session check | `GET /` | Logged out → you land on `/login/index.php`. |
 | Courses | `GET /` | Links `a[href*="/course/view.php?id="]`; title text like `Multimedia Computing[202602-SOC4020-001]`, the professor's name is nearby. |
-| Upcoming events | `GET /calendar/view.php?view=upcoming` | `.event` items: `.referer` (title, with `a` → `/mod/<type>/view.php?id=<moduleId>` when it is an activity), `.course`, `.date`. The `.date a[href]` links carry `time=<unix seconds>`: one link = due time, two = start and end of a window (VODs). Course-level events have no module link. |
+| Upcoming events | `GET /calendar/view.php?view=upcoming` | `.event` items: `.referer` (title, with `a` → `/mod/<type>/view.php?id=<moduleId>` when it is an activity), `.course`, `.date`. The `.date a[href]` links carry `time=<unix seconds>`: one link = due time, two = start and end of a window (VODs). Course-level events have no module link. `.course a` links to `/course/view.php?id=<courseId>`. The page stops at a fixed number of events (the fixture holds 10, Moodle's default `calendar_maxevents`), class periods included, so the app also reads `&course=<courseId>` for each course (same markup, its own cut) and merges the pages without repeats. Each page is optional. A quiz with a long window has two events, `(Quiz opens)` and `(Quiz closes)`; the opening is left out. |
 | Class attendance | `GET /local/ubattendance/my_status.php?id=<courseId>` | `table.attendance_my`: Week (date `YYYY-MM-DD`) / Class / Attendance / Absence / Late / Others. The column holding `○` is the mark. A second table fills in by AJAX and is not needed. |
-| VOD progress | `GET /report/ubcompletion/user_progress.php?id=<courseId>` | `table.user_progress`: Week / Resources / Contents time / max position / Progress `%`. The Week cell uses `rowspan`, so later rows in a week have one fewer cell. When a course has no progress-managed VODs the page says so and the table is missing; that is not an error. |
+| VOD progress | `GET /report/ubcompletion/user_progress.php?id=<courseId>` | `table.user_progress`: Week / Resources / Contents time / max position / Progress `%`. The Week cell uses `rowspan`, so later rows in a week have one fewer cell. When a course has no progress-managed VODs the page says so and the table is missing; that is not an error. Each row's Details button has `data-sterm` and `data-eterm` (the watch window, unix seconds) and `data-modid`, which is the VOD's instance id and **not** a course module id (`/mod/vod/view.php?id=<that>` answers "Invalid course module ID"). |
+| Log out | `GET /login/logout.php?sesskey=<sesskey>` | Moodle's own link, with the page's `sesskey`. The extension uses it on sign-out, since it shares the browser's cookies. Follows Moodle's renderer; not tried live. |
+| VOD list | `GET /mod/vod/index.php?id=<courseId>` | Links `view.php?id=<moduleId>` whose text is the VOD's name: the real module ids, matched to the progress rows by name. Optional: without it a row has no `moduleId` and no link. |
+| VOD player | `GET /mod/vod/viewer.php?id=<moduleId>`, in a WebView | Body class `mod-vod-viewer`, `<video id="my-video" class="video-js">` (video.js renames the element itself to `my-video_html5_api`) with an HLS `<source type="application/x-mpegURL">`, driven by eClass's AMD module `mod_vod/vod`. Its `progress()` posts to `/mod/vod/action.php` every 60 s and on player events (type `vod_track_for_onwindow` among others), and it knows the earlier position. The app plays the page with the session cookies copied from its cookie jar and the same desktop User-Agent, and **never posts to `action.php` itself**; it only pauses the video before leaving, so the pause's request goes out. The page may call `alert()` on a tracking failure. Read from the live site; playing it in the app hasn't been tried live. |
 | Assignment status | `GET /mod/assign/view.php?id=<moduleId>` | `div.submissionstatustable table.generaltable`, rows Submission status / Grading status / Due date / Time remaining / Last modified. Moodle's renderer: the status cell gets a `submissionstatus<state>` class only once there is a submission (`submitted`, `draft`, `reopened`, `marked`); "No attempt" has no class. `td.submissiongraded` once graded. Times as `2026-10-21 21:14` in the profile's zone. Checked live 2026-10-23 (no submitted example this term, so "submitted" follows Moodle's strings). The course index `/mod/assign/index.php?id=<courseId>` lists every assignment with a Submission column too. |
-| Quiz status | `GET /mod/quiz/view.php?id=<moduleId>` | `.box.quizinfo` (attempts allowed, open/close times). After an attempt: `table.generaltable.quizattemptsummary`, State cell `Finished` + `span.statedetails` "Submitted 2026-10-04 23:13", and `.box.quizattempt` "No more attempts are allowed". Before one: the start form only. GET never starts an attempt (that is a POST to `startattempt.php`). Checked live on a finished and an open quiz. |
+| Quiz status | `GET /mod/quiz/view.php?id=<moduleId>` | `.box.quizinfo` (attempts allowed, open/close times). After an attempt: `table.generaltable.quizattemptsummary`, State cell (first in the row, or second after an Attempt column when the quiz allows more than one attempt, which is from Moodle's renderer and not seen live, so every cell is tried) `Finished` + `span.statedetails` "Submitted 2026-10-04 23:13", and `.box.quizattempt` "No more attempts are allowed". Before one: the start form only. GET never starts an attempt (that is a POST to `startattempt.php`). Checked live on a finished and an open quiz. |
+| Grades page | `GET /grade/report/user/index.php?id=<courseId>` | `table.user-grade`. Rows by the classes on `th.column-itemname`: a heading (category name), `.item` (one mark) or `.baggt` (a category's total, after its items, the row carrying its weight; at `.level1`, the course total). Cells by `td.column-weight` / `-grade` / `-range` / `-percentage` / `-contributiontocoursetotal` (headed "백분 환산 점수"): points out of 100 in the course total. `-percentage` is missing in some courses. A weight is % of the level above, `-` when not set; a category with nothing in it yet still has its row, range `0–0`. `th[id=row_<grade item id>_<user id>]`; an activity links `a.gradeitemheader` to its module, a manual item has no link. A professor can close the page: **404, "Can not view grades."** Checked live 2026-10-31. Course total's own Grade cell can disagree with the contribution (seen `1.00` beside `6.25`, and a range of `0–200`), so the app uses the contribution. |
+| Assignment and quiz lists | `GET /mod/assign/index.php?id=<courseId>`, `GET /mod/quiz/index.php?id=<courseId>` | The marks of a course with its grades page closed. `#region-main table.generaltable`, last column Grade; an empty `td[colspan]` row separates the weeks. A quiz reads `37.00/100.00` or nothing; an assignment `-` or the mark alone, so its maximum comes from the Feedback box on `/mod/assign/view.php?id=<moduleId>` (`.feedback` table, row Grade, `85.00 / 100.00`). No table = none in this course. Lists checked live 2026-10-31, but nothing was graded on an assignment then, so its mark and the Feedback box follow Moodle's renderer. A list and the grades page can differ: one quiz read `37.00/100.00` here and `0.37` of 100 there. |
 | Notifications | `POST /lib/ajax/service.php?sesskey=<M.cfg.sesskey>` body `[{"index":0,"methodname":"message_popup_get_popup_notifications","args":{"useridto":<id>,"newestfirst":true,"limit":20,"offset":0}}]` | `sesskey` is in the page's `M.cfg` JSON. The user id is not; take it from the `/user/edit.php?id=<id>` link on any logged-in page. |
 
 Fixtures: `test/fixtures/private/` holds real pages (git-ignored). `test/fixtures/`
@@ -78,7 +83,9 @@ Plain `http://` answers 200 but would send the password unencrypted, so don't us
    `window.frm.fileurl.value = '...%253d'`; don't document from the DOM again.)
    GET and POST of the URL as written both return the XML.
    The server sometimes redirects to its internal name `http://ins.iutdev.ac.kr/...`,
-   which doesn't resolve outside IUT; the client pins every redirect to ins.inha.uz.
+   which doesn't resolve outside IUT; the client pins every redirect to ins.inha.uz. In the
+   browser extension fetch follows the redirect itself and fails on that hop, so a failed hop falls
+   through to the direct report URL, and in an INS tab a failed menu counts as an expired session.
 3. `POST` that `fileurl` (empty body) → XML, **encoding EUC-KR** (decode bytes
    accordingly), shape:
 
@@ -91,7 +98,8 @@ Plain `http://` answers 200 but would send the password unencrypted, so don't us
   <TOT_JUM>999.99</TOT_JUM>            <!-- total grade points -->
   <COM_PYUNG>9.999999</COM_PYUNG> <SIN_PYUNG>9.999999</SIN_PYUNG> <!-- GPA (cumulative), likely on a 4.5 scale -->
   <TODAYTIME>yyyy-MM-dd HH:mm:ss</TODAYTIME>
-  ... per-category credit totals (KYOPIL, JUNPIL, ...) ...
+  <KYOPIL>8.0</KYOPIL> <JUNPIL>9.0</JUNPIL>   <!-- general-required / major-required credits; Grades shows them beside its own count -->
+  ... other per-category credit totals ...
   <MARK>                               <!-- one per course, ~46 -->
     <STNO/> <GRADE>Freshman|Sophomore|Junior|...|''</GRADE>
     <YEARTERM>20231</YEARTERM> <DISPLAY_YEARTERM>2023 Fall Semester</DISPLAY_YEARTERM>
@@ -117,11 +125,12 @@ Basic`), so the app uses EWS SOAP with `Authorization: Basic` and never touches 
 
 - `FindItem` on `distinguishedFolderId inbox`, `IndexedPageItemView` (MaxEntriesReturned
   30, offset 0), shape `IdOnly` + additional properties `item:Subject`,
-  `message:From`, `item:DateTimeReceived`, `message:IsRead`, `item:Preview` (Exchange
-  2013+; drop it if the server rejects it).
+  `message:From`, `item:DateTimeReceived`, `message:IsRead`, `item:HasAttachments`, `item:Preview`
+  (Exchange 2013+; drop it if the server rejects it). `m:QueryString` after `ParentFolderIds` makes it a
+  search of that folder, by subject, body and people. Not checked against this server yet.
 - `GetItem` with `BodyType Text` for one message, plus `item:Subject`, `message:From`,
-  `item:DateTimeReceived`, `message:IsRead` and `item:Attachments` (name, size, `IsInline`;
-  no content). GetItem does not change the read flag. Exchange writes HTML links as
+  `item:DateTimeReceived`, `message:IsRead` and `item:Attachments` (id, name, type, size, `IsInline`;
+  no content; `GetAttachment` with the `AttachmentId` gets a file as base64, and an attached message has none). GetItem does not change the read flag. Exchange writes HTML links as
   `label<url>` and leaves runs of blank lines and zero-width padding in the text body.
 - `UpdateItem` `SetItemField message:IsRead` (`MessageDisposition="SaveOnly"`,
   `ConflictResolution="AlwaysOverwrite"`, no ChangeKey) marks a message read or unread.
@@ -139,6 +148,10 @@ Basic`), so the app uses EWS SOAP with `Authorization: Basic` and never touches 
 - **A saved draft** is sent with `UpdateItem` of only the changed fields (an emptied recipient line is a `DeleteItemField`), whose
   response has the new ChangeKey, then `SendItem SaveItemToFolder="true"`. The body is only rewritten when it changed, because it
   goes back as plain text and would flatten a reply draft's quoted HTML.
+- **Files** go on a saved message: `CreateItem` with `SaveOnly` (or the draft's update), then one `CreateAttachment` per file with
+  `ParentItemId` (Id and ChangeKey) and a `FileAttachment` (Name, ContentType, base64 Content), whose response has the new
+  `RootItemChangeKey`, then `SendItem`. If a step fails, what was written stays in Drafts. A message without files still goes
+  straight out with `SendAndSaveCopy`. The app allows 25 MB of new files: Exchange's default limit is 35 MB, and base64 adds a third.
 - **Delete** is `MoveItem` to `deleteditems` (Junk and "Not junk" are moves too); the response gives the new id, which Undo uses.
   The app never hard-deletes.
 - **Directory search:** `ResolveNames` with `SearchScope="ActiveDirectoryContacts"` and `ReturnFullContactData="false"` finds
@@ -150,6 +163,9 @@ Basic`), so the app uses EWS SOAP with `Authorization: Basic` and never touches 
   the OWA logon page asks for "user name", Exchange 2019 / 15.2.1544, so a default
   domain is configured). Sent exactly as saved, one attempt only, so a wrong
   password costs one failed logon toward any lockout.
-- 401 → wrong credentials → `LoginRequired(Service.mail)`.
+- 401 → wrong credentials → `LoginRequired(Service.mail)`. A refresh makes several calls at once, so until a login is known to
+  work the first call goes alone and the others wait for its answer. The refused login is then not sent again (`CredentialStore`
+  keeps a hash of it) until the student saves a login, even the same one, or 24 h have passed, so a passing server fault mends
+  itself at one failed logon a day. eClass and INS logins follow the same rule.
 
 ActiveSync (`/Microsoft-Server-ActiveSync`) also answers with Basic, but EWS is simpler.

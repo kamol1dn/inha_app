@@ -13,7 +13,11 @@ library;
 
 import 'package:intl/intl.dart';
 
+import '../data/exams.dart';
+import '../data/scores.dart';
+import '../data/urgency.dart';
 import '../models/models.dart';
+import '../ui/format/format.dart' show roomChoice, rowTitle;
 
 // ---------------------------------------------------------------------------
 // Thresholds
@@ -36,6 +40,11 @@ const remindedDeadlineKinds = {
 /// How long before a class starts its reminder fires.
 const classReminderLead = Duration(minutes: 15);
 
+/// How long before an exam its last reminder fires. The one before it comes
+/// the evening before, at [examEveningHour].
+const examReminderLead = Duration(hours: 1);
+const examEveningHour = 20;
+
 /// A late reminder is skipped when the next reminder for the same item is
 /// due within this long anyway, so the two do not arrive back to back.
 const lateReminderSkipWithin = Duration(hours: 1);
@@ -43,7 +52,7 @@ const lateReminderSkipWithin = Duration(hours: 1);
 /// Absences dated longer ago than this are not announced. This keeps a first
 /// run from announcing a whole semester of old marks. It has to cover the
 /// time eClass takes to mark a VOD week absent: the ~9-day watch window plus
-/// some delay.
+/// some delay. eClass's bell menu goes by it too.
 const absenceLookback = Duration(days: 21);
 
 /// How long the notifier keeps a sent key. Must be longer than
@@ -71,7 +80,30 @@ const vodKeyPrefix = 'vod:';
 const dueKeyPrefix = 'due:';
 const absenceKeyPrefix = 'absent:';
 const classKeyPrefix = 'class:';
-const allKeyPrefixes = {vodKeyPrefix, dueKeyPrefix, absenceKeyPrefix, classKeyPrefix};
+const gradeKeyPrefix = 'grade:';
+const examKeyPrefix = 'exam:';
+const noticeKeyPrefix = 'notice:';
+const allKeyPrefixes = {
+  vodKeyPrefix,
+  dueKeyPrefix,
+  absenceKeyPrefix,
+  classKeyPrefix,
+  gradeKeyPrefix,
+  examKeyPrefix,
+  noticeKeyPrefix,
+};
+
+/// The keys that came from eClass, which go when the student signs out of it.
+const eclassKeyPrefixes = {vodKeyPrefix, dueKeyPrefix, absenceKeyPrefix, gradeKeyPrefix, noticeKeyPrefix};
+
+/// The item a key's notification is about, without the lead. An item's
+/// reminders are one notification (DESIGN.md 11): the later replaces the
+/// earlier. A key of any other kind is its own item.
+String reminderItem(String key) {
+  if (!key.startsWith(vodKeyPrefix) && !key.startsWith(dueKeyPrefix) && !key.startsWith(examKeyPrefix)) return key;
+  final end = key.lastIndexOf('|');
+  return end < 0 ? key : key.substring(0, end);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,7 +111,7 @@ const allKeyPrefixes = {vodKeyPrefix, dueKeyPrefix, absenceKeyPrefix, classKeyPr
 
 /// The Android notification channel a notification goes to, each with its
 /// own switch in Settings. Off by default: [classes] (DESIGN.md 11).
-enum NotifyChannel { deadlines, vod, attendance, classes }
+enum NotifyChannel { deadlines, vod, exams, attendance, grades, announcements, classes }
 
 /// The nightly quiet hours, as minutes after midnight in device time. The
 /// window may cross midnight (start after end).
@@ -173,15 +205,23 @@ class PlannedNotification {
 /// hour before they start (22:00), else (that time has passed) goes out
 /// [PlannedNotification.quiet]. Every channel is planned whether or not the
 /// student turned it off; the notifier filters.
+///
+/// [seenGrades] holds the last mark announced for each item, by course id and
+/// [GradeItem.key]: a mark goes out when it differs from that one. [exams] are
+/// the student's own sittings, [notices] the items of eClass's bell menu.
 List<PlannedNotification> planNotifications({
   required DateTime now,
   List<Deadline> deadlines = const [],
   List<CourseAttendance> attendance = const [],
   List<Lesson> lessons = const [],
+  List<CourseGrades> courseGrades = const [],
   Set<String> sentKeys = const {},
   QuietHours? quietHours,
   Map<int, int> absenceLimits = const {},
   Set<DateTime> classFree = const {},
+  Map<int, Map<String, String>> seenGrades = const {},
+  List<MyExam> exams = const [],
+  List<EclassNotification> notices = const [],
 }) {
   final out = <String, PlannedNotification>{};
   void add(PlannedNotification n) => out.putIfAbsent(n.key, () => n);
@@ -198,6 +238,17 @@ List<PlannedNotification> planNotifications({
       // Nothing closes: an absence can always wait for the morning.
       _quiet([n], DateTime(9999), now, quietHours).forEach(add);
     }
+  }
+  for (final course in courseGrades) {
+    for (final n in _newMarks(now, course, seenGrades[course.course.id] ?? const {})) {
+      _quiet([n], DateTime(9999), now, quietHours).forEach(add); // a mark can wait for the morning too
+    }
+  }
+  for (final m in exams) {
+    _quiet(_examReminders(now, m), m.exam.start, now, quietHours).forEach(add);
+  }
+  for (final n in _notices(now, notices)) {
+    _quiet([n], DateTime(9999), now, quietHours).forEach(add); // news can wait for the morning too
   }
   // No classes in an exam week, whatever the timetable says.
   final today = now.toLocal();
@@ -221,8 +272,9 @@ Iterable<PlannedNotification> _vodReminders(
   Deadline d,
   List<CourseAttendance> attendance,
 ) sync* {
+  if (d.dismissed) return;
+  if (_watched(d, attendance)) return;
   final progress = _findVod(d, attendance);
-  if (progress.isNotEmpty && progress.every((p) => p.done)) return;
 
   final course = _courseName(d.courseName);
   final closes = _dayTime.format(d.end.toLocal());
@@ -243,19 +295,34 @@ Iterable<PlannedNotification> _vodReminders(
   }
 }
 
-/// The progress rows for a VOD deadline, matched on course name and title
-/// with whitespace and case ignored. Empty when there is no progress data,
-/// which counts as unwatched. More than one row only if titles repeat in a
-/// course; then it counts as watched only if all of them are.
+/// The progress rows for a VOD deadline. The course is found as the screens
+/// find it ([courseFor]), so a row they show as watched is never reminded of;
+/// the VOD by module id, else by title with whitespace and case ignored. Empty
+/// when there is no progress data, which counts as unwatched. More than one row
+/// only if titles repeat in a course; then it counts as watched only if all of
+/// them are.
 List<VodProgress> _findVod(Deadline d, List<CourseAttendance> attendance) {
-  final course = _norm(_courseName(d.courseName));
+  final id = d.courseId;
+  final course = (id == null ? null : attendance.where((c) => c.course.id == id).firstOrNull) ??
+      courseFor(_courseName(d.courseName), attendance);
+  if (course == null) return const [];
+  final module = d.moduleId;
+  final byModule = module == null ? const <VodProgress>[] : course.vods.where((v) => v.moduleId == module).toList();
+  if (byModule.isNotEmpty) return byModule;
   final title = _norm(d.title);
-  return [
-    for (final a in attendance)
-      if (_norm(a.course.name) == course)
-        for (final v in a.vods)
-          if (_norm(v.title) == title) v,
-  ];
+  return course.vods.where((v) => _norm(v.title) == title).toList();
+}
+
+/// The items of [deadlines] nothing is left to do for: handed in, watched or
+/// marked done. A reminder already in the tray for one of them is withdrawn.
+Set<String> finishedItems(List<Deadline> deadlines, List<CourseAttendance> attendance) => {
+      for (final d in deadlines)
+        if (d.done || d.dismissed || (d.kind == DeadlineKind.vod && _watched(d, attendance))) reminderStem(d),
+    };
+
+bool _watched(Deadline d, List<CourseAttendance> attendance) {
+  final progress = _findVod(d, attendance);
+  return progress.isNotEmpty && progress.every((p) => p.done);
 }
 
 String _vodStatus(List<VodProgress> progress) {
@@ -275,7 +342,7 @@ String _vodStatus(List<VodProgress> progress) {
 }
 
 Iterable<PlannedNotification> _deadlineReminders(DateTime now, Deadline d) sync* {
-  if (d.done) return; // handed in: nothing to remind about (pending ones are cancelled)
+  if (d.done || d.dismissed) return; // nothing to remind about (pending ones are cancelled)
   final course = _courseName(d.courseName);
   final due = _dayTime.format(d.end.toLocal());
   final body = switch (d.kind) {
@@ -290,6 +357,47 @@ Iterable<PlannedNotification> _deadlineReminders(DateTime now, Deadline d) sync*
       body: body,
       when: at,
       channel: NotifyChannel.deadlines,
+    );
+  }
+}
+
+/// The evening before an exam, and [examReminderLead] before it. The room is
+/// the student's own once they set it, else the rooms the exam uses. rules.ts
+/// says the same, word for word, under the same keys.
+Iterable<PlannedNotification> _examReminders(DateTime now, MyExam m) sync* {
+  final e = m.exam;
+  final start = e.start.toLocal();
+  final evening = DateTime(start.year, start.month, start.day - 1, examEveningHour);
+  final eveningLead = start.difference(evening);
+  final course = _clean(m.course.name);
+  final when = _dayTime.format(start);
+  final room = m.room ?? (e.rooms.length == 1 ? e.rooms.single : null);
+  final where = room != null ? 'Room $room' : e.rooms.isEmpty ? 'Room not set' : 'Room not set: ${roomChoice(e.rooms)}';
+  final caveat = m.sittings > 1 ? '. ${sittingsLine(m)}' : '';
+  final stem = '$examKeyPrefix${_norm(e.slot)}|${_norm(e.cell)}|${_stamp(e.start)}';
+  for (final (lead, at) in _reminderTimes(now: now, end: e.start, leads: [eveningLead, examReminderLead])) {
+    yield PlannedNotification(
+      key: '$stem|${lead == examReminderLead ? _leadTag(lead) : 'eve'}',
+      title: lead == examReminderLead ? 'Exam at ${_hm.format(start)}: $course' : 'Exam: $course',
+      body: '$when · $where$caveat',
+      when: at,
+      channel: NotifyChannel.exams,
+    );
+  }
+}
+
+/// Unread items of eClass's bell menu. Old ones are not announced: a first run
+/// would otherwise repeat the whole menu, and a sent key isn't kept for ever.
+Iterable<PlannedNotification> _notices(DateTime now, List<EclassNotification> all) sync* {
+  final since = now.subtract(absenceLookback);
+  for (final n in all) {
+    if (n.read || n.time.isBefore(since)) continue;
+    yield PlannedNotification(
+      key: '$noticeKeyPrefix${n.id}',
+      title: _clean(n.subject),
+      body: _clean(n.text),
+      when: now,
+      channel: NotifyChannel.announcements,
     );
   }
 }
@@ -318,6 +426,40 @@ Iterable<PlannedNotification> _absences(DateTime now, CourseAttendance a, int? l
     );
   }
 }
+
+Iterable<PlannedNotification> _newMarks(DateTime now, CourseGrades g, Map<String, String> seen) sync* {
+  final score = CourseScore.of(g);
+  final course = _clean(g.course.name);
+  for (final item in g.items) {
+    if (!item.marked || isAttendanceMark(item)) continue;
+    final was = seen[item.key];
+    if (was == item.mark) continue;
+    final name = rowTitle(item.name);
+    final before = was == null ? null : double.tryParse(was);
+    yield PlannedNotification(
+      key: gradeKey(g.course.id, item, was),
+      title: was == null ? 'Graded: $name' : 'Grade changed: $name',
+      body: [
+        course,
+        item.score,
+        if (was != null) 'was ${before == null ? was : plainNumber(before)}',
+        if (score != null) '${score.line} so far',
+      ].join(' · '),
+      when: now,
+      channel: NotifyChannel.grades,
+    );
+  }
+}
+
+/// The notification key for [item]'s mark, after [was]. The change is in the
+/// key, so a mark going back to an earlier value is news again.
+String gradeKey(int courseId, GradeItem item, String? was) =>
+    '$gradeKeyPrefix$courseId|${item.key}|${was ?? ''}>${item.mark}';
+
+/// The eClass course id in a grade key, or null for another key.
+int? gradeCourseId(String key) => key.startsWith(gradeKeyPrefix)
+    ? int.tryParse(key.substring(gradeKeyPrefix.length).split('|').first)
+    : null;
 
 PlannedNotification? _classReminder(DateTime now, Lesson l) {
   final today = now.toLocal();

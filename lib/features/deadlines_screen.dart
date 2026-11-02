@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -39,18 +40,22 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
     final showDone = prefs.showDone;
     final shown = all.where((d) {
       if (!kinds.contains(d.kind)) return false;
-      if (course != null && courseFor(d.courseName, att)?.course.name != course && d.courseName != course) {
+      // Past a day it is only old cache: the upcoming page no longer lists it.
+      if (!d.end.isAfter(now.subtract(const Duration(hours: 24)))) return false;
+      if (course != null && courseOfDeadline(d, att)?.course.name != course && d.courseName != course) {
         return false;
       }
       if (!showDone && isDone(d, att)) return false;
       return true;
     }).toList();
     // Done work shows by default, so hiding it is what narrows the list.
-    final filtered = kinds != Prefs.defaultDeadlineKinds || course != null || !showDone;
+    final filtered = !setEquals(kinds, Prefs.defaultDeadlineKinds) || course != null || !showDone;
 
-    final overdue = shown.where((d) => d.end.isBefore(now)).toList();
+    // Overdue is what is still owed. Done work and class periods stay under their day.
+    bool isOverdue(Deadline d) => d.end.isBefore(now) && isDue(d) && !isDone(d, att);
+    final overdue = shown.where(isOverdue).toList();
     final groups = <String, List<Deadline>>{};
-    for (final d in shown.where((d) => !d.end.isBefore(now))) {
+    for (final d in shown.where((d) => !isOverdue(d))) {
       groups.putIfAbsent(dayHeader(d.end, now: now), () => []).add(d);
     }
 
@@ -72,20 +77,21 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
         else if (data.deadlines.data == null && data.deadlines.error == null)
           const SkeletonRows()
         else
-          SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass),
-        if (data.deadlines.data != null && all.where(isDue).isEmpty && !filtered)
+          SourceError(data.deadlines, 'eClass', onRetry: data.refreshEclass, coveredByOfflineRow: true),
+        if (data.deadlines.data != null && shown.where(isDue).isEmpty && !filtered)
           const EmptyNote('No upcoming deadlines in eClass.'),
         if (data.deadlines.data != null && shown.isEmpty && filtered)
           EmptyNote('Nothing matches these filters.',
               action: 'Clear filters', onAction: () => setState(prefs.resetDeadlineFilters)),
         if (overdue.isNotEmpty) ...[
-          const SectionHeader('Overdue', first: true, status: Status.danger),
+          SectionHeader('Overdue', first: true, status: Status.danger, source: data.deadlines),
           for (final d in overdue) DueRow(d, attendance: att, now: now, line: false),
         ],
         for (final e in groups.entries) ...[
+          // The first header on screen carries the stale marker.
           SectionHeader(e.key,
               first: e.key == groups.keys.first && overdue.isEmpty,
-              source: e.key == groups.keys.first ? data.deadlines : null),
+              source: e.key == groups.keys.first && overdue.isEmpty ? data.deadlines : null),
           for (final d in e.value) DueRow(d, attendance: att, now: now, line: false),
         ],
         const SizedBox(height: 24),
@@ -99,7 +105,7 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
     final names = <String>{
       for (final c in att) c.course.name,
       for (final d in all)
-        if (courseFor(d.courseName, att) == null && d.courseName.isNotEmpty) d.courseName,
+        if (courseOfDeadline(d, att) == null && d.courseName.isNotEmpty) d.courseName,
     };
     return names.toList()..sort();
   }
@@ -191,6 +197,7 @@ class _CourseChip extends StatelessWidget {
       showCheckmark: false,
       avatar: const Icon(Icons.school_outlined, size: 18),
       deleteIcon: const Icon(Icons.arrow_drop_down),
+      deleteButtonTooltipMessage: 'Choose course',
       onDeleted: () => _pick(context),
       onPressed: () => _pick(context),
     );
