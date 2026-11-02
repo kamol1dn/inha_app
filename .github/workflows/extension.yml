@@ -93,8 +93,10 @@ jobs:
         with:
           files: extension/${{ steps.pkg.outputs.chrome }}
 
-      # Firefox and Zen install only signed add-ons for good: Mozilla signs it, unlisted (not published,
-      # just signed). A second run of the same tag can't sign again, so it takes the file the first run attached.
+      # Firefox and Zen install only signed add-ons for good. Each tag goes to addons.mozilla.org as a public
+      # (listed) version, with its source code and amo-metadata.json for the listing, and comes back signed
+      # once Mozilla approves it. A version still in review gets no signed file here: the listing serves it
+      # when approved. A second run of the same tag can't submit again, so it takes the file the first run attached.
       - name: Sign for Firefox and Zen
         id: sign
         if: startsWith(github.ref, 'refs/tags/v') && env.AMO_JWT_ISSUER != '' && env.AMO_JWT_SECRET != ''
@@ -108,7 +110,9 @@ jobs:
             echo "This tag's signed build is already on the release."
             exit 0
           fi
-          npx web-ext sign --source-dir dist-firefox --channel unlisted --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" --artifacts-dir signed --approval-timeout 1500000
+          # What the reviewers rebuild from: the extension and the exam timetable it bundles.
+          git -C .. archive --format=zip -o "$RUNNER_TEMP/iut-eclass-source.zip" HEAD extension assets/exams LICENSE
+          npx web-ext sign --source-dir dist-firefox --channel listed --amo-metadata amo-metadata.json --upload-source-code "$RUNNER_TEMP/iut-eclass-source.zip" --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" --artifacts-dir signed --approval-timeout 1500000
 
       - name: Name the Zen and Firefox build
         id: xpi
@@ -122,13 +126,13 @@ jobs:
             mv "${files[0]}" "$SIGNED"
             rm "$UNSIGNED"
             echo "file=$SIGNED" >> "$GITHUB_OUTPUT"
-            echo "how=Download $SIGNED. In Zen or Firefox open about:addons, press the gear, choose Install Add-on From File and pick it. It stays installed, and a newer one installs over it the same way." >> "$GITHUB_OUTPUT"
+            echo "how=Install it from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/iut-for-eclass/), which keeps it up to date. Or download $SIGNED: in Zen or Firefox open about:addons, press the gear, choose Install Add-on From File and pick it." >> "$GITHUB_OUTPUT"
           else
             if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-              echo "::warning::Mozilla didn't sign this build, so the release has $UNSIGNED: a temporary add-on only (README, Install)."
+              echo "::warning::Mozilla hasn't signed this build (still in review, or refused), so the release has $UNSIGNED: a temporary add-on only (README, Install)."
             fi
             echo "file=$UNSIGNED" >> "$GITHUB_OUTPUT"
-            echo "how=This release has no signed build. $UNSIGNED loads only as a temporary add-on: about:debugging, This Firefox, Load Temporary Add-on. It is gone when the browser restarts." >> "$GITHUB_OUTPUT"
+            echo "how=Mozilla hadn't approved this version when the release was made. Once it has, install it from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/iut-for-eclass/). Until then $UNSIGNED loads only as a temporary add-on: about:debugging, This Firefox, Load Temporary Add-on. It is gone when the browser restarts." >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/upload-artifact@v7

@@ -107,6 +107,10 @@ gh secret set IUT_KEY_PASSWORD
 Without them a branch build still runs, but its APK is signed with a debug key (the artifact name ends
 in `-debug-key`) and cannot update the signed app on the phone; a tag build fails instead.
 
+## License
+
+MIT, see [LICENSE](LICENSE). The fonts keep their own licence, the SIL Open Font License (`assets/fonts/`).
+
 ## Repository
 
 | Path | What |

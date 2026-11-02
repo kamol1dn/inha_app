@@ -1,0 +1,15 @@
+{
+  "slug": "iut-for-eclass",
+  "categories": { "firefox": ["alerts-updates"] },
+  "summary": {
+    "en-US": "Unofficial companion for Inha University in Tashkent students: a cleaner eClass with your timetable, deadlines, attendance, scores, INS grades and university mail in one place."
+  },
+  "description": {
+    "en-US": "**Unofficial.** Made by an IUT student, not by the university.\n\nIUT for eClass gives eClass (eclass.inha.ac.kr) a clean, readable look, light or dark, and puts what you check every day where you already are:\n\n- **Today:** your next class and room, or exam, and what's due soon.\n- **Course list:** absences, VODs watched, your eClass score and what's due next, beside every course.\n- **Deadlines** across all your courses, with reminders before they close.\n- **Attendance** against each course's limit.\n- **Scores** from eClass's own grade report, with what-if numbers for marks still open, and your **INS grades**.\n- **University mail:** read, search, write, reply and attach files.\n- **Schedule** from the public timetable, and the **exam timetable**.\n\nIt needs your own IUT accounts (eClass, and optionally INS and university mail). It talks only to the university's services, as you; nothing goes to the developer or anyone else. Saved passwords are encrypted in your browser.\n\nPrivacy policy: https://github.com/kamol1dn/inha_app/blob/main/extension/PRIVACY.md\n\nSource code: https://github.com/kamol1dn/inha_app"
+  },
+  "homepage": { "en-US": "https://github.com/kamol1dn/inha_app" },
+  "version": {
+    "license": "MIT",
+    "approval_notes": "Unofficial companion for students of Inha University in Tashkent. Everything it shows needs a student's own university account: eClass (eclass.inha.ac.kr), and optionally INS (ins.inha.uz) and university mail (mail.inha.uz, Exchange Web Services). These are personal accounts the university issues to its students, so we can't provide a test account; the developer can't share their own. Without an account the extension shows its sign-in prompts and settings only.\n\nNetwork: only those three university hosts plus iut.edupage.org (the public timetable, no login). No server of its own, no analytics. Saved passwords are encrypted with AES-GCM under a non-extractable WebCrypto key in the extension's IndexedDB (src/core/vault.ts) and posted only to their own service's login form.\n\nThe innerHTML warnings come from bundled libraries (Preact, and linkedom in the background script for parsing fetched pages), not from our code: src/ has no innerHTML.\n\nBuild (the attached source archive, also https://github.com/kamol1dn/inha_app under extension/): Node 24, then\n  cd extension\n  npm ci\n  IUT_VERSION=<this version> npm run build:firefox\nThe add-on is dist-firefox/. esbuild bundles and minifies TypeScript and Preact; nothing is obfuscated. The build also reads ../assets/exams/ (the exam timetable as JSON), which the archive includes."
+  }
+}

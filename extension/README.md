@@ -18,8 +18,9 @@ eClass's content area, under its header and beside its menu, in a frame of the e
 
 ## Install
 
-Every `v*` release on GitHub has two builds, next to the APKs. Neither browser updates them by itself: to update, install the newer
-one the same way. Logins and settings stay, since each build keeps one fixed ID.
+Zen and Firefox install it from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/iut-for-eclass/), which keeps it up to
+date. Every `v*` release on GitHub also has both builds, next to the APKs; a build installed from there doesn't update by itself, so
+install the newer one the same way. Logins and settings stay, since each build keeps one fixed ID. Privacy: [PRIVACY.md](PRIVACY.md).
 
 **Chrome.** The extension isn't in the Chrome Web Store, so it loads from a folder:
 
@@ -33,10 +34,12 @@ Chrome asks at startup to turn off developer-mode extensions, say no. The manife
 loading a newer copy from another folder replaces the old one instead of adding a second that posts every notification again. Only the
 public half of that key exists in the repository; Chrome needs no more for an unpacked install. A copy loaded before the `key` was added has another ID: remove it, and save the logins again.
 
-**Zen or Firefox** (128 or newer):
+**Zen or Firefox** (140 or newer):
 
-1. Download `iut-eclass-zen-firefox-<version>.xpi`.
-2. Open `about:addons`, press the gear, choose **Install Add-on From File** and pick it, then **Add**.
+1. Open [IUT for eClass on addons.mozilla.org](https://addons.mozilla.org/firefox/addon/iut-for-eclass/) and press **Add to Firefox**.
+   Or download `iut-eclass-zen-firefox-<version>.xpi` from a release, open `about:addons`, press the gear, choose **Install Add-on
+   From File** and pick it.
+2. Firefox lists what leaves the browser: the logins, sent only to their own university service, and the mail you send. Accept to add it.
 3. Zen may ask to allow the four sites. If they are off, Settings shows "Allow access", and a source that can't load says so instead
    of blaming the connection.
 
@@ -118,9 +121,15 @@ CI (`.github/workflows/extension.yml`) builds and tests on every push that touch
 1. Its number becomes the version of both builds (`v1.4.0` gives `1.4.0`), whatever `static/manifest.json` says, so each release has a
    new version for Mozilla to sign.
 2. The Chrome `.zip` goes on the tag's GitHub release, the one the APKs go on, before anything else can fail.
-3. Mozilla signs the `.xpi`, unlisted (signed, not published), with the repository secrets `AMO_JWT_ISSUER` and `AMO_JWT_SECRET`: an
-   API key from addons.mozilla.org → Developer Hub → Manage API Keys. If the secrets are missing or signing fails, the job stays green with a warning and
-   attaches `iut-eclass-zen-firefox-<version>-unsigned-temporary.xpi` instead. Running the same tag again reuses the signed file already on the release.
+3. The `.xpi` goes to addons.mozilla.org as a public (listed) version, with the repository secrets `AMO_JWT_ISSUER` and `AMO_JWT_SECRET`
+   (an API key from addons.mozilla.org → Developer Hub → Manage API Keys). It carries `amo-metadata.json` (the listing's text, MIT license,
+   notes for the reviewers) and the source code, `extension/` and `assets/exams/`, since the build minifies. Once Mozilla approves it, the
+   signed file goes on the release too. If the secrets are missing, or the version is still in review after 25 minutes, or Mozilla refuses
+   it, the job stays green with a warning and attaches `iut-eclass-zen-firefox-<version>-unsigned-temporary.xpi` instead; a version
+   approved later is served by the listing. Running the same tag again reuses the signed file already on the release.
+
+   The listing's privacy policy is [PRIVACY.md](PRIVACY.md); Mozilla's API can't set it, so it is pasted in the Developer Hub (Edit
+   Product Page → Privacy Policy). The manifest declares what Mozilla counts as data leaving the browser (`manifest.ts`).
 4. The release's text gets the install steps above.
 
 ## Layout
