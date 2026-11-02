@@ -24,9 +24,11 @@ export function manifestFor(base: Manifest, { firefox, version }: { firefox: boo
   manifest.browser_specific_settings = {
     gecko: {
       id: 'iut-eclass@kamol1dn.github.io',
-      strict_min_version: '128.0',
-      // It talks only to the university's own services, as the student; nothing goes to us or anyone else.
-      data_collection_permissions: { required: ['none'] },
+      // 140 is the first Firefox that asks for the data below at install (PRIVACY.md).
+      strict_min_version: '140.0',
+      // Nothing goes to us or anyone else, but Mozilla counts what leaves the browser for the university's own
+      // services too: the logins, posted to each one's sign-in, and the mail the student sends.
+      data_collection_permissions: { required: ['authenticationInfo', 'personalCommunications'] },
     },
   };
   return manifest;

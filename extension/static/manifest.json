@@ -4,7 +4,8 @@
   "short_name": "IUT",
   "version": "0.2.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1RvesgeVx2yIuBSna6vE43uxdiYg54KABxux1TX3Gj/viXr5jBZISMW3wKIdXIYjOv5JiuIY4AQgpTQOf848SULUGurtdSiETQjnEqYHuVQnIMk2xSsUQp/RbJED2Xh0QtyUsmG6yZo/rqnvP6DgN6CQ4p3WQxrqlNeqLIqV3nLp5IO4Su6z1z0vlheFGLoc4VD9ucVxy5N9Tn67pW7RsrwXaJoeUWsuU9O04hdbqnrWEeEvJJTuz2xFNBhJ82bTs1opwHKEqhV2VA7lXSylgcNYyma7Pra7M1EzcWjRkmRDMvpXxIl0srOlzzvG2+1HgXK6cHOuQCnoQrhJZgCCIwIDAQAB",
-  "description": "A new eClass for Inha University in Tashkent, with your timetable, INS grades and university mail built in.",
+  "description": "A new eClass for Inha University in Tashkent, with your timetable, INS grades and university mail built in. Unofficial.",
+  "homepage_url": "https://github.com/kamol1dn/inha_app",
   "icons": {
     "192": "icons/icon.png"
   },
