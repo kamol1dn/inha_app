@@ -10,11 +10,11 @@ describe('darkRule', () => {
   test("eClass's attendance cells: the held ones on the page, the rest a step apart", () => {
     assert.equal(
       darkRule('.format-ubsweeks .user_attendance .attendance_section.active', decl({ backgroundColor: 'rgb(255, 255, 255)' })),
-      'html.iut-dark .format-ubsweeks .user_attendance .attendance_section.active { background-color: var(--surface) !important; }',
+      'html.iut-paint .format-ubsweeks .user_attendance .attendance_section.active { background-color: var(--surface) !important; }',
     );
     assert.equal(
       darkRule('.format-ubsweeks .user_attendance .attendance li', decl({ backgroundColor: '#f5f5f6', borderRightColor: '#ebebeb' })),
-      'html.iut-dark .format-ubsweeks .user_attendance .attendance li { background-color: var(--low) !important; border-right-color: var(--rule) !important; }',
+      'html.iut-paint .format-ubsweeks .user_attendance .attendance li { background-color: var(--low) !important; border-right-color: var(--rule) !important; }',
     );
   });
 
@@ -47,11 +47,11 @@ describe('darkRule', () => {
 
 describe('scopedToDark', () => {
   test('every selector of a list, keeping the commas inside brackets', () => {
-    assert.equal(scopedToDark('.a, .b:is(.c, .d),.e[x="1,2"]'), 'html.iut-dark .a, html.iut-dark .b:is(.c, .d), html.iut-dark .e[x="1,2"]');
+    assert.equal(scopedToDark('.a, .b:is(.c, .d),.e[x="1,2"]'), 'html.iut-paint .a, html.iut-paint .b:is(.c, .d), html.iut-paint .e[x="1,2"]');
   });
   test('a rule on html itself has nothing to answer; body does', () => {
     assert.equal(scopedToDark('html.foo, :root'), '');
-    assert.equal(scopedToDark('body.foo .x'), 'html.iut-dark body.foo .x');
+    assert.equal(scopedToDark('body.foo .x'), 'html.iut-paint body.foo .x');
     assert.equal(darkRule('html', decl({ backgroundColor: '#fff' })), null);
   });
 });
@@ -77,7 +77,7 @@ describe('darkRulesOf', () => {
         media('print', rule('.c', { backgroundColor: '#fff' })),
         rule('.d', { backgroundColor: '#123' }),
       ]),
-      ['html.iut-dark .a { background-color: var(--surface) !important; }', 'html.iut-dark .b { background-color: var(--surface) !important; }'],
+      ['html.iut-paint .a { background-color: var(--surface) !important; }', 'html.iut-paint .b { background-color: var(--surface) !important; }'],
     );
   });
 });

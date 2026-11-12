@@ -97,6 +97,11 @@ function App() {
     else delete document.documentElement.dataset.theme;
   }, [snap?.settings.theme]);
 
+  // Transparent only as the frame in eClass, where the window shows through the page around it.
+  useEffect(() => {
+    document.documentElement.classList.toggle('iut-glass', frame === 'inline' && !!snap?.settings.glass);
+  }, [snap?.settings.glass]);
+
   if (!snap) return null;
   if (route[0] === 'welcome') return <Settings snap={snap} welcome />;
   const view = viewFor(route, snap, now);

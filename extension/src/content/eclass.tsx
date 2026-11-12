@@ -53,7 +53,7 @@ let paintedSheets = 0;
 /** Answers whatever eClass's sheets, as loaded so far, set for white paper. A sheet that can't be read is skipped. */
 function paintDark(): void {
   // Reading some 10,000 rules takes a moment: only again when another sheet has arrived.
-  if (!root.classList.contains('iut-dark') || document.styleSheets.length === paintedSheets) return;
+  if (!root.classList.contains('iut-paint') || document.styleSheets.length === paintedSheets) return;
   const rules: string[] = [];
   for (const sheet of Array.from(document.styleSheets)) {
     if (sheet.ownerNode === style || sheet.ownerNode === darkStyle) continue;
@@ -76,25 +76,34 @@ const whenParsed = (run: () => void) =>
 /**
  * The theme on eClass's document and every part on it, followed live: the
  * setting from any page of the extension, the system's preference from the OS.
- * html.iut-dark is for moodle.css's rules that exist only in the dark.
+ * html.iut-dark is for moodle.css's rules that exist only in the dark,
+ * html.iut-glass for the transparent background, and html.iut-paint for the
+ * answers to eClass's white paper, which either one needs.
  */
-function followTheme(initial: Theme): void {
+function followTheme(initial: { theme: Theme; glass: boolean }): void {
   const system = matchMedia('(prefers-color-scheme: dark)');
-  let theme = initial;
+  let { theme, glass } = initial;
   const apply = () => {
     if (theme === 'system') delete root.dataset.theme;
     else root.dataset.theme = theme;
-    root.classList.toggle('iut-dark', isDark(theme, system.matches));
+    const dark = isDark(theme, system.matches);
+    root.classList.toggle('iut-dark', dark);
+    root.classList.toggle('iut-glass', glass);
+    root.classList.toggle('iut-paint', dark || glass);
     if (document.readyState !== 'loading') paintDark();
-    setPartsTheme(theme);
+    setPartsTheme(theme, glass);
     remember(theme);
   };
   apply();
   system.addEventListener('change', apply);
   chrome.storage.onChanged.addListener((changes, area) => {
-    const next = (changes.settings?.newValue as { theme?: Theme } | undefined)?.theme;
-    if (area !== 'local' || !next || next === theme) return;
-    theme = next;
+    const next = changes.settings?.newValue as { theme?: Theme; glass?: boolean } | undefined;
+    if (area !== 'local' || !next) return;
+    const nextTheme = next.theme ?? theme;
+    const nextGlass = next.glass ?? false;
+    if (nextTheme === theme && nextGlass === glass) return;
+    theme = nextTheme;
+    glass = nextGlass;
     apply();
   });
 }
@@ -121,7 +130,7 @@ void (async () => {
   }
 
   root.classList.add('iut');
-  followTheme(settings.theme);
+  followTheme(settings);
   addEventListener('load', paintDark, { once: true }); // the sheets eClass adds late
   whenParsed(() => {
     paintDark();

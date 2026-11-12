@@ -38,6 +38,29 @@
   --ok: #8FC79A; --ok-c: #1F3524; --warning: #E3AE5B; --warning-c: #3D2C0E; --danger: #F0A08C; --danger-c: #4A1F16; --info: #9DBDE6; --info-c: #1D3F66;
 }
 
+/* Glass (Settings: Transparent background): no paper, so a browser that draws its
+   window through a page (Zen) shows it. No color of the paper's either: a panel, a
+   hover or a sticky bar (--glass-bar, frosted) is a shade of black over the window,
+   and the lines are neutral. What floats over the page (--bright) stays solid.
+   Each block comes after the one it changes, so it wins the tie. */
+:root.iut-glass, :host(.iut-glass) {
+  --surface: transparent; --paper: #FFFFFF; --glass-bar: rgb(0 0 0 / .03);
+  --lowest: rgb(0 0 0 / .03); --low: rgb(0 0 0 / .04); --container: rgb(0 0 0 / .06); --high: rgb(0 0 0 / .08); --highest: rgb(0 0 0 / .11);
+  --rule: rgb(0 0 0 / .12); --outline: rgb(0 0 0 / .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root.iut-glass:not([data-theme="light"]), :host(.iut-glass:not([data-theme="light"])) {
+    --paper: #000000; --glass-bar: rgb(0 0 0 / .25);
+    --lowest: rgb(0 0 0 / .2); --low: rgb(0 0 0 / .14); --container: rgb(0 0 0 / .18); --high: rgb(0 0 0 / .24); --highest: rgb(0 0 0 / .3);
+    --rule: rgb(255 255 255 / .1); --outline: rgb(255 255 255 / .3);
+  }
+}
+:root.iut-glass[data-theme="dark"], :host(.iut-glass[data-theme="dark"]) {
+  --paper: #000000; --glass-bar: rgb(0 0 0 / .25);
+  --lowest: rgb(0 0 0 / .2); --low: rgb(0 0 0 / .14); --container: rgb(0 0 0 / .18); --high: rgb(0 0 0 / .24); --highest: rgb(0 0 0 / .3);
+  --rule: rgb(255 255 255 / .1); --outline: rgb(255 255 255 / .3);
+}
+
 /* Type scale (DESIGN.md 4), as classes. */
 .t-display { font: 600 60px/64px var(--display); letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 .t-hm { font: 600 32px/38px var(--serif); letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }

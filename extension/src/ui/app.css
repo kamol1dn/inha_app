@@ -261,3 +261,7 @@ body.popup .shell .mail { height: calc(100vh - 57px - 53px); }
 .login-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; margin-top: 8px; }
 .login-grid .field { margin: 0; }
 @media (max-width: 600px) { .login-grid { grid-template-columns: 1fr; } }
+
+/* ---- Glass (Settings: Transparent background), in eClass's frame only (main.tsx) ---- */
+:root.iut-glass :is(.bar, .mail .search, .whatif) { background: var(--glass-bar); backdrop-filter: blur(20px) saturate(1.4); }
+:root.iut-glass .rail-row .node i.class { background: var(--paper); }

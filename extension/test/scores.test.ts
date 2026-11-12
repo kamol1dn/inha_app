@@ -508,6 +508,9 @@ describe('the theme on eClass pages', () => {
     assert.match(css, /html\.iut, html\.iut-wait \{\s+color-scheme: light;/);
     assert.match(css, /@media \(prefers-color-scheme: dark\) \{\s+html\.iut:not\(\[data-theme="light"\]\), html\.iut-wait:not\(\[data-theme="light"\]\) \{\s+color-scheme: dark;/);
     assert.match(css, /html\.iut\[data-theme="dark"\], html\.iut-wait\[data-theme="dark"\] \{\s+color-scheme: dark;/);
+    assert.match(css, /html\.iut\.iut-glass \{\s+--surface: transparent;/);
+    assert.match(css, /html\.iut\.iut-glass:not\(\[data-theme="light"\]\) \{/);
+    assert.match(css, /html\.iut\.iut-glass\[data-theme="dark"\] \{/);
     assert.ok(!/:root|:host/.test(css));
   });
 

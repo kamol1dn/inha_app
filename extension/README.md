@@ -58,6 +58,10 @@ and near-black text with the same selector on the tokens, and `moodle.css` refin
 text give way to the page's ink in the dark. With "New look on eClass" off, eClass stays as it is, light. Content in an iframe (the VOD
 player, an embedded editor) isn't restyled, since the content script runs only in the top frame.
 
+**Transparent background.** For Zen, which can show the window through a page. eClass's pages and the views inside them lose their paper
+(`html.iut-glass`, the glass token blocks in `src/ui/theme.css`): panels and hovers are shades of black, the header is frosted, and menus
+and dialogs stay solid. darkrules.ts's answers apply in the light too then, under `html.iut-paint`, so eClass's white panels don't stay white.
+
 ## Logins
 
 Saved in Settings (or by ticking "Remember" on the sign-in page, once eClass has accepted it). The password is encrypted with

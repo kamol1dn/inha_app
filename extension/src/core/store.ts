@@ -36,6 +36,8 @@ export interface Settings {
   /** 23:00 to 07:30, as on the phone. */
   quietHours: boolean;
   theme: 'system' | 'light' | 'dark';
+  /** eClass with no paper of its own, so a browser that draws the window through a page (Zen) shows it. */
+  glass: boolean;
   /** Replace eClass's own pages with the new layout. Off = classic eClass, with only the top bar. */
   takeover: boolean;
   /** Show submitted assignments, attempted quizzes and watched VODs on Deadlines. */
@@ -59,6 +61,7 @@ export const defaultSettings: Settings = {
   notify: { deadlines: true, vod: true, attendance: true, classes: false, exams: true, grades: true, mail: true, notices: true },
   quietHours: true,
   theme: 'system',
+  glass: false,
   takeover: true,
   showDone: true,
   examRooms: {},

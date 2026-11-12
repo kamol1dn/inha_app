@@ -260,6 +260,20 @@ html.iut-dark .text-warning { color: var(--warning) !important; }
 html.iut-dark .text-danger { color: var(--danger) !important; }
 html.iut-dark .text-info, html.iut-dark .text-primary { color: var(--info) !important; }
 
+/* ---- Glass (Settings: Transparent background). The tokens do most of it (theme.css):
+   the paper is gone and panels are a shade of black. The menus' columns are just the
+   window, set off by their lines. What scrolls under the header is frosted, and what
+   floats over the page keeps a solid ground to be read on. ---- */
+html.iut-glass :is(#page, #page-lnb, #page-submenu) { background: transparent !important; }
+/* What eClass shades and the answers to its paper (iut-paint) turn black: an open group
+   of the course menu, the current week's title. An id more than those answers, to win. */
+html.iut.iut-glass #coursemos-course-menu#coursemos-course-menu :is(li, ul) { background-color: transparent !important; }
+html.iut.iut-glass #page .course-content :is(h2.main, .section-title-one) { background-color: transparent !important; }
+html.iut-glass #page-header .navbar { background: var(--glass-bar) !important; border-bottom-color: var(--rule) !important; backdrop-filter: blur(20px) saturate(1.4); }
+html.iut.iut-glass :is(.dropdown-menu, .modal-content, .moodle-dialogue-wrap, .popover, .datepicker) { background-color: var(--bright) !important; }
+/* The sign-in covers eClass's own form, which would show through it. */
+html.iut-glass body:has(> #iut-signin) > :not(#iut-signin) { visibility: hidden !important; }
+
 /* Hidden until the content script has decided, so the old look never flashes. */
 html.iut-wait { background: var(--surface) !important; }
 html.iut-wait body { visibility: hidden !important; }
