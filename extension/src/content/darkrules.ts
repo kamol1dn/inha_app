@@ -2,7 +2,8 @@
 // current-week bars, panels of every plugin. In the dark each one that sets a
 // near-white background or near-black text is answered here with the same
 // selector on the page's tokens, read from the sheets as loaded so a rule nobody
-// listed by hand is covered too. moodle.css comes after and wins a tie.
+// listed by hand is covered too. Glass needs the same answers (its tokens have no
+// paper), so they hang off html.iut-paint, set in either. moodle.css comes after and wins a tie.
 
 interface Rgba {
   r: number;
@@ -30,7 +31,7 @@ const saturation = ({ r, g, b }: Rgba) => {
   return max === 0 ? 0 : (max - Math.min(r, g, b)) / max;
 };
 
-/** Each selector of a list under html.iut-dark. A rule about html itself has nothing to answer. */
+/** Each selector of a list under html.iut-paint (dark, or glass). A rule about html itself has nothing to answer. */
 export function scopedToDark(selectors: string): string {
   const parts: string[] = [];
   let depth = 0;
@@ -48,7 +49,7 @@ export function scopedToDark(selectors: string): string {
   return parts
     .map((p) => p.trim())
     .filter((p) => p && !/^(html|:root)\b/.test(p))
-    .map((p) => `html.iut-dark ${p}`)
+    .map((p) => `html.iut-paint ${p}`)
     .join(', ');
 }
 

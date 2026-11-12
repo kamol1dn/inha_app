@@ -331,6 +331,14 @@ export function Settings({ snap, welcome }: { snap: Snapshot; welcome: boolean }
             <option value="dark">Dark</option>
           </select>
         </div>
+        <label class="check">
+          <input type="checkbox" checked={settings.glass} onChange={(e) => writeSettings({ glass: (e.target as HTMLInputElement).checked })} />
+          <span>
+            <span class="t-bl">Transparent background</span>
+            <br />
+            <span class="t-bm muted">For Zen and other browsers that show the window through a page. Elsewhere eClass just looks bare.</span>
+          </span>
+        </label>
       </section>
 
       {!welcome && (

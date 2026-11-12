@@ -10,16 +10,19 @@ import type { Theme } from './theme.ts';
 
 // Light until the new look is on: classic eClass is a white page whatever the setting says.
 let partsTheme: Theme = 'light';
+let partsGlass = false;
 const hosts = new Set<HTMLElement>();
 
 function themeHost(host: HTMLElement) {
   if (partsTheme === 'system') delete host.dataset.theme;
   else host.dataset.theme = partsTheme;
+  host.classList.toggle('iut-glass', partsGlass);
 }
 
-/** Sets the theme of every part, those added already and those still to come. */
-export function setPartsTheme(theme: Theme): void {
+/** Sets the theme (and the transparent background) of every part, those added already and those still to come. */
+export function setPartsTheme(theme: Theme, glass = false): void {
   partsTheme = theme;
+  partsGlass = glass;
   hosts.forEach(themeHost);
 }
 
